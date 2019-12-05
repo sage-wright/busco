@@ -1,6 +1,7 @@
 **BUSCO - Benchmarking Universal Single-Copy Orthologs.**
 
-> The new BUSCO datasets, **odb10**, will be available very soon. Stay tuned !
+> The new BUSCO datasets are available as part of v4 release:
+try https://busco4beta.ezlab.org
 
 To install, ``sudo python setup.py install`` or ``python setup.py install --user``
 
