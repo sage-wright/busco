@@ -1,39 +1,45 @@
-**BUSCO - Benchmarking Universal Single-Copy Orthologs.**
+**BUSCOv4 - Benchmarking sets of Universal Single-Copy Orthologs.**
 
-> **The new BUSCO datasets are available as part of v4 release with new features:**
-> 
-> Try it on https://busco4beta.ezlab.org
+Main changes in v4:
 
-To install, ``sudo python setup.py install`` or ``python setup.py install --user``
+- Automated selection of lineages issued from https://www.orthodb.org/ release 10
 
-To get help, ``python scripts/run_BUSCO.py -h`` and ``python scripts/generate_plot.py -h``
+- Automated download of all necessary files and datasets to conduct a run
 
-Do not forget to create a ``config.ini`` file in the ``config/`` subfolder. You can set the ``BUSCO_CONFIG_FILE`` 
+- Use prodigal for non-eukaryotic genomes
+
+
+To install, clone the repository and enter ``sudo python setup.py install`` or ``python setup.py install --user``
+
+Or use the offical Docker container: https://hub.docker.com/r/ezlabgva/busco/tags
+
+To get help, ``busco -h`` and ``python scripts/generate_plot.py -h``
+
+Do not forget to create a ``config.ini`` file in the ``config/`` subfolder (the script busco_configurator.py can help you filling it). You can set the ``BUSCO_CONFIG_FILE`` 
 environment variable to define a custom path (including the filename) to the ``config.ini`` file, 
-useful for switching between configurations or in a multi-users environment.
+useful for switching between configurations or in a multi-user environment.
 
-See also the user guide: BUSCO_v3_userguide.pdf
+**!!!** Don't use "odb9" datasets with BUSCOv4. If you need to reproduce previous analyses, use BUSCOv3 (https://gitlab.com/ezlab/busco/-/tags/3.0.2)
 
-You can download BUSCO datasets on http://busco.ezlab.org
-
-You can find scripts to produce a phylogeny and a Dockerfile that contains BUSCO on https://gitlab.com/ezlab/busco_usecases/tree/master/phylogenomics
+See also the user guide: https://busco.ezlab.org/busco_userguide.html
+and report problems on the BUSCO issue board at https://gitlab.com/ezlab/busco/issues
 
 **How to cite BUSCO**
 
+*BUSCO: Assessing Genome Assembly and Annotation Completeness.*
+Mathieu Seppey, Mosè Manni, Evgeny M. Zdobnov
+In: Kollmar M. (eds) Gene Prediction. Methods in Molecular Biology, vol 1962. Humana, New York, NY. 2019
+doi.org/10.1007/978-1-4939-9173-0_14
+
 *BUSCO applications from quality assessments to gene prediction and phylogenomics.*
-Robert M. Waterhouse, Mathieu Seppey, Felipe A. Simão, Mose Manni, Panagiotis Ioannidis, Guennadi Klioutchnikov, Evgenia V. Kriventseva, and Evgeny M. Zdobnov
-*Molecular Biology & Evolution*, Volume 35, Issue 3, 1 March 2018, Pages 543–548 (published online Dec 6, 2017) 
+Robert M. Waterhouse, Mathieu Seppey, Felipe A. Simão, Mosè Manni, Panagiotis Ioannidis, Guennadi Klioutchnikov, Evgenia V. Kriventseva, and Evgeny M. Zdobnov
+*Mol Biol Evol*, published online Dec 6, 2017 
 doi: 10.1093/molbev/msx319 
 
 *BUSCO: assessing genome assembly and annotation completeness with single-copy orthologs.*
 Felipe A. Simão, Robert M. Waterhouse, Panagiotis Ioannidis, Evgenia V. Kriventseva, and Evgeny M. Zdobnov
-*Bioinformatics*, Volume 31, Issue 19, 1 October 2015, Pages 3210–3212 (published online June 9, 2015) 
+*Bioinformatics*, published online June 9, 2015 
 doi: 10.1093/bioinformatics/btv351
-
-*Using BUSCO to assess insect genomic resources.*
-Robert M. Waterhouse, Mathieu Seppey, Felipe A. Simão, and Evgeny M. Zdobnov
-*Methods in Molecular Biology*, Insect Genomics, Humana Press, New York, NY 2019, Pages 59-74 (published online November 10, 2018) 
-doi: 10.1007/978-1-4939-8775-7_6
 
 Copyright (c) 2016-2019, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.

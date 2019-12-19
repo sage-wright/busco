@@ -1,3 +1,14 @@
+4.0.0
+- Add the auto lineage selection through phylogenetic placement
+- Introduce the automated downloads and updates of data files
+- Use the OrthoDB v10 datasets, "_odb10", 166 lineages including archaea
+- Add links to orthoDB in the file full_table.tsv
+- Use Prodigal as gene predictor for non-eukaryotes
+- Major refactoring of the code
+- Main script is now called `busco`
+- Improved logging system, notably to address issue #60 and to provide debug info without rerunning with debug=True
+- Fix many minor bugs reported over years
+
 3.1.0
 - Add the additional script run_BUSCO_auto_lineage.sh
 

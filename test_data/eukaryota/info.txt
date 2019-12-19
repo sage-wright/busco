@@ -1,0 +1,8 @@
+To test BUSCO when analyzing an eukaryote genome, use the input genome.fna
+and compare your log with `expected_log.txt`
+
+GCA_001515485.2_Saccharomyces_pastorianus_Weihenstephan_34_70_chromosomes_assembly_1.0_genomic.fna
+Saccharomyces pastorianus Weihenstephan
+20 concatenated BUSCO markers belonging to the eukaryota_odb10 dataset
+
+To test: `busco -i genome.fna -c 8 -m geno -f --out test_eukaryota`

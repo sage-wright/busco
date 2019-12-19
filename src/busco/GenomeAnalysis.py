@@ -11,1140 +11,417 @@ Licensed under the MIT license. See LICENSE.md file.
 
 """
 from busco.BuscoAnalysis import BuscoAnalysis
-from busco.BuscoConfig import BuscoConfig
-from collections import deque
-import heapq
+from busco.Analysis import NucleotideAnalysis
+from busco.BuscoTools import ProdigalRunner, AugustusRunner, GFF2GBRunner, NewSpeciesRunner, ETrainingRunner, OptimizeAugustusRunner
+from busco.BuscoConfig import BuscoConfigAuto
 import os
-from pipebricks.PipeLogger import PipeLogger
-from pipebricks.Toolset import Tool
+import shutil
+from busco.BuscoLogger import BuscoLogger
+from busco.BuscoLogger import LogDecorator as log
+from busco.Toolset import Tool
 import time
-# from overrides import overrides  # useful fro dev, but don't want all user to install this
+from abc import ABCMeta, abstractmethod
+from configparser import NoOptionError
 
 
-class GenomeAnalysis(BuscoAnalysis):
-    """
-    This class runs a BUSCO analysis on a genome.
-    """
 
-    _logger = PipeLogger.get_logger(__name__)
+logger = BuscoLogger.get_logger(__name__)
 
-    #
-    # magic or public, meant to be accessed by external scripts [instance]
-    #
 
-    def __init__(self, params):
-        """
-        Initialize an instance.
-        :param params: Values of all parameters that have to be defined
-        :type params: PipeConfig
-        """
-        # 1) load parameters
-        # 2) load and validate tools
-        # 3) check data and dataset integrity
-        # 4) Ready for analysis
-        # See parent __init__ where most of the calls and actions are made
+class GenomeAnalysis(NucleotideAnalysis, BuscoAnalysis, metaclass=ABCMeta):
 
-        # Retrieve the augustus config path, mandatory for genome
-        # Cannot be specified through conf because some augustus perl scripts use it as well
-        # BUSCO could export it if absent, but do not want to mess up with the user env,
-        # let's just tell the user to do it for now
+    _mode = "genome"
 
-        self._augustus_config_path = BuscoConfig.nice_path(os.environ.get('AUGUSTUS_CONFIG_PATH'))
-        self._target_species = params.get('busco', 'species')
-        self._augustus_parameters = params.get('busco', 'augustus_parameters')
-        self._mode = 'genome'
-        super(GenomeAnalysis, self).__init__(params)  # _init tool called here
-        self._long = params.getboolean('busco', 'long')
-        self._flank = self._define_flank()
-        # data integrity checks not done by the parent class
-        if self.check_nucleotide_file() is False:
-            GenomeAnalysis._logger.error('Please provide a nucleotide file as input')
-            raise SystemExit
+    def __init__(self, config):
+        self._target_species = config.get("busco_run", "augustus_species")
+        super().__init__(config)
 
-    # @overrides
+    @abstractmethod
     def run_analysis(self):
-        """
-        This function calls all needed steps for running the analysis.
-        """
+        super().run_analysis()
 
-        super(GenomeAnalysis, self).run_analysis()
 
-        if self._restart:
-            checkpoint = self.get_checkpoint(reset_random_suffix=True)
-            GenomeAnalysis._logger.warning('Restarting an uncompleted run')
-        else:
-            checkpoint = 0  # all steps will be done
+    @abstractmethod
+    def create_dirs(self):
+        super().create_dirs()
 
-        GenomeAnalysis._logger.info(
-            '****** Phase 1 of 2, initial predictions ******')
-        if checkpoint < 1:
-            GenomeAnalysis._logger.info(
-                '****** Step 1/3, current time: %s ******' %
-                time.strftime("%m/%d/%Y %H:%M:%S"))
-            self._run_tblastn()
-            self._set_checkpoint(1)
-
-        if checkpoint < 2:
-            GenomeAnalysis._logger.info(
-                '****** Step 2/3, current time: %s ******' %
-                time.strftime("%m/%d/%Y %H:%M:%S"))
-            self._get_coordinates()
-            self._run_augustus()
-            GenomeAnalysis._logger.info(
-                '****** Step 3/3, current time: %s ******' %
-                time.strftime("%m/%d/%Y %H:%M:%S"))
-            self._run_hmmer()
-            self._set_checkpoint(2)
-        self._load_score()
-        self._load_length()
-        if checkpoint == 2 or checkpoint == 3:
-            GenomeAnalysis._logger.info('Phase 1 was already completed.')
-        if checkpoint == 3:
-            self._fix_restart_augustus_folder()
-        self._produce_short_summary()
-        GenomeAnalysis._logger.info(
-            '****** Phase 2 of 2, predictions using species specific training '
-            '******')
-        if checkpoint < 3:
-            GenomeAnalysis._logger.info(
-                '****** Step 1/3, current time: %s ******' %
-                time.strftime("%m/%d/%Y %H:%M:%S"))
-            if self._has_variants_file:
-                self._run_tblastn(missing_and_frag_only=True, ancestral_variants=True)
-                self._get_coordinates(missing_and_frag_only=True)
-            else:
-                self._run_tblastn(missing_and_frag_only=True, ancestral_variants=False)
-                self._get_coordinates(missing_and_frag_only=True)
-            self._set_checkpoint(3)
-        GenomeAnalysis._logger.info(
-            '****** Step 2/3, current time: %s ******' %
-            time.strftime("%m/%d/%Y %H:%M:%S"))
-        self._rerun_augustus()
-        self._move_retraining_parameters()
-        self.cleanup()
-        if self._tarzip:
-            self._run_tarzip_augustus_output()
-            self._run_tarzip_hmmer_output()
-        # remove the checkpoint, run is done
-        self._set_checkpoint()
-
-    # @overrides
-    def cleanup(self):
-        """
-        This function cleans temporary files
-        """
-        super(GenomeAnalysis, self).cleanup()
-        self._p_open(['rm %s*%s%s_.temp' % (self._tmp, self._out, self._random)], 'bash', shell=True)
-        self._p_open(
-            ['rm %(tmp)s%(abrev)s.*ns? %(tmp)s%(abrev)s.*nin '
-             '%(tmp)s%(abrev)s.*nhr' %
-             {'tmp': self._tmp, 'abrev': self._out + str(self._random)}], 'bash', shell=True)
-
-    # @overrides
-    def _check_dataset(self):
-        """
-        Check if the dataset integrity, if files and folder are present
-        :raises SystemExit: if the dataset miss files or folders
-        """
-        super(GenomeAnalysis, self)._check_dataset()
-        # prfl folder
-        flag = False
-        for dirpath, dirnames, files in os.walk('%sprfl' % self._lineage_path):
-            if files:
-                flag = True
-        if not flag:
-            BuscoAnalysis._logger.error(
-                'The dataset you provided lacks elements in %sprfl' %
-                self._lineage_path)
-            raise SystemExit
-        # note: score and length cutoffs are checked when read,
-        # see _load_scores and _load_lengths
-        # ancestral would cause blast to fail, and be detected, see _blast()
-        # dataset.cfg is not mandatory
-
-        # check whether the ancestral_variants file is present
-        if os.path.exists('%sancestral_variants' % self._lineage_path):
-            self._has_variants_file = True
-        else:
-            self._has_variants_file = False
-            BuscoAnalysis._logger.warning(
-                'The dataset you provided does not contain the file '
-                'ancestral_variants, likely because it is an old version. '
-                'All blast steps will use the file ancestral instead')
-
-    #
-    # public, meant to be accessed by external scripts [class]
-    #
-
-    # Nothing
-
-    #
-    # method that should be used as if protected, for internal use [instance]
-    # to move to public and rename if meaningful
-    #
-
-    # @overrides
-    def _init_tools(self):
-        """
-        :return:
-        """
-        super(GenomeAnalysis, self)._init_tools()  # call to check_tool_dependencies made here
-        self._check_file_dependencies()
-        self._augustus = Tool('augustus', self._params)
-        self._etraining = Tool('etraining', self._params)
-        self._gff2gbSmallDNA_pl = Tool('gff2gbSmallDNA.pl', self._params)
-        self._new_species_pl = Tool('new_species.pl', self._params)
-        self._optimize_augustus_pl = Tool('optimize_augustus.pl', self._params)
-
-    def _define_flank(self):
-        """
-        :return:
-        """
-        try:
-            f = open(self._sequences, 'r')
-            size = 0
-            for line in f:
-                if line.startswith('>'):
-                    pass
-                else:
-                    size += len(line.strip())
-            size /= 1000  # size in mb
-            flank = int(size / 50)  # proportional flank size
-            if flank < 5000:
-                flank = 5000
-            elif flank > BuscoConfig.MAX_FLANK:
-                flank = BuscoConfig.MAX_FLANK
-            f.close()
-        except IOError:
-            GenomeAnalysis._logger.error('Impossible to read the fasta file %s ' % self._sequences)
-            raise SystemExit
-        return flank
-
-    def _fix_restart_augustus_folder(self):
-        """
-        This function resets and checks the augustus folder to make a restart
-        possible in phase 2
-        :raises SystemExit: if it is not possible to fix the folders
-        """
-        if os.path.exists('%saugustus_output/predicted_genes_run1' % self.mainout) \
-                and os.path.exists('%shmmer_output_run1' % self.mainout):
-            self._p_open(['rm', '-fr', '%saugustus_output/predicted_genes' %
-                         self.mainout], 'bash', shell=False)
-            self._p_open(['mv', '%saugustus_output/predicted_genes_run1' %
-                         self.mainout, '%saugustus_output/predicted_genes' % self.mainout], 'bash',
-                         shell=False)
-            self._p_open(['rm', '-fr', '%shmmer_output' % self.mainout],
-                         'bash', shell=False)
-            self._p_open(['mv', '%shmmer_output_run1/' % self.mainout, '%shmmer_output/' % self.mainout],
-                         'bash', shell=False)
-
-        elif os.path.exists('%saugustus_output/predicted_genes' %
-                            self.mainout) and os.path.exists('%shmmer_output' %
-                                                             self.mainout):
-            pass
-        else:
-            GenomeAnalysis._logger.error(
-                'Impossible to restart the run, necessary folders are missing.'
-                ' Use the -f option instead of -r')
-            raise SystemExit
-
-    def _get_coordinates(self, missing_and_frag_only=False):
-        """
-        This function gets coordinates for candidate regions
-        from tblastn result file
-        :param missing_and_frag_only: tell whether to use
-        the missing_and_frag_rerun tblastn file
-        :type missing_and_frag_only: bool
-        """
-
-        if missing_and_frag_only:
-            blast_file = open(
-                '%sblast_output/tblastn_%s_missing_and_frag_rerun.tsv' %
-                (self.mainout, self._out))
-        else:
-            blast_file = open('%sblast_output/tblastn_%s.tsv' %
-                              (self.mainout, self._out))
-
-        GenomeAnalysis._logger.info('Maximum number of candidate contig per BUSCO limited to: %s' % self._region_limit)
-
-        GenomeAnalysis._logger.info(
-            'Getting coordinates for candidate regions...')
-
-        dic = {}
-        coords = {}
-        for line in blast_file:
-            if line.startswith('#'):
-                pass
-            else:
-                try:
-                    line = line.strip().split()
-                    busco_name = line[0]
-                    contig = line[1]  # busco_og and contig name, respectively
-                    busco_start = int(line[6])
-                    busco_end = int(line[7])  # busco hit positions
-                    contig_start = int(line[8])
-                    contig_end = int(line[9])  # contig postions
-                    aln_len = int(line[3])  # e_value and alignment length
-                    blast_eval = float(line[10])
-                    # for minus-strand genes,invert coordinates for convenience
-                    if contig_end < contig_start:
-                        temp = contig_end
-                        contig_end = contig_start
-                        contig_start = temp
-                    # create new entry in dictionary for current BUSCO
-                    if busco_name not in dic.keys():
-                        dic[busco_name] = [contig]
-                        coords[busco_name] = {}
-                        coords[busco_name][contig] = [contig_start, contig_end,
-                                                      deque([[busco_start,
-                                                              busco_end]]),
-                                                      aln_len, blast_eval]
-                    # get just the top scoring regions
-                    # according to region limits
-                    elif contig not in dic[busco_name] and len(dic[busco_name]) < self._region_limit:
-                        # scoring regions
-                        dic[busco_name].append(contig)
-                        coords[busco_name][contig] = [contig_start, contig_end,
-                                                      deque([[busco_start,
-                                                              busco_end]]),
-                                                      aln_len, blast_eval]
-
-                    # replace the lowest scoring region if the current has
-                    # a better score.
-                    # needed because of multiple blast query having
-                    # the same name when using ancestral_variants
-                    # and not sorted by eval in the tblastn result file
-                    elif contig not in dic[busco_name] and len(dic[busco_name]) >= self._region_limit:
-                        to_replace = None
-                        for entry in list(coords[busco_name].keys()):
-                            if coords[busco_name][entry][4] > blast_eval:
-                                # check if there is already a to_replace entry
-                                # and compare the eval
-                                if (to_replace and coords[busco_name][entry][4] > list(to_replace.values())[0]) \
-                                        or not to_replace:
-                                    # use a single entry dictionary to store
-                                    # the id to replace and its eval
-                                    to_replace = {entry: coords[busco_name][entry][4]}
-                        if to_replace:
-                            dic[busco_name].remove(list(to_replace.keys())[0])
-                            dic[busco_name].append(contig)
-                            coords[busco_name][contig] = [contig_start,
-                                                          contig_end,
-                                                          deque([[busco_start,
-                                                                  busco_end]]),
-                                                          aln_len, blast_eval]
-                    # contigold already checked
-                    elif contig in dic[busco_name]:
-                        # now update coordinates
-                        if contig_start < coords[busco_name][contig][0] and \
-                                                coords[busco_name][contig][0] - \
-                                                contig_start <= 50000:
-                            # starts before and withing 50kb of current pos
-                            coords[busco_name][contig][0] = contig_start
-                            coords[busco_name][contig][2].append([busco_start,
-                                                                  busco_end])
-                        if contig_end > coords[busco_name][contig][1] \
-                                and contig_end - coords[busco_name][contig][1] <= 50000:
-                            # ends after and within 50 kbs
-                            coords[busco_name][contig][1] = contig_end
-                            coords[busco_name][contig][3] = busco_end
-                            coords[busco_name][contig][2].append([busco_start,
-                                                                  busco_end])
-                        elif coords[busco_name][contig][1] > contig_start > \
-                                coords[busco_name][contig][0]:
-                            # starts inside current coordinates
-                            if contig_end < coords[busco_name][contig][1]:
-                                # if ending inside, just add
-                                # alignemnt positions to deque
-                                coords[busco_name][contig][2].append(
-                                    [busco_start, busco_end])
-                                # if ending after current coordinates, extend
-                            elif contig_end > coords[busco_name][contig][1]:
-                                coords[busco_name][contig][2][1] = contig_end
-                                coords[busco_name][contig][2].append(
-                                    [busco_start, busco_end])
-
-                except (IndexError, ValueError):
-                    pass
-
-        blast_file.close()
-        final_locations = {}
-        if missing_and_frag_only:
-            out = open(
-                '%s/blast_output/coordinates_%s_missing_and_frag_rerun.tsv' %
-                (self.mainout, self._out), 'w')  # Coordinates output file
-        else:
-            out = open(
-                '%s/blast_output/coordinates_%s.tsv' %
-                (self.mainout, self._out), 'w')  # Coordinates output file
-
-        for busco_group in coords:
-            final_locations[busco_group] = []
-            # list of candidate contigs
-            candidate_contigs = list(coords[busco_group].keys())
-            size_lists = []
-
-            for contig in candidate_contigs:
-                potential_locations = coords[busco_group][contig][2]
-                max_iterations = len(potential_locations)
-                iter_count = 0
-
-                final_regions = []  # nested list of regions
-                used_pieces = []
-                non_used = []
-
-                while iter_count < max_iterations:
-                    currently = potential_locations[iter_count]
-                    if len(final_regions) == 0:
-                        final_regions.append(currently)
-                    else:
-                        for region in final_regions:
-                            if self._check_overlap(currently, region) != 0:
-                                gg = self._define_boundary(currently,
-                                                           region)
-                                region_index = final_regions.index(region)
-                                final_regions[region_index] = gg
-                                used_pieces.append(iter_count)
-                            else:
-                                non_used.append(iter_count)
-                    iter_count += 1
-
-                # done for this contig, now consolidate
-                for entry_index in non_used:
-                    entry = potential_locations[entry_index]
-                    if entry in used_pieces:
-                        pass  # already used
-                    else:
-                        ok = []
-                        for region in final_regions:
-                            checking = self._check_overlap(entry, region)
-                            if checking == 0:
-                                # i.e. no overlap
-                                pass
-                            else:
-                                ok.append([region, entry])
-                        if len(ok) == 0:
-                            # no overlaps at all (i.e. unique boundary)
-                            final_regions.append(entry)
-                        else:
-                            region = ok[0][0]
-                            currently = ok[0][1]
-                            gg = self._define_boundary(currently, region)
-                            final_regions[final_regions.index(region)] = gg
-
-                size_lists.append(self._gargantua(final_regions))
-            max_size = max(size_lists)
-            size_cutoff = int(0.7 * max_size)
-            index_passed_cutoffs = heapq.nlargest(int(self._region_limit),
-                                                  range(len(size_lists)),
-                                                  size_lists.__getitem__)
-
-            for candidate in index_passed_cutoffs:
-                if size_lists[candidate] >= size_cutoff:
-                    seq_name = candidate_contigs[candidate]
-                    seq_start = int(coords[busco_group]
-                                    [candidate_contigs[candidate]][0]) - self._flank
-                    if seq_start < 0:
-                        seq_start = 0
-                    seq_end = int(coords[busco_group]
-                                  [candidate_contigs[candidate]][1]) + self._flank
-                    final_locations[busco_group].append([seq_name, seq_start,
-                                                         seq_end])
-                    out.write('%s\t%s\t%s\t%s\n' % (busco_group, seq_name,
-                                                    seq_start, seq_end))
-        out.close()
-
-    def _extract_scaffolds(self, missing_and_frag_only=False):
-        """
-        This function extract the scaffold having blast results
-        :param missing_and_frag_only: to tell which coordinate file
-        to look for, complete or just missing and fragment
-        :type missing_and_frag_only: bool
-        """
-        GenomeAnalysis._logger.info('Pre-Augustus scaffold extraction...')
-        if missing_and_frag_only:
-            coord = open(
-                '%s/blast_output/coordinates_%s_missing_and_frag_rerun.tsv' %
-                (self.mainout, self._out))
-        else:
-            coord = open(
-                '%s/blast_output/coordinates_%s.tsv' % (self.mainout,
-                                                        self._out))
-        dic = {}
-        scaff_list = []
-        for i in coord:
-            i = i.strip().split()
-            if len(i) != 2:
-                dic[i[0]] = [i[1], i[2], i[3]]
-                if i[1] not in scaff_list:
-                    scaff_list.append(i[1])
-        coord.close()
-        f = open(self._sequences)
-        check = 0
-        out = None
-        contig_len = 0
-        contig_id = None
-        for i in f:
-            if i.startswith('>'):
-                i = i.split()
-                i = i[0][1:]
-                if i in scaff_list:
-                    out = open('%s%s%s%s_.temp' % (self._tmp, i, self._out,
-                                                   self._random), 'w')
-                    out.write('>%s\n' % i)
-                    check = 1
-                    contig_id = i
-                else:
-                    check = 0
-            elif check == 1:
-                out.write(i)
-                if i != '\n':
-                    contig_len += len(i)
-        f.close()
-        if out:
-            out.close()
-            # Keep track of the contig max lenght
-            #  Not used yet but might be useful
-            self._contig_length.update({contig_id: contig_len})
-
-    def _run_augustus(self):
-        """
-        This function runs Augustus
-        """
-        # Run Augustus on all candidate regions
-        # 1- Get the temporary sequence files (no multi-fasta support in
-        # Augustus)
-        # 2- Build a list with the running commands (for threading)
-        # 3- Launch Augustus in paralell using Threading
-        # 4- Prepare the sequence files to be analysed with HMMer 3.1
-
-        # Extract candidate contigs/scaffolds from genome assembly
-        # Augustus can't handle multi-fasta files, each sequence has
-        # to be present in its own file
-        # Write the temporary sequence files
-
-        # First, delete the augustus result folder, in case we are in
-        #  the restart mode at this point
-        self._p_open(['rm -rf %saugustus_output/*' % self.mainout], 'bash', shell=True)
-
-        # get all scaffolds with blast results
-        self._extract_scaffolds()
-
-        # Now run Augustus on each candidate region with its respective
-        # Block-profile
-
-        GenomeAnalysis._logger.info(
-            'Running Augustus prediction using %s as species:' %
-            self._target_species)
-
-        if self._augustus_parameters:
-            GenomeAnalysis._logger.info(
-                'Additional parameters for Augustus are %s: ' %
-                self._augustus_parameters)
-
-        augustus_log = '%saugustus_output/augustus.log' % self.mainout
-        GenomeAnalysis._logger.info(
-            '[augustus]\tPlease find all logs related to Augustus errors here: %s' %
-            augustus_log)
-        if not os.path.exists('%saugustus_output/predicted_genes' % self.mainout):
-            os.makedirs('%saugustus_output/predicted_genes' % self.mainout)
-
-        # coordinates of hits by BUSCO
-        self._location_dic = {}
-        f = open('%s/blast_output/coordinates_%s.tsv' % (self.mainout,
-                                                         self._out))
-        for line in f:
-            line = line.strip().split('\t')
-            scaff_id = line[1]
-            scaff_start = line[2]
-            scaff_end = line[3]
-            group_name = line[0]
-
-            if group_name not in self._location_dic:
-                # scaffold,start and end
-                self._location_dic[group_name] = [[scaff_id, scaff_start,
-                                                   scaff_end]]
-            elif group_name in self._location_dic:
-                self._location_dic[group_name].append([scaff_id, scaff_start,
-                                                       scaff_end])
-        f.close()
-        # Make a list containing the commands to be executed in parallel
-        # with threading.
-        for entry in self._location_dic:
-
-            for location in self._location_dic[entry]:
-                scaff = location[0] + self._out + str(self._random) + \
-                        '_.temp'
-                scaff_start = location[1]
-                scaff_end = location[2]
-                output_index = self._location_dic[entry].index(location) + 1
-
-                out_name = '%saugustus_output/predicted_genes/%s.out.%s' % \
-                           (self.mainout, entry, output_index)
-
-                augustus_job = self._augustus.create_job()
-                augustus_job.add_parameter('--codingseq=1')
-                augustus_job.add_parameter('--proteinprofile=%sprfl/%s.prfl' % (self._lineage_path, entry))
-                augustus_job.add_parameter('--predictionStart=%s ' % scaff_start)
-                augustus_job.add_parameter('--predictionEnd=%s ' % scaff_end)
-                augustus_job.add_parameter('--species=%s' % self._target_species)
-                for p in self._augustus_parameters.split(' '):
-                    if len(p) > 2:
-                        augustus_job.add_parameter(p)
-                augustus_job.add_parameter('%s%s' % (self._tmp, scaff))
-                augustus_job.stdout_file = [out_name, 'w']
-                augustus_job.stderr_file = [augustus_log, 'a']
-
-        self._augustus.run_jobs(self._cpus)
-
-        # Preparation of sequences for use with HMMer
-
-        # Parse Augustus output files
-        # ('run_XXXX/augustus') and extract protein
-        # sequences to a FASTA file
-        # ('run_XXXX/augustus_output/extracted_proteins').
-        GenomeAnalysis._logger.info('Extracting predicted proteins...')
-        files = os.listdir('%saugustus_output/predicted_genes' % self.mainout)
-        files.sort()
-        for entry in files:
-            self._p_open(
-                ['sed -i.bak \'1,3d\' %saugustus_output/predicted_genes/%s;'
-                 'rm %saugustus_output/predicted_genes/%s.bak' %
-                 (self.mainout, entry, self.mainout, entry)], 'bash',
-                shell=True)
-        if not os.path.exists(self.mainout + 'augustus_output/extracted_proteins'):
-            os.makedirs('%saugustus_output/extracted_proteins' % self.mainout)
-
-        self._no_predictions = []
-        for entry in files:
-            self._extract(self.mainout, entry)
-            self._extract(self.mainout, entry, aa=False)
-
-        self._p_open(['find %saugustus_output/extracted_proteins -size 0 -delete' % self.mainout],
-                     'bash', shell=True)
-
-    def _set_rerun_busco_command(self):
-        """
-        This function sets the command line to call to reproduce this run
-        """
-        super(GenomeAnalysis, self)._set_rerun_busco_command()
-        self._rerun_cmd += ' -sp %s' % self._target_species
-        if self._augustus_parameters:
-            self._rerun_cmd += ' --augustus_parameters \'%s\'' % self._augustus_parameters
-
-    def _rerun_augustus(self):
-        """
-        This function runs Augustus and hmmersearch for the second time
-        """
-        #  TODO: augustus and augustus rerun should reuse the shared code
-        #  when possible, and hmmer should not be here
-
-        augustus_log = '%saugustus_output/augustus.log' % self.mainout
-
-        if not os.path.exists('%saugustus_output/gffs' % self.mainout):
-            os.makedirs('%saugustus_output/gffs' % self.mainout)
-        if not os.path.exists('%saugustus_output/gb' % self.mainout):
-            os.makedirs('%saugustus_output/gb' % self.mainout)
-
-        GenomeAnalysis._logger.info(
-            'Training Augustus using Single-Copy Complete BUSCOs:')
-        GenomeAnalysis._logger.info(
-            'Converting predicted genes to short genbank files at %s...' %
-            time.strftime("%m/%d/%Y %H:%M:%S"))
-        for entry in self._single_copy_files:
-            check = 0
-            file_name = self._single_copy_files[entry].split('-')[-1]
-            target_seq_name = self._single_copy_files[entry].split('[')[0]
-            group_name = file_name.split('.')[0]
-
-            # create GFFs with only the "single-copy" BUSCO sequences
-            pred_file = open('%saugustus_output/predicted_genes/%s' %
-                             (self.mainout, file_name))
-            gff_file = open('%saugustus_output/gffs/%s.gff' %
-                            (self.mainout, group_name), 'w')
-            GenomeAnalysis._logger.debug('creating %s' % ('%saugustus_output/gffs/%s.gff' % (self.mainout, group_name)))
-            for line in pred_file:
-                if line.startswith('# start gene'):
-                    pred_name = line.strip().split()[-1]
-                    if pred_name == target_seq_name:
-                        check = 1
-                elif line.startswith('#'):
-                    check = 0
-                elif check == 1:
-                    gff_file.write(line)
-            pred_file.close()
-            gff_file.close()
-
-            gff2_gb_small_dna_pl_job = self._gff2gbSmallDNA_pl.create_job()
-
-            gff2_gb_small_dna_pl_job.add_parameter('%saugustus_output/gffs/%s.gff' % (self.mainout, entry))
-
-            gff2_gb_small_dna_pl_job.add_parameter('%s' % self._sequences)
-
-            gff2_gb_small_dna_pl_job.add_parameter('1000')
-
-            gff2_gb_small_dna_pl_job.add_parameter('%saugustus_output/gb/%s.raw.gb' % (self.mainout, entry))
-
-            gff2_gb_small_dna_pl_job.stderr_file = [augustus_log, 'a']
-
-            gff2_gb_small_dna_pl_job.stdout_file = gff2_gb_small_dna_pl_job.stderr_file
-
-        self._gff2gbSmallDNA_pl.run_jobs(self._cpus, log_it=False)
-
-        GenomeAnalysis._logger.info(
-            'All files converted to short genbank files, now running '
-            'the training scripts at %s...' % time.strftime("%m/%d/%Y %H:%M:%S"))
-
-        # create new species config file from template
-        new_species_pl_job = self._new_species_pl.create_job()
-        # bacteria clade needs to be flagged as "prokaryotic"
-        if self._domain == 'prokaryota':
-            new_species_pl_job.add_parameter('--prokaryotic')
-        new_species_pl_job.add_parameter('--species=BUSCO_%s%s' % (self._out, self._random))
-        new_species_pl_job.stderr_file = [augustus_log, 'a']
-        new_species_pl_job.stdout_file = new_species_pl_job.stderr_file
-        self._new_species_pl.run_jobs(self._cpus, False)
-
-        GenomeAnalysis._logger.debug('concat all gb files...')
-
-        self._p_open(['find %saugustus_output/gb/ -type f -name "*.gb" -exec cat {} \; '
-                     '> %saugustus_output/training_set_%s.txt' % (self.mainout, self.mainout, self._out)],
-                     'bash', shell=True)
-
-        GenomeAnalysis._logger.debug('run etraining...')
-        # train on new training set (complete single copy buscos)
-        etraining_job = self._etraining.create_job()
-        etraining_job.add_parameter('--species=BUSCO_%s%s' % (self._out, self._random))
-        etraining_job.add_parameter('%saugustus_output/training_set_%s.txt' % (self.mainout, self._out))
-        etraining_job.stderr_file = [augustus_log, 'a']
-        etraining_job.stdout_file = new_species_pl_job.stderr_file
-        self._etraining.run_jobs(self._cpus, False)
-
-        # long mode (--long) option - runs all the Augustus optimization
-        # scripts (adds ~1 day of runtime)
-        if self._long:
-            GenomeAnalysis._logger.warning(
-                'Optimizing augustus metaparameters, this may take a '
-                'very long time, started at %s' % time.strftime("%m/%d/%Y %H:%M:%S"))
-            optimize_augustus_pl_job = self._optimize_augustus_pl.create_job()
-            optimize_augustus_pl_job.add_parameter('--cpus=%s' % self._cpus)
-            optimize_augustus_pl_job.add_parameter('--species=BUSCO_%s%s' % (self._out, self._random))
-            optimize_augustus_pl_job.add_parameter('%saugustus_output/training_set_%s.txt' % (self.mainout, self._out))
-            optimize_augustus_pl_job.stderr_file = [augustus_log, 'a']
-            optimize_augustus_pl_job.stdout_file = optimize_augustus_pl_job.stderr_file
-            self._optimize_augustus_pl.run_jobs(self._cpus, False)
-            # train on new training set (complete single copy buscos)
-            etraining_job = self._etraining.create_job()
-            etraining_job.add_parameter('--species=BUSCO_%s%s' % (self._out, self._random))
-            etraining_job.add_parameter('%saugustus_output/training_set_%s.txt' % (self.mainout, self._out))
-            etraining_job.stderr_file = [augustus_log, 'a']
-            etraining_job.stdout_file = new_species_pl_job.stderr_file
-            self._etraining.run_jobs(self._cpus, False)
-
-        #######################################################
-
-        # get all scaffolds with blast results
-        self._extract_scaffolds(missing_and_frag_only=True)
-
-        GenomeAnalysis._logger.info(
-            'Re-running Augustus with the new metaparameters, number of '
-            'target BUSCOs: %s' % len(self._missing_busco_list +
-                                      self._fragmented_busco_list))
-
-        augustus_rerun_seds = []
-
-        # Move first run and create a folder for the rerun
-        self._p_open(['mv', '%saugustus_output/predicted_genes' % self.mainout,
-                     '%saugustus_output/predicted_genes_run1' % self.mainout], 'bash', shell=False)
-        os.makedirs('%saugustus_output/predicted_genes' % self.mainout)
-        self._p_open(['mv', '%shmmer_output/' % self.mainout, '%shmmer_output_run1/'
-                     % self.mainout], 'bash', shell=False)
-        os.makedirs('%shmmer_output/' % self.mainout)
-
-        # Update the location dict with the new blast search
-        # coordinates of hits by BUSCO
-        self._location_dic = {}
-        f = open('%s/blast_output/coordinates_%s_missing_and_frag_rerun.tsv' %
-                 (self.mainout, self._out))
-        for line in f:
-            line = line.strip().split('\t')
-            scaff_id = line[1]
-            scaff_start = line[2]
-            scaff_end = line[3]
-            group_name = line[0]
-
-            if group_name not in self._location_dic:
-                # scaffold,start and end
-                self._location_dic[group_name] = [[scaff_id, scaff_start,
-                                                   scaff_end]]
-            elif group_name in self._location_dic:
-                self._location_dic[group_name].append([scaff_id, scaff_start,
-                                                       scaff_end])
-        f.close()
-
-        for entry in self._missing_busco_list + self._fragmented_busco_list:
-            if entry in self._location_dic:
-                for location in self._location_dic[entry]:
-                    scaff = location[0] + self._out + str(self._random) + \
-                            '_.temp'
-                    scaff_start = location[1]
-                    scaff_end = location[2]
-                    output_index = self._location_dic[entry].index(location) + 1
-
-                    out_name = '%saugustus_output/predicted_genes/%s.out.%s' \
-                               % (self.mainout, entry, output_index)
-
-                    augustus_job = self._augustus.create_job()
-                    augustus_job.add_parameter('--codingseq=1')
-                    augustus_job.add_parameter('--proteinprofile=%sprfl/%s.prfl' % (self._lineage_path, entry))
-                    augustus_job.add_parameter('--predictionStart=%s ' % scaff_start)
-                    augustus_job.add_parameter('--predictionEnd=%s ' % scaff_end)
-                    augustus_job.add_parameter('--species=BUSCO_%s' % self._out + str(self._random))
-                    for p in self._augustus_parameters.split(' '):
-                        if len(p) > 2:
-                            augustus_job.add_parameter(p)
-                    augustus_job.add_parameter('%s%s' % (self._tmp, scaff))
-                    augustus_job.stdout_file = [out_name, 'w']
-                    augustus_job.stderr_file = [augustus_log, 'a']
-
-                    sed_call = 'sed -i.bak \'1,3d\' %s;rm %s.bak' % (out_name,
-                                                                     out_name)
-                    augustus_rerun_seds.append(sed_call)
-
-                    out_name = '%shmmer_output/%s.out.%s' % (self.mainout,
-                                                             entry,
-                                                             output_index)
-                    augustus_fasta = \
-                        '%saugustus_output/extracted_proteins/%s.faa.%s' \
-                        % (self.mainout, entry, output_index)
-
-                    hmmer_job = self._hmmer.create_job()
-
-                    hmmer_job.add_parameter('--domtblout')
-                    hmmer_job.add_parameter('%s' % out_name)
-                    hmmer_job.add_parameter('-o')
-                    hmmer_job.add_parameter('%stemp_%s%s' % (self._tmp, self._out, self._random))
-                    hmmer_job.add_parameter('--cpu')
-                    hmmer_job.add_parameter('1')
-                    hmmer_job.add_parameter('%shmms/%s.hmm' % (self._lineage_path, entry))
-                    hmmer_job.add_parameter('%s' % augustus_fasta)
-
-            else:
-                pass
-
-        self._augustus.run_jobs(self._cpus)
-
-        for sed_string in augustus_rerun_seds:
-            self._p_open(['%s' % sed_string], 'bash', shell=True)
-        # Extract fasta files from augustus output
-        GenomeAnalysis._logger.info('Extracting predicted proteins...')
-        self._no_predictions = []
-        for entry in self._missing_busco_list + self._fragmented_busco_list:
-            if entry in self._location_dic:
-                for location in self._location_dic[entry]:
-                    output_index = self._location_dic[entry].index(location) + 1
-                    # when extract gets reworked to not need MAINOUT,
-                    # change to OUT_NAME
-                    plain_name = '%s.out.%s' % (entry, output_index)
-                    self._extract(self.mainout, plain_name)
-                    self._extract(self.mainout, plain_name, aa=False)
-            else:
-                pass
-
-        # filter out the line that have no augustus prediction
-        for job in self._hmmer.jobs_to_run:
-            word = job.cmd_line
-            target_seq = word[-1].split('/')[-1]
-            if target_seq in self._no_predictions:
-                self._hmmer.remove_job(job)
-
-        GenomeAnalysis._logger.info('****** Step 3/3, current time: %s ******'
-                                    % time.strftime("%m/%d/%Y %H:%M:%S"))
-        GenomeAnalysis._logger.info(
-            'Running HMMER to confirm orthology of predicted proteins:')
-
-        self._hmmer.run_jobs(self._cpus)
-
-        # Fuse the run1 and rerun folders
-        self._p_open(['mv %saugustus_output/predicted_genes/*.* '
-                     '%saugustus_output/predicted_genes_run1/ 2> /dev/null'
-                      % (self.mainout, self.mainout)], 'bash', shell=True)
-        self._p_open(['mv %shmmer_output/*.* %shmmer_output_run1/ 2> /dev/null'
-                     % (self.mainout, self.mainout)], 'bash', shell=True)
-        self._p_open(['rm', '-r', '%saugustus_output/predicted_genes' % self.mainout], 'bash',
-                     shell=False)
-        self._p_open(['rm', '-r', '%shmmer_output' % self.mainout], 'bash', shell=False)
-        self._p_open(['mv', '%saugustus_output/predicted_genes_run1'
-                     % self.mainout, '%saugustus_output/predicted_genes' %
-                     self.mainout], 'bash', shell=False)
-        self._p_open(['mv', '%shmmer_output_run1' % self.mainout, '%shmmer_output' % self.mainout], 'bash', shell=False)
-
-        # Compute the final results
-        self._produce_short_summary()
-
-        if len(self._missing_busco_list) == self._totalbuscos:
-            GenomeAnalysis._logger.warning(
-                'BUSCO did not find any match. Do not forget to check '
-                'the file %s to exclude a problem regarding Augustus' %
-                augustus_log)
-        # get single-copy files as fasta
-        if not os.path.exists('%ssingle_copy_busco_sequences' % self.mainout):
-            os.makedirs('%ssingle_copy_busco_sequences' % self.mainout)
-
-        GenomeAnalysis._logger.debug('Getting single-copy files...')
-        for entry in self._single_copy_files:
-            check = 0
-
-            file_name = \
-                self._single_copy_files[entry].split('-')[-1].replace('out',
-                                                                      'faa')
-            file_name_nucl = \
-                self._single_copy_files[entry].split('-')[-1].replace('out',
-                                                                      'fna')
-            target_seq_name = self._single_copy_files[entry].split('[')[0]
-            group_name = file_name.split('.')[0]
-            seq_coord_start = \
-                self._single_copy_files[entry].split(']-')[0].split('[')[1]
-
-            pred_fasta_file = open('%saugustus_output/extracted_proteins/%s' %
-                                   (self.mainout, file_name))
-            single_copy_outfile = open('%ssingle_copy_busco_sequences/%s.faa' %
-                                       (self.mainout, group_name), 'w')
-
-            pred_fasta_file_nucl = \
-                open('%saugustus_output/extracted_proteins/%s' %
-                     (self.mainout, file_name_nucl))
-            single_copy_outfile_nucl = \
-                open('%ssingle_copy_busco_sequences/%s.fna' %
-                     (self.mainout, group_name), 'w')
-
-            for line in pred_fasta_file:
-                if line.startswith('>%s' % target_seq_name):
-                    single_copy_outfile.write(
-                        '>%s:%s:%s\n' % (group_name, self._sequences,
-                                         seq_coord_start))
-                    check = 1
-                elif line.startswith('>'):
-                    check = 0
-                elif check == 1:
-                    single_copy_outfile.write(line)
-
-            for line in pred_fasta_file_nucl:
-                if line.startswith('>%s' % target_seq_name):
-                    single_copy_outfile_nucl.write(
-                        '>%s:%s:%s\n' % (group_name, self._sequences,
-                                         seq_coord_start))
-                    check = 1
-                elif line.startswith('>'):
-                    check = 0
-                elif check == 1:
-                    single_copy_outfile_nucl.write(line)
-
-            pred_fasta_file.close()
-            single_copy_outfile.close()
-            pred_fasta_file_nucl.close()
-            single_copy_outfile_nucl.close()
-
-    def _move_retraining_parameters(self):
-        """
-        This function moves retraining parameters from augustus species folder
-        to the run folder
-        """
-        if os.path.exists(self._augustus_config_path + ('species/BUSCO_%s%s' % (self._out, self._random))):
-            self._p_open(['cp', '-r', '%sspecies/BUSCO_%s%s'
-                         % (self._augustus_config_path, self._out, self._random),
-                         '%saugustus_output/retraining_parameters' % self.mainout], 'bash', shell=False)
-            self._p_open(['rm', '-rf', '%sspecies/BUSCO_%s%s'
-                         % (self._augustus_config_path, self._out, self._random)], 'bash', shell=False)
-        else:
-            GenomeAnalysis._logger.warning(
-                'Augustus did not produce a retrained species folder, '
-                'please check the augustus log file in the run folder '
-                'to ensure that nothing went wrong '
-                '(%saugustus_output/augustus.log)' % self.mainout)
-
-    # @overrides
-    def _run_hmmer(self):
-        """
-        This function runs hmmsearch.
-        :raises SystemExit: if the hmmsearch result folder is empty
-        after the run
-        """
-        GenomeAnalysis._logger.info(
-            'Running HMMER to confirm orthology of predicted proteins:')
-
-        files = os.listdir('%saugustus_output/extracted_proteins' %
-                           self.mainout)
-        files.sort()
-        if not os.path.exists(self.mainout + 'hmmer_output'):
-            os.makedirs('%shmmer_output' % self.mainout)
-
-        count = 0
-        for entry in files:
-            if entry.split('.')[-2] == 'faa':
-                count += 1
-                group_name = entry.split('.')[0]
-                group_index = entry.split('.')[-1]
-                hmmer_job = self._hmmer.create_job()
-                hmmer_job.add_parameter('--domtblout')
-                hmmer_job.add_parameter('%shmmer_output/%s.out.%s' % (self.mainout, group_name, group_index))
-                hmmer_job.add_parameter('-o')
-                hmmer_job.add_parameter('%stemp_%s%s' % (self._tmp, self._out, self._random))
-                hmmer_job.add_parameter('--cpu')
-                hmmer_job.add_parameter('1')
-                hmmer_job.add_parameter('%shmms/%s.hmm' % (self._lineage_path, group_name))
-                hmmer_job.add_parameter('%saugustus_output/extracted_proteins/%s' %
-                                        (self.mainout, entry))
-
-        self._hmmer.run_jobs(self._cpus)
-
-    def _run_tarzip_augustus_output(self):
-        """
-        This function tarzips results folder
-        """
-        # augustus_output/predicted_genes
-        self._p_open(['tar', '-C', '%saugustus_output' % self.mainout,
-                      '-zcf', '%saugustus_output/predicted_genes.tar.gz' %
-                      self.mainout, 'predicted_genes', '--remove-files'],
-                     'bash', shell=False)
-        # augustus_output/extracted_proteins
-        self._p_open(['tar', '-C', '%saugustus_output' % self.mainout,
-                      '-zcf', '%saugustus_output/extracted_proteins.tar.gz' %
-                      self.mainout, 'extracted_proteins', '--remove-files'],
-                     'bash', shell=False)
-        # augustus_output/gb
-        self._p_open(['tar', '-C', '%saugustus_output' % self.mainout,
-                      '-zcf', '%saugustus_output/gb.tar.gz' % self.mainout, 'gb', '--remove-files'],
-                     'bash', shell=False)
-        # augustus_output/gffs
-        self._p_open(['tar', '-C', '%saugustus_output' % self.mainout,
-                      '-zcf', '%saugustus_output/gffs.tar.gz' %
-                      self.mainout, 'gffs', '--remove-files'], 'bash', shell=False)
-        # single_copy_busco_sequences
-        self._p_open(['tar', '-C', '%s' % self.mainout, '-zcf',
-                      '%ssingle_copy_busco_sequences.tar.gz' % self.mainout,
-                      'single_copy_busco_sequences', '--remove-files'], 'bash', shell=False)
-
-    def _extract(self, path, group, aa=True):
-        """
-        This function extracts fasta files from augustus output
-        :param path: the path to the BUSCO run folder
-        :type path: str
-        :param group: the BUSCO group id
-        :type group: str
-        :param aa: to tell whether to extract amino acid instead of nucleotide
-        sequence
-        :type aa: bool
-        """
-        ext = 'fna'
-        start_str = '# coding sequence'
-        end_str = '# protein'
-        if aa:
-            ext = 'faa'
-            start_str = '# protein'
-            end_str = '# end'
-
-        count = 0
-        group_name = group.split('.')[0]
-        try:
-            group_index = int(group.split('.')[-1])
-        except IndexError:
-            group_index = '1'
-            group += '.out.1'
-        group_index = str(group_index)
-
-        f = open('%saugustus_output/predicted_genes/%s' % (path, group))
-        written_check = 0
-        check = 0
-        while True:
-            line = f.readline()
-            if not line:
-                break
-            if line.startswith('# start gene'):
-                line = f.readline()
-                line = line.split()
-                places = [line[0], line[3], line[4]]
-            elif line.startswith(start_str):
-                line = line.strip().split('[')
-                count += 1
-                if written_check == 0:
-                    out = open('%saugustus_output/extracted_proteins/%s.%s.%s'
-                               % (path, group_name, ext, group_index), 'w')
-                    written_check = 1
-                out.write('>g%s[%s:%s-%s]\n' % (count, places[0], places[1],
-                                                places[2]))
-                if line[1][-1] == ']':
-                    line[1] = line[1][:-1]
-                out.write(line[1])
-                check = 1
-            else:
-                if line.startswith('# sequence of block'):
-                    check = 0
-                elif line.startswith(end_str):
-                    check = 0
-                    out.write('\n')
-                elif check == 1:
-                    line = line.split()[1]
-                    if line[-1] == ']':
-                        line = line[:-1]
-                    out.write(line)
-        f.close()
-        if written_check == 1:
-            out.close()
-        else:
-            self._no_predictions.append('%s.faa.%s' %
-                                        (group_name, group_index))
-
-    # @overrides
-    def _check_tool_dependencies(self):
+    def check_tool_dependencies(self):
         """
         check dependencies on tools
         :raises SystemExit: if a Tool is not available
         """
-        super(GenomeAnalysis, self)._check_tool_dependencies()
-        # check 'augustus' command availability
-        if not Tool.check_tool_available('augustus', self._params, True):
-            GenomeAnalysis._logger.error(
-                '\"augustus\" is not accessible, check its path in the config.ini file (do not include the commmand '
-                'in the path !), and '
-                'add it to your $PATH environmental variable (the entry in config.ini is not sufficient '
-                'for retraining to work properly)')
-            raise SystemExit
+        super().check_tool_dependencies()
 
-        # check availability augustus - related commands
-        if not Tool.check_tool_available('etraining', self._params, True):
-            GenomeAnalysis._logger.error(
-                '\"etraining\" is not accessible, check its path in the config.ini file(do not include the commmand '
-                'in the path !), and '
-                'add it to your $PATH environmental variable (the entry in config.ini is not sufficient '
-                'for retraining to work properly)')
-            raise SystemExit
+    def init_tools(self):
+        """
+        Initialize tools needed for Genome Analysis.
+        :return:
+        """
+        super().init_tools()
 
-        if not Tool.check_tool_available('gff2gbSmallDNA.pl', self._params):
-            GenomeAnalysis._logger.error(
-                'Impossible to locate the required script gff2gbSmallDNA.pl. '
-                'Check that you properly declared the path to augustus scripts folder in your '
-                'config.ini file (do not include the script name '
-                'in the path !)')
-            raise SystemExit
+    # def _run_tarzip_augustus_output(self): # Todo: rewrite using tarfile
+    #     """
+    #     This function tarzips results folder
+    #     """
+    #     # augustus_output/predicted_genes
+    #
+    #     self._p_open(["tar", "-C", "%saugustus_output" % self.main_out,
+    #                   "-zcf", "%saugustus_output/predicted_genes.tar.gz" %
+    #                   self.main_out, "predicted_genes", "--remove-files"],
+    #                  "bash", shell=False)
+    #     # augustus_output/extracted_proteins
+    #     self._p_open(["tar", "-C", "%saugustus_output" % self.main_out,
+    #                   "-zcf", "%saugustus_output/extracted_proteins.tar.gz" %
+    #                   self.main_out, "extracted_proteins", "--remove-files"],
+    #                  "bash", shell=False)
+    #     # augustus_output/gb
+    #     self._p_open(["tar", "-C", "%saugustus_output" % self.main_out,
+    #                   "-zcf", "%saugustus_output/gb.tar.gz" % self.main_out, "gb", "--remove-files"],
+    #                  "bash", shell=False)
+    #     # augustus_output/gffs
+    #     self._p_open(["tar", "-C", "%saugustus_output" % self.main_out,
+    #                   "-zcf", "%saugustus_output/gffs.tar.gz" %
+    #                   self.main_out, "gffs", "--remove-files"], "bash", shell=False)
+    #     # single_copy_busco_sequences
+    #     self._p_open(["tar", "-C", "%s" % self.main_out, "-zcf",
+    #                   "%ssingle_copy_busco_sequences.tar.gz" % self.main_out,
+    #                   "single_copy_busco_sequences", "--remove-files"], "bash", shell=False)
 
-        if not Tool.check_tool_available('new_species.pl', self._params):
-            GenomeAnalysis._logger.error(
-                'Impossible to locate the required script new_species.pl. '
-                'Check that you properly declared the path to augustus scripts folder in your '
-                'config.ini file (do not include the script name '
-                'in the path !)')
-            raise SystemExit
+    def set_rerun_busco_command(self, clargs):
+        """
+        This function sets the command line to call to reproduce this run
+        """
+        clargs.extend(["-sp", self._target_species])
+        super().set_rerun_busco_command(clargs)
 
-        if not Tool.check_tool_available('optimize_augustus.pl', self._params):
-            GenomeAnalysis._logger.error(
-                'Impossible to locate the required script optimize_augustus.pl. '
-                'Check that you properly declared the path to augustus scripts folder in your '
-                'config.ini file (do not include the script name '
-                'in the path !)')
-            raise SystemExit
+    def _write_full_table_header(self, out):
+        """
+        This function adds a header line to the full table file
+        :param out: a full table file
+        :type out: file
+        """
+        out.write("# Busco id\tStatus\tContig\tStart\tEnd\tScore\tLength\n")
 
-    def _check_file_dependencies(self):
+
+class GenomeAnalysisProkaryotes(GenomeAnalysis):
+    """
+    This class runs a BUSCO analysis on a genome.
+    """
+
+    def __init__(self, config):
+        """
+        Initialize an instance.
+        :param config: Values of all parameters that have to be defined
+        :type config: PipeConfig
+        """
+        super().__init__(config)
+        self.load_persistent_tools()
+
+        # Get genetic_code from dataset.cfg file
+        # bacteria/archaea=11; Entomoplasmatales,Mycoplasmatales=4
+        try:
+            self._genetic_code = self._config.get("prodigal", "prodigal_genetic_code").split(",")
+        except NoOptionError:
+            self._genetic_code = ["11"]
+
+        if len(self._genetic_code) > 1:
+            try:
+                self.ambiguous_cd_range = [float(self._config.get("prodigal", "ambiguous_cd_range_lower")),
+                                           float(self._config.get("prodigal", "ambiguous_cd_range_upper"))]
+            except NoOptionError:
+                raise SystemExit("Dataset config file does not contain required information. Please upgrade datasets.")
+
+        else:
+            self.ambiguous_cd_range = [None, 0]
+
+        self.code_4_selected = False
+        self.prodigal_output_dir = os.path.join(self.main_out, "prodigal_output")
+
+    def _cleanup(self):
+        # tmp_path = os.path.join(self.prodigal_output_dir, "tmp")
+        # if os.path.exists(tmp_path):
+        #     shutil.rmtree(tmp_path)
+        super()._cleanup()
+
+    def run_analysis(self):
+        """
+        This function calls all needed steps for running the analysis.
+        """
+        # Initialize tools and check dependencies
+        super().run_analysis()
+
+        if not os.path.exists(self.prodigal_output_dir):  # If prodigal has already been run on the input, don't run it again
+            os.makedirs(self.prodigal_output_dir)
+            self._run_prodigal()
+            self._config.persistent_tools.append(self.prodigal_runner)
+
+        elif any(g not in self.prodigal_runner.genetic_code for g in self._genetic_code):
+            self.prodigal_runner.genetic_code = self._genetic_code
+            self.prodigal_runner.cd_lower, self.prodigal_runner.cd_upper = self.ambiguous_cd_range
+            self._run_prodigal()
+
+        else:
+            # Prodigal has already been run on input. Don't run again, just load necessary params.
+            # First determine which GC to use
+            self.prodigal_runner.select_optimal_results(self._genetic_code, self.ambiguous_cd_range)
+            tmp_file = self.prodigal_runner.gc_run_results[self.prodigal_runner.gc]["tmp_name"]
+            log_file = self.prodigal_runner.gc_run_results[self.prodigal_runner.gc]["log_file"]
+            self.prodigal_runner._organize_prodigal_files(tmp_file, log_file)
+
+        self.code_4_selected = self.prodigal_runner.gc == "4"
+        self.sequences_nt = self.prodigal_runner.gc_run_results[self.prodigal_runner.gc]["seqs_nt"]
+        self.sequences_aa = self.prodigal_runner.gc_run_results[self.prodigal_runner.gc]["seqs_aa"]
+        self._gene_details = self.prodigal_runner.gc_run_results[self.prodigal_runner.gc]["gene_details"]
+        self.run_hmmer(self.prodigal_runner.output_faa)
+        self._write_buscos_to_file(self.sequences_aa, self.sequences_nt)
+        return
+
+    def load_persistent_tools(self):
+        """
+        For multiple runs, load Prodigal Runner in the same state as the previous run, to avoid having to run Prodigal
+        on the input again.
+        :return:
+        """
+        for tool in self._config.persistent_tools:
+            if isinstance(tool, ProdigalRunner):
+                self.prodigal_runner = tool
+            else:
+                raise SystemExit("Unrecognized persistent tool.")
+
+    def create_dirs(self):
+        super().create_dirs()
+
+    def check_tool_dependencies(self):
+        """
+        check dependencies on tools
+        :raises SystemExit: if a Tool is not available
+        """
+        super().check_tool_dependencies()
+
+    def init_tools(self):
+        """
+        Init the tools needed for the analysis
+        """
+        super().init_tools()
+        try:
+            assert(isinstance(self._prodigal_tool, Tool))
+        except AttributeError:
+            self._prodigal_tool = Tool("prodigal", self._config)
+        except AssertionError:
+            raise SystemExit("Prodigal should be a tool")
+
+    @log("***** Run Prodigal on input to predict and extract genes *****", logger)
+    def _run_prodigal(self):
+        """
+        Run Prodigal on input file to detect genes.
+        :return:
+        """
+        if not hasattr(self, "prodigal_runner"):
+            self.prodigal_runner = ProdigalRunner(self._prodigal_tool, self._input_file, self.prodigal_output_dir,
+                                                  self._genetic_code, self.ambiguous_cd_range, self.log_folder)
+        self.prodigal_runner.run()
+        self.code_4_selected = self.prodigal_runner.code_4_selected
+        return
+
+    def _write_full_table_header(self, out):
+        """
+        This function adds a header line to the full table file
+        :param out: a full table file
+        :type out: file
+        """
+        out.write("# Busco id\tStatus\tContig\tStart\tEnd\tScore\tLength\n")
+
+
+class GenomeAnalysisEukaryotes(GenomeAnalysis):
+    """
+    This class runs a BUSCO analysis on a euk_genome.
+    Todo: reintroduce restart mode with checkpoints
+    """
+    def __init__(self, config):
+        """
+        Retrieve the augustus config path, mandatory for genome
+        Cannot be specified through config because some augustus perl scripts use it as well
+        BUSCO could export it if absent, but do not want to mess up with the user env,
+        let's just tell the user to do it for now.
+
+        :param config: Values of all parameters that have to be defined
+        :type config: PipeConfig
+        """
+        self._augustus_config_path = os.environ.get("AUGUSTUS_CONFIG_PATH")
+        try:
+            self._augustus_parameters = config.get("busco_run", "augustus_parameters").replace(',', ' ')
+        except NoOptionError:
+            self._augustus_parameters = ""
+        super().__init__(config)
+        self._check_file_dependencies()
+        self.mkblast_runner = None
+        self.tblastn_runner = None
+        self.augustus_runner = None
+        self.sequences_nt = {}
+        self.sequences_aa = {}
+
+    def create_dirs(self):
+        super().create_dirs()
+
+    def init_tools(self):
+        """
+        Initialize all required tools for Genome Eukaryote Analysis:
+        MKBlast, TBlastn, Augustus and Augustus scripts: GFF2GBSmallDNA, new_species, etraining
+        :return:
+        """
+        super().init_tools()
+        try:
+            assert(isinstance(self._augustus_tool, Tool))
+        except AttributeError:
+            self._augustus_tool = Tool("augustus", self._config, augustus_out=True)
+            # For some reason Augustus appears to send a return code before it writes to stdout, so we have to
+            # sleep briefly to allow the output to be written to the file. Otherwise we have a truncated output which
+            # will cause an error.
+            # self._augustus_tool.sleep = 0.4
+        except AssertionError:
+            raise SystemExit("Augustus should be a tool")
+
+        try:
+            assert(isinstance(self._gff2gbSmallDNA_tool, Tool))
+        except AttributeError:
+            self._gff2gbSmallDNA_tool = Tool("gff2gbSmallDNA.pl", self._config)
+        except AssertionError:
+            raise SystemExit("gff2gbSmallDNA.pl should be a tool")
+
+        try:
+            assert(isinstance(self._new_species_tool, Tool))
+        except AttributeError:
+            self._new_species_tool = Tool("new_species.pl", self._config)
+        except AssertionError:
+            raise SystemExit("new_species.pl should be a tool")
+
+        try:
+            assert(isinstance(self._etraining_tool, Tool))
+        except AttributeError:
+            self._etraining_tool = Tool("etraining", self._config)
+        except AssertionError:
+            raise SystemExit("etraining should be a tool")
+
+        if self._long:
+            try:
+                assert (isinstance(self._optimize_augustus_tool, Tool))
+            except AttributeError:
+                self._optimize_augustus_tool = Tool("optimize_augustus.pl", self._config)
+            except AssertionError:
+                raise SystemExit("optimize_augustus should be a tool")
+
+        return
+
+    @log("Running Augustus gene predictor on BLAST search results.", logger)
+    def _run_augustus(self, coords):
+        output_dir = os.path.join(self.run_folder, "augustus_output")
+        if not os.path.exists(output_dir):  # TODO: consider grouping all create_dir calls into one function for all tools
+            os.mkdir(output_dir)
+        self.augustus_runner = AugustusRunner(self._augustus_tool, output_dir, self.tblastn_runner.output_seqs, self._target_species,
+                                              self._lineage_dataset, self._augustus_parameters, coords,
+                                              self._cpus, self.log_folder, self.sequences_aa, self.sequences_nt)
+        self.augustus_runner.run()
+        self.sequences_nt = self.augustus_runner.sequences_nt
+        self.sequences_aa = self.augustus_runner.sequences_aa
+
+    def _rerun_augustus(self, coords):
+        self._augustus_tool.total = 0  # Reset job count
+        self._augustus_tool.nb_done = 0
+        missing_and_fragmented_buscos = self.hmmer_runner.missing_buscos + list(
+            self.hmmer_runner.fragmented_buscos.keys())
+        logger.info("Re-running Augustus with the new metaparameters, number of target BUSCOs: {}".format(
+            len(missing_and_fragmented_buscos)))
+        missing_and_fragmented_coords = {busco: coords[busco] for busco in coords if busco in missing_and_fragmented_buscos}
+        logger.debug('Trained species folder is {}'.format(self._target_species))
+        self._run_augustus(missing_and_fragmented_coords)
+        return
+
+    def _set_checkpoint(self, id=None):
+        """
+        This function update the checkpoint file with the provided id or delete
+        it if none is provided
+        :param id: the id of the checkpoint
+        :type id: int
+        """
+        checkpoint_filename = os.path.join(self.run_folder, "checkpoint.tmp")
+        if id:
+            with open(checkpoint_filename, "w") as checkpt_file:
+                checkpt_file.write("{}.{}".format(id, self._mode))
+        else:
+            if os.path.exists(checkpoint_filename):
+                os.remove(checkpoint_filename)
+        return
+
+    def _run_gff2gb(self):
+        self.gff2gb = GFF2GBRunner(self._gff2gbSmallDNA_tool, self.run_folder, self._input_file,
+                                   self.hmmer_runner.single_copy_buscos, self._cpus)
+        self.gff2gb.run()
+        return
+
+    def _run_new_species(self):
+        new_species_name = "BUSCO_{}".format(os.path.basename(self.main_out))
+        self.new_species_runner = NewSpeciesRunner(self._new_species_tool, self._domain, new_species_name, self._cpus)
+        # create new species config file from template
+        self.new_species_runner.run()
+        return new_species_name
+
+    def _run_etraining(self):
+        # train on new training set (complete single copy buscos)
+        self.etraining_runner = ETrainingRunner(self._etraining_tool, self.main_out, self._cpus)
+        self.etraining_runner.run()
+        return
+
+    def run_analysis(self):
+        """
+                This function calls all needed steps for running the analysis.
+                Todo: reintroduce checkpoints and restart option.
+        """
+
+        super().run_analysis()
+        self._run_mkblast()
+        coords = self._run_tblastn()
+        self._run_augustus(coords)
+        self._gene_details = self.augustus_runner.gene_details
+        self.run_hmmer(self.augustus_runner.output_sequences)
+        if self.busco_type == "main":
+            self.rerun_analysis()
+
+    def rerun_analysis(self):
+
+        # self._fix_restart_augustus_folder()  # todo: reintegrate this when checkpoints are restored
+        coords = self._run_tblastn(missing_and_frag_only=True, ancestral_variants=self._has_variants_file)
+
+        logger.info("Training Augustus using Single-Copy Complete BUSCOs:")
+        logger.info("Converting predicted genes to short genbank files")
+
+        self._run_gff2gb()
+
+        logger.info("All files converted to short genbank files, now running the training scripts")
+        new_species_name = self._run_new_species()
+        self._target_species = new_species_name
+
+        self._merge_gb_files()
+
+        self._run_etraining()
+
+        if self._long:
+            self._run_optimize_augustus(new_species_name)
+            self._run_etraining()
+
+        self._rerun_augustus(coords)
+        self._gene_details.update(self.augustus_runner.gene_details)
+        self.run_hmmer(self.augustus_runner.output_sequences)
+        self._write_buscos_to_file(self.sequences_aa, self.sequences_nt)
+
+        self._move_retraining_parameters()  # todo: clean species folder on systemexit
+        # if self._tarzip:
+        #     self._run_tarzip_augustus_output()
+        #     self._run_tarzip_hmmer_output()
+        # remove the checkpoint, run is done
+        self._set_checkpoint()
+        return
+
+    def _check_file_dependencies(self):  # todo: currently only implemented for GenomeAnalysisEukaryotes, checking Augustus dirs. Does it need to be rolled out for all analyses?
         """
         check dependencies on files and folders
         properly configured.
@@ -1155,37 +432,101 @@ class GenomeAnalysis(BuscoAnalysis):
         present
         """
         try:
-            if not os.access(self._augustus_config_path, os.W_OK):
-                GenomeAnalysis._logger.error(
-                    'Cannot write to Augustus config path, '
-                    'please make sure you have write permissions to %s' %
-                    self._augustus_config_path)
-                raise SystemExit
+            augustus_species_dir = os.path.join(self._augustus_config_path, "species")
+            if not os.access(augustus_species_dir, os.W_OK):
+                raise SystemExit("Cannot write to Augustus species folder, please make sure you have write "
+                                 "permissions to {}".format(augustus_species_dir))
+
         except TypeError:
-            GenomeAnalysis._logger.error(
-                'The environment variable AUGUSTUS_CONFIG_PATH is not set')
-            raise SystemExit
+            raise SystemExit(
+                "The environment variable AUGUSTUS_CONFIG_PATH is not set")
 
-        if not os.path.exists(self._augustus_config_path + '/species/%s' % self._target_species):
-            GenomeAnalysis._logger.error(
-                'Impossible to locate the species "%s" in Augustus config path'
-                ' (%sspecies), check that AUGUSTUS_CONFIG_PATH is properly set'
-                ' and contains this species. \n\t\tSee the help if you want '
-                'to provide an alternative species' %
-                (self._target_species, self._augustus_config_path))
-            raise SystemExit
 
-    def _write_full_table_header(self, out):
+        if not os.path.exists(os.path.join(augustus_species_dir, self._target_species)):
+            raise SystemExit(
+                "Impossible to locate the species \"{0}\" in Augustus species folder"
+                " ({1}), check that AUGUSTUS_CONFIG_PATH is properly set"
+                " and contains this species. \n\t\tSee the help if you want "
+                "to provide an alternative species".format(self._target_species, augustus_species_dir))
+
+    def set_rerun_busco_command(self, clargs):
         """
-        This function adds a header line to the full table file
-        :param out: a full table file
-        :type out: file
+        This function sets the command line to call to reproduce this run
         """
-        out.write('# Busco id\tStatus\tContig\tStart\tEnd\tScore\tLength\n')
+        clargs.extend(["-sp", self._target_species])
+        if self._augustus_parameters:
+            clargs.extend(["--augustus_parameters", "\"%s\"" % self._augustus_parameters])
+        super().set_rerun_busco_command(clargs)
 
-    #
-    # method that should be considered as if protected, for internal use [class]
-    # to move to public and rename if meaningful
-    #
+    def _cleanup(self):
+        """
+        This function cleans temporary files
+        """
+        try:
+            augustus_tmp = self.augustus_runner.tmp_dir
+            if os.path.exists(augustus_tmp):
+                shutil.rmtree(augustus_tmp)
+        except:
+            pass
+        super()._cleanup()
 
-    # Nothing
+
+    def _fix_restart_augustus_folder(self):
+        """
+        This function resets and checks the augustus folder to make a restart
+        possible in phase 2
+        :raises SystemExit: if it is not possible to fix the folders
+        # Todo: reintegrate this when restart option is added back
+        """
+        if os.path.exists(os.path.join(self.augustus_runner.output_folder, "predicted_genes_run1")) \
+                and os.path.exists(os.path.join(self.main_out, "hmmer_output_run1")):
+            os.remove(os.path.join(self.main_out, "augustus_output", "predicted_genes", "*"))
+            os.rmdir(os.path.join(self.main_out, "augustus_output", "predicted_genes"))
+
+            os.rename(os.path.join(self.main_out, "augustus_output", "predicted_genes_run1"),
+                      os.path.join(self.main_out, "augustus_output", "predicted_genes"))
+
+            os.remove(os.path.join(self.main_out, "hmmer_output", "*"))
+            os.rmdir(os.path.join(self.main_out, "hmmer_output"))
+
+            os.rename(os.path.join(self.main_out, "hmmer_output_run1"), os.path.join(self.main_out, "hmmer_output"))
+
+
+        elif (os.path.exists(os.path.join(self.main_out, "augustus_output", "predicted_genes"))
+              and os.path.exists(os.path.join(self.main_out, "hmmer_output"))):
+            pass
+        else:
+            raise SystemExit("Impossible to restart the run, necessary folders are missing. Use the -f option instead of -r")
+        return
+
+    def _move_retraining_parameters(self):
+        """
+        This function moves retraining parameters from augustus species folder
+        to the run folder
+        """
+        augustus_species_path = os.path.join(self._augustus_config_path, "species", self._target_species)
+        if os.path.exists(augustus_species_path):
+            new_path = os.path.join(self.augustus_runner.output_folder, "retraining_parameters", self._target_species)
+            shutil.move(augustus_species_path, new_path)
+        else:
+            logger.warning("Augustus did not produce a retrained species folder.")
+        return
+
+    def _merge_gb_files(self):
+        logger.debug("concat all gb files...")
+        # Concatenate all GB files into one large file
+        with open(os.path.join(self.augustus_runner.output_folder, "training_set.db"), "w") as outfile:
+            gb_dir_path = os.path.join(self.augustus_runner.output_folder, "gb")
+            for fname in os.listdir(gb_dir_path):
+                with open(os.path.join(gb_dir_path, fname), "r") as infile:
+                    outfile.writelines(infile.readlines())
+        return
+
+    def _run_optimize_augustus(self, new_species_name):
+        # long mode (--long) option - runs all the Augustus optimization
+        # scripts (adds ~1 day of runtime)
+        logger.warning("Optimizing augustus metaparameters, this may take a very long time, started at {}".format(
+            time.strftime("%m/%d/%Y %H:%M:%S")))
+        self.optimize_augustus_runner = OptimizeAugustusRunner(self._optimize_augustus_tool, self.augustus_runner.output_folder, new_species_name, self._cpus)
+        self.optimize_augustus_runner.run()
+        return

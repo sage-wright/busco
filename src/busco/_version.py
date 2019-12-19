@@ -2,8 +2,8 @@
 # coding: utf-8
 """
 
-Copyright (c) 2016-2017, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2019, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 
 """
-__version__ = "3.1.0"
+__version__ = "4.0.0"

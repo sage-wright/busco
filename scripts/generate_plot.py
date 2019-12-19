@@ -1,25 +1,25 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # coding: utf-8
 """
 
 .. module:: generate_plot
    :synopsis: This module produces a graphic summary for BUSCO runs based on short summary files
 .. versionadded:: 2.0.0
-.. versionchanged:: 3.0.1
+.. versionchanged:: 4.0.0
 
  This module produces a graphic summary for BUSCO runs based on short summary files
 
-(``python generate_plot.py -h`` and user guide for details on how to do it)
+(``python3 generate_plot.py -h`` and user guide for details on how to do it)
 
 Place the short summary files of all BUSCO runs you would like to see on the figure a single folder.
-Keep the file named as follow: ``short_summary_label.txt``, 'label' being used in the plot as species name
+Keep the file named as follow: ``short_summary.[generic|specific].dataset.label.txt``, 'label' being used in the plot as species name
 
-This tool produces the R code of the figure and uses ggplot2. If your system is able to run R, this script
+This tool produces the R code of the figure and uses ggplot2 (2.2.0+). If your system is able to run R, this script
 automatically runs it.
 
 You can find both the resulting R script for customisation and the figure in the working directory.
 
-Copyright (c) 2016-2017, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2019, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 
 """
@@ -30,12 +30,11 @@ import time
 import traceback
 import argparse
 import subprocess
+import glob
+from shutil import which
 from argparse import RawTextHelpFormatter
 import logging
-from pipebricks.PipeLogger import PipeLogger
-from pipebricks.Toolset import Tool
-from pipebricks.Toolset import ToolException
-from busco.BuscoConfig import BuscoConfig
+from busco.BuscoLogger import BuscoLogger
 
 #: working directory
 _plot_dir = ''
@@ -46,12 +45,12 @@ _r_file = 'busco_figure.R'
 _no_r = False
 
 #: Get an instance of _logger for keeping track of events
-_logger = PipeLogger.get_logger(__name__)
+_logger = BuscoLogger.get_logger(__name__)
 
 RCODE = '######################################\n'\
         '#\n'\
         '# BUSCO summary figure\n'\
-        '# @version 3.0.0\n'\
+        '# @version 4.0.0\n'\
         '# @since BUSCO 2.0.0\n'\
         '# \n' \
         '# Copyright (c) 2016-2017, Evgeny Zdobnov (ez@ezlab.org)\n'\
@@ -107,7 +106,7 @@ RCODE = '######################################\n'\
         '\n'\
         'figure <- ggplot() + \n'\
         '  \n'\
-        '  geom_bar(aes(y = my_percentage, x = my_species, fill = category), data = df, stat="identity", ' \
+        '  geom_bar(aes(y = my_percentage, x = my_species, fill = category), position = position_stack(reverse = TRUE), data = df, stat="identity", ' \
         'width=my_bar_height) + \n'\
         '  coord_flip() + \n' \
         '  theme_gray(base_size = 8) + \n' \
@@ -120,7 +119,7 @@ RCODE = '######################################\n'\
         '  xlab("") + \n'\
         '  ylab("\\n%BUSCOs") + \n'\
         '\n'\
-        '  theme(plot.title = element_text(family=my_family, colour = "black", size = rel(2.2)*my_size_ratio, face = ' \
+        '  theme(plot.title = element_text(family=my_family, hjust=0.5, colour = "black", size = rel(2.2)*my_size_ratio, face = ' \
         '"bold")) + \n'\
         '  theme(legend.position="top",legend.title = element_blank()) + \n'\
         '  theme(legend.text = element_text(family=my_family, size = rel(1.2)*my_size_ratio)) + \n'\
@@ -211,23 +210,17 @@ def _run_r_code():
         return None  # do not run the code, but no need to stop the execution
 
     # run R
-    if os.environ.get('BUSCO_CONFIG_FILE') and os.access(os.environ.get('BUSCO_CONFIG_FILE'), os.R_OK):
-        config = BuscoConfig(os.environ.get('BUSCO_CONFIG_FILE'), {}, False)
+    if which('Rscript') is not None:
+        r_script = ['Rscript','%s%s' % (_plot_dir, _r_file)]
+        p = subprocess.Popen(r_script, shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, err = p.communicate()
+        if out:
+            _logger.info('\n%s' % str(out.decode('utf-8')))
+        if err:
+            _logger.error('\n%s' % str(err.decode('utf-8')))
     else:
-        config = BuscoConfig('%s/../config/config.ini' % os.path.dirname(os.path.realpath(__file__)), {}, False)
-    try:
-        if Tool.check_tool_available('Rscript', config):
-            r_script = Tool('Rscript', config)
-            r_script_job = r_script.create_job()
-            r_script_job.add_parameter('%s%s' % (_plot_dir, _r_file))
-            r_script.run_jobs(1)
-        else:
-            _logger.error(
-                '\"Rscript\" is not accessible, please '
-                'add or modify its path in the config file')
-            raise SystemExit
-    except ToolException as e:
-        _logger.error(e)
+        _logger.error(
+            '\"Rscript\" is not accessible')
         raise SystemExit
 
 
@@ -235,14 +228,14 @@ def _set_args():
     """
     This function sets the parameters provided by the user
     """
-    parser = argparse.ArgumentParser(description='BUSCO %s plot generation tool.\n'
-                                                 'Place all BUSCO short summary files in a single folder. '
+    parser = argparse.ArgumentParser(description='BUSCO plot generation tool.\n'
+                                                 'Place all BUSCO short summary files (short_summary.[generic|specific].dataset.label.txt) in a single folder. '
                                                  'It will be '
                                                  'your working directory, in which the generated plot files'
                                                  ' will be written'
                                                  '\nSee also the user guide'
-                                                 ' for additional information' % BuscoConfig.VERSION,
-                                     usage='python BUSCO_plot.py -wd [WORKING_DIRECTORY] [OTHER OPTIONS]',
+                                                 ' for additional information',
+                                     usage='python3 generate_plot.py -wd [WORKING_DIRECTORY] [OTHER OPTIONS]',
                                      formatter_class=RawTextHelpFormatter, add_help=False)
 
     required = parser.add_argument_group('required arguments')
@@ -252,12 +245,13 @@ def _set_args():
         '-wd', '--working_directory', metavar='PATH', required=True, dest='working_directory',
         help='Define the location of your working directory')
     optional.add_argument(
+        '-rt', '--run_type', required=False, dest='run_type',
+        help='type of summary to use, `generic` or `specific`')
+    optional.add_argument(
         '--no_r', help='To avoid to run R. It will just create the R script file in the working directory',
         action="store_true", dest='no_r')
     optional.add_argument(
         '-q', '--quiet', help='Disable the info logs, displays only errors', action="store_true", dest='quiet')
-    optional.add_argument('-v', '--version', action='version', help="Show this version and exit",
-                          version='BUSCO %s' % BuscoConfig.VERSION)
     optional.add_argument('-h', '--help', action="help", help="Show this help message and exit")
     args = vars(parser.parse_args())
     if args["quiet"]:
@@ -269,44 +263,53 @@ def _set_args():
     _plot_dir = args["working_directory"]
     if _plot_dir[-1] != '/':
         _plot_dir += '/'
-
+    global _run_type
+    _run_type = '*'
+    if args["run_type"]:
+        _run_type = args["run_type"]
 
 def _load_data():
     """
 
     :return:
     """
-    data = {'species': [], 'values': [], 'percentages': []}
-    for f in os.listdir(_plot_dir):
-        if f.startswith('short_summary_'):
-            try:
-                content = open('%s/%s' % (_plot_dir, f))
-                comp = 0
-                dupl = 0
-                frag = 0
-                miss = 0
-                for line in content:
-                    if 'Complete and single-copy BUSCOs' in line:
-                        comp = int(line.split('\t')[1])
-                    elif 'Complete and duplicated BUSCOs' in line:
-                        dupl = int(line.split('\t')[1])
-                    elif 'Fragmented BUSCOs' in line:
-                        frag = int(line.split('\t')[1])
-                    elif 'Missing BUSCOs' in line:
-                        miss = int(line.split('\t')[1])
-                data['species'] += [f[14:].split('.txt')[0]]*4
-                data['values'] += [comp, dupl, frag, miss]
-                total = comp + dupl + frag + miss
-                comp_pc = round(comp/float(total)*100, 1)
-                dupl_pc = round(dupl/float(total)*100, 1)
-                frag_pc = round(frag/float(total)*100, 1)
-                miss_pc = round(100 - comp_pc - dupl_pc - frag_pc, 1)
-                data['percentages'] += [comp_pc, dupl_pc, frag_pc, miss_pc]
-                _logger.info('Loaded %s successfully' % f)
-            except IOError:
-                _logger.warning('Impossible to use the file %s' % f)
+    data = {'species': [], 'values': [], 'percentages': [], 'species_tmp': []}
+    datasets = set([])
+    for f in glob.glob('%s/short_summary.%s.*.*.txt' % (_plot_dir, _run_type)):
+        try:
+            datasets.add(f.split('/')[-1].split('.')[1])
+            content = open(f)
+            comp = 0
+            dupl = 0
+            frag = 0
+            miss = 0
+            for line in content:
+                if 'Complete and single-copy BUSCOs' in line:
+                    comp = int(line.split('\t')[1])
+                elif 'Complete and duplicated BUSCOs' in line:
+                    dupl = int(line.split('\t')[1])
+                elif 'Fragmented BUSCOs' in line:
+                    frag = int(line.split('\t')[1])
+                elif 'Missing BUSCOs' in line:
+                    miss = int(line.split('\t')[1])
+            data['species_tmp'] += [".".join(f.split('/')[-1].split('.')[3:-1]+[f.split('/')[-1].split('.')[2]])]*4
+            data['values'] += [comp, dupl, frag, miss]
+            total = comp + dupl + frag + miss
+            comp_pc = round(comp/float(total)*100, 1)
+            dupl_pc = round(dupl/float(total)*100, 1)
+            frag_pc = round(frag/float(total)*100, 1)
+            miss_pc = round(100 - comp_pc - dupl_pc - frag_pc, 1)
+            data['percentages'] += [comp_pc, dupl_pc, frag_pc, miss_pc]
+            _logger.info('Loaded %s successfully' % f)
+        except IOError:
+            _logger.warning('Impossible to use the file %s' % f)
+    # if only one dataset, remove it from species label
+    if len(datasets) == 1:
+        data['species'] = [label.split('.')[0] for label in data['species_tmp']]
+    else:
+        data['species'] = data['species_tmp']
     if len(data['species']) == 0:
-        _logger.warning('No short summary found in %s' % _plot_dir)
+        _logger.warning('No files matching the pattern short_summary.%s were found in %s' % (_run_type,_plot_dir))
         raise SystemExit
     return data
 
@@ -351,16 +354,16 @@ def main():
     except SystemExit:
         _logger.error('Plot generation failed !')
         _logger.info(
-            'Check the logs, read the user guide, if you still need technical support, then please contact %s\n'
-            % BuscoConfig.CONTACT)
+            'Check the logs, read the user guide, and check the BUSCO issue board on https://gitlab.com/ezlab/busco/issues'
+            )
         raise SystemExit
 
     except KeyboardInterrupt:
         _logger.error('A signal was sent to kill the process')
         _logger.error('Plot generation failed !')
         _logger.info(
-            'Check the logs, read the user guide, if you still need technical support, then please contact %s\n'
-            % BuscoConfig.CONTACT)
+            'Check the logs, read the user guide, and check the BUSCO issue board on https://gitlab.com/ezlab/busco/issues'
+            )
         raise SystemExit
 
     except BaseException:
@@ -369,8 +372,8 @@ def main():
                                                                                               exc_traceback)))
         _logger.error('Plot generation failed !\n')
         _logger.info(
-            'Check the logs, read the user guide, if you still need technical support, then please contact %s\n'
-            % BuscoConfig.CONTACT)
+            'Check the logs, read the user guide, and check the BUSCO issue board on https://gitlab.com/ezlab/busco/issues'
+            )
         raise SystemExit
 
 

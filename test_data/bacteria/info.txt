@@ -1,0 +1,8 @@
+To test BUSCO when analyzing a bacterial genome, use the input genome.fna
+and compare your log with `expected_log.txt`
+
+GCF_000013425.1_ASM1342v1_genomic.fna
+Staphylococcus aureus subsp. aureus NCTC 8325 chromosome, complete genome
+First 10,000 lines
+
+To test: `busco -i genome.fna -c 8 -m geno -f --out test_bacteria`

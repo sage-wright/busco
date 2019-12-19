@@ -2,9 +2,9 @@
 # coding: utf-8
 """
 .. versionadded:: 3.0.0
-.. versionchanged:: 3.0.0
+.. versionchanged:: 4.0.beta1
 
-Copyright (c) 2016-2017, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2019, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 
 This script proceeds to the BUSCO packages installation
@@ -25,6 +25,8 @@ setup(name='BUSCO',
                        'with Benchmarking Universal Single-Copy Orthologs ',
       url='https://busco.ezlab.org/',
       platforms='Unix like',
-      packages=['busco', 'pipebricks'],
-      package_dir={'busco': 'src/busco', 'pipebricks': 'src/pipebricks'}
+      packages=['busco'],
+      package_dir={'busco': 'src/busco'},
+      scripts=['bin/busco'],
+      data_files=[('config', ['config/config.ini'])]
       )

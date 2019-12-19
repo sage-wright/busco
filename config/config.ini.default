@@ -1,76 +1,92 @@
-# BUSCO specific configuration
-# It overrides default values in code and dataset cfg, and is overridden by arguments in command line
-# Uncomment lines when appropriate
-[busco]
+#
+# This is the BUSCOv4 default configuration file.
+# Rename it as config.ini and edit the path and command values to match your own environnment.
+# You can use the script busco_configurator.py to do it for you
+# Many of the options in the busco_run section can alternatively be set using command line arguments. See the help prompt (busco -h) for details.
+# WARNING: passing a parameter through the command line overrides the value specified in this file.
+#
+# Enable a parameter by removing ";"
+#
+[busco_run]
 # Input file
-;in = ./sample_data/target.fa
+;in = /path/to/input_file.fna
 # Run name, used in output files and folder
-;out = SAMPLE
+;out = BUSCO_run
 # Where to store the output directory
-;out_path = ./sample_data
+;out_path = /path/to/output_folder
 # Path to the BUSCO dataset
-;lineage_path = ./sample_data/example
-# Which mode to run (genome / protein / transcriptome)
+;lineage_dataset = bacteria
+# Which mode to run (genome / proteins / transcriptome)
 ;mode = genome
+# Run lineage auto selector
+;auto-lineage = True
+# Run auto selector only for non-eukaryote datasets
+;auto-lineage-prok = True
+# Run auto selector only for eukaryote datasets
+;auto-lineage-euk = True
 # How many threads to use for multithreaded steps
-;cpu = 1
-# Domain for augustus retraining, eukaryota or prokaryota
-# Do not change this unless you know exactly why !!!
-;domain = eukaryota
+;cpu = 16
 # Force rewrite if files already exist (True/False)
 ;force = False
-# Restart mode (True/False)
-;restart = False
 # Blast e-value
 ;evalue = 1e-3
-# Species to use with augustus, for old datasets only
-;species = fly
-# Augustus extra parameters
-# Use single quotes, like this: '--param1=1 --param2=2'
-;augustus_parameters = ''
-# Tmp folder
-;tmp_path = ./tmp/
 # How many candidate regions (contigs, scaffolds) to consider for each BUSCO
 ;limit = 3
 # Augustus long mode for retraining (True/False)
 ;long = False
+# Augustus species
+;augustus_species = human
+# Augustus parameters
+;augustus_parameters='--genemodel=intronless,--singlestrand=false'
 # Quiet mode (True/False)
 ;quiet = False
-# Debug logs (True/False), it needs Quiet to be False
-;debug = True
-# tar gzip output files (True/False)
-;gzip = False
-# Force single core for the tblastn step
-;blast_single_core = True
+# Local destination path for downloaded lineage datasets
+;download_path = ./busco_downloads/
+# Run offline
+;offline=True
+# Ortho DB Datasets version
+;datasets_version = odb10
+# URL to BUSCO datasets
+;download_base_url = https://busco-data.ezlab.org/v4/data/
+# Download most recent BUSCO data and files
+;update-data = True
 
 [tblastn]
-# path to tblastn
-path = /usr/bin/
+path = /ncbi-blast-2.2.31+/bin/
+command = tblastn
 
 [makeblastdb]
-# path to makeblastdb
-path = /usr/bin/
+path = /ncbi-blast-2.2.31+/bin/
+command = makeblastdb
 
 [augustus]
-# path to augustus
-path = /home/osboxes/BUSCOVM/augustus/augustus-3.2.2/bin/
+path = /augustus/bin/
+command = augustus
 
 [etraining]
-# path to augustus etraining
-path = /home/osboxes/BUSCOVM/augustus/augustus-3.2.2/bin/
+path = /augustus/bin/
+command = etraining
 
-# path to augustus perl scripts, redeclare it for each new script
 [gff2gbSmallDNA.pl]
-path = /home/osboxes/BUSCOVM/augustus/augustus-3.2.2/scripts/
+path = /augustus/scripts/
+command = gff2gbSmallDNA.pl
+
 [new_species.pl]
-path = /home/osboxes/BUSCOVM/augustus/augustus-3.2.2/scripts/
+path = /augustus/scripts/
+command = new_species.pl
+
 [optimize_augustus.pl]
-path = /home/osboxes/BUSCOVM/augustus/augustus-3.2.2/scripts/
+path = /augustus/scripts/
+command = optimize_augustus.pl
 
 [hmmsearch]
-# path to HMMsearch executable
-path = /home/osboxes/BUSCOVM/hmmer/hmmer-3.1b2-linux-intel-ia32/binaries/
+path = /usr/local/bin/
+command = hmmsearch
 
-[Rscript]
-# path to Rscript, if you wish to use the plot tool
-path = /usr/bin/
+[sepp]
+path = /home/biodocker/sepp/
+command = run_sepp.py
+
+[prodigal]
+path = /usr/local/bin/
+command = prodigal

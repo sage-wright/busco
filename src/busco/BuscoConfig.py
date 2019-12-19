@@ -1,242 +1,461 @@
-#!/usr/bin/env python
-# coding: utf-8
-"""
-.. module:: BuscoConfig
-   :synopsis: Load and combine all parameters provided to BUSCO through config file, dataset and command line
-.. versionadded:: 3.0.0
-.. versionchanged:: 3.0.1
-
-Copyright (c) 2016-2017, Evgeny Zdobnov (ez@ezlab.org)
-Licensed under the MIT license. See LICENSE.md file.
-
-"""
-import os
-from pipebricks.PipeConfig import PipeConfig
-from pipebricks.PipeLogger import PipeLogger
+from configparser import ConfigParser
+from configparser import NoOptionError
+from configparser import ParsingError
+from configparser import DuplicateOptionError
+from busco.BuscoLogger import BuscoLogger
+from busco.BuscoLogger import LogDecorator as log
+from abc import ABCMeta, abstractmethod
+from busco.BuscoDownloadManager import BuscoDownloadManager
 import busco
+import os
+import shutil
+import glob
+import pprint
 
-try:
-    from configparser import NoOptionError
-    from configparser import NoSectionError
-    from configparser import ParsingError
-    from configparser import DuplicateSectionError
-    from configparser import DuplicateOptionError
-except ImportError:
-    from ConfigParser import NoOptionError  # Python 2.7
-    from ConfigParser import NoSectionError  # Python 2.7
-    from ConfigParser import ParsingError  # Python 2.7
+logger = BuscoLogger.get_logger(__name__)
+
+class BaseConfig(ConfigParser):
+
+    DEFAULT_ARGS_VALUES = {"out_path": os.getcwd(), "cpu": 1, "force": False, "evalue": 1e-3,
+                           "limit": 3, "long": False, "quiet": False,
+                           "download_path": os.path.join(os.getcwd(), "busco_downloads"), "datasets_version": "odb10",
+                           "offline": False, "download_base_url": "https://busco-data.ezlab.org/v4/data/",
+                           "auto-lineage": False, "auto-lineage-prok": False, "auto-lineage-euk": False,
+                           "update-data": False}
+
+    def __init__(self):
+        super().__init__()
+
+    def _load_config_file(self):
+        """
+        Load config file using ConfigParser.
+        :return:
+        """
+        try:
+            with open(self.conf_file) as cfg_file:
+                self.read_file(cfg_file)
+        except IOError:
+            raise SystemExit("Config file {} cannot be found".format(self.conf_file))
+        except ParsingError:
+            raise SystemExit("Unable to parse the contents of config file {}".format(self.conf_file))
+        except DuplicateOptionError:
+            raise SystemExit("Duplicated entry in config file {}. Unable to load configuration.".format(self.conf_file))
+        return
+
+    def _init_downloader(self):
+        """
+        Initialize BuscoDownloadManager to control any file downloads from the BUSCO server.
+        :return:
+        """
+        self.downloader = BuscoDownloadManager(self)
+        return
 
 
-class BuscoConfig(PipeConfig):
+class PseudoConfig(BaseConfig):
+
+    def __init__(self, conf_file):
+        super().__init__()
+        self.conf_file = conf_file
+
+    def load(self):
+        self._load_config_file()
+        self._fill_default_values()
+        self._init_downloader()
+
+    def _fill_default_values(self):
+        self.set("busco_run", "offline", "False")
+
+        try:
+            self.get("busco_run", "download_base_url")
+        except NoOptionError:
+            self.set("busco_run", "download_base_url", type(self).DEFAULT_ARGS_VALUES["download_base_url"])
+
+        try:
+            self.get("busco_run", "download_path")
+        except NoOptionError:
+            self.set("busco_run", "download_path", type(self).DEFAULT_ARGS_VALUES["download_path"])
+
+        try:
+            self.update = self.getboolean("busco_run", "update-data")
+            if not self.update:
+                self.existing_downloads = sorted(glob.glob(os.path.join(self.get("busco_run", "download_path"), "information", "lineages_list*.txt")))[::-1]
+                if self.existing_downloads:
+                    logger.warning("The datasets list shown may not be up-to-date. To get current information, make sure "
+                                   "you have set 'update-data=True' in your config file.")
+                else:
+                    raise SystemExit("Unable to download list of datasets. Please make sure you have set "
+                                     "update-data=True in your config file.")
+
+        except NoOptionError:
+            self.set("busco_run", "update-data", "True")
+
+
+
+class BuscoConfig(ConfigParser, metaclass=ABCMeta):
     """
-    This class extends pipebricks.PipeConfig to read the config.ini file. Furthermore, it uses extra args that can be
+    This class extends busco.PipeConfig to read the config.ini file. Furthermore, it uses extra args that can be
     provided through command line and information available in the dataset.cfg file to produce a single instance
     containing all correct parameters to be injected to a busco.BuscoAnalysis instance.
     """
 
-    FORBIDDEN_HEADER_CHARS = ['ç', '¬', '¢', '´', 'ê', 'î', 'ô', 'ŵ', 'ẑ', 'û', 'â', 'ŝ', 'ĝ', 'ĥ', 'ĵ', 'ŷ',
-                              'ĉ', 'é', 'ï', 'ẅ', 'ë', 'ẅ', 'ë', 'ẗ,', 'ü', 'í', 'ö', 'ḧ', 'é', 'ÿ', 'ẍ', 'è', 'é',
-                              'à', 'ä', '¨', '€', '£', 'á']
+    FORBIDDEN_HEADER_CHARS = ["ç", "¬", "¢", "´", "ê", "î", "ô", "ŵ", "ẑ", "û", "â", "ŝ", "ĝ", "ĥ", "ĵ", "ŷ",
+                              "ĉ", "é", "ï", "ẅ", "ë", "ẅ", "ë", "ẗ,", "ü", "í", "ö", "ḧ", "é", "ÿ", "ẍ", "è", "é",
+                              "à", "ä", "¨", "€", "£", "á"]
 
-    FORBIDDEN_HEADER_CHARS_BEFORE_SPLIT = ['/', '\'']
+    FORBIDDEN_HEADER_CHARS_BEFORE_SPLIT = ["/", "\""]
 
     HMMER_VERSION = 3.1
 
-    MAX_FLANK = 20000
-
     VERSION = busco.__version__
 
-    CONTACT = 'mailto:support@orthodb.org'
+    def __init__(self, **kwargs):
 
-    DEFAULT_ARGS_VALUES = {'cpu': 1, 'evalue': 1e-3, 'species': 'fly', 'tmp_path': './tmp/', 'limit': 3,
-                           'out_path': os.getcwd(), 'domain': 'eukaryota', 'clade_name': 'N/A',
-                           'dataset_creation_date': 'N/A',
-                           'dataset_nb_buscos': 'N/A', 'dataset_nb_species': 'N/A', 'augustus_parameters': '',
-                           'long': False, 'restart': False, 'quiet': False, 'debug': False, 'force': False,
-                           'tarzip': False, 'blast_single_core': False}
+        super().__init__(**kwargs)
 
-    MANDATORY_USER_PROVIDED_PARAMS = ['in', 'out', 'lineage_path', 'mode']
+    def download_lineage_file(self, lineage):
+        """
+        Download lineage dataset if not present using BuscoDownloadManager.
+        :param str lineage: Basename of the lineage dataset
+        :return str lineage_filepath: Local path to downloaded file
+        """
+        local_lineage_filepath = self.downloader.get(lineage, "lineages")
+        self.set("busco_run", "lineage_dataset", local_lineage_filepath)
+        return
 
-    _logger = PipeLogger.get_logger(__name__)
+    def load_dataset_config(self):
+        """
+        Load BUSCO dataset config file.
+        :return:
+        """
+        try:
+            with open(os.path.join(self.get("busco_run", "lineage_dataset"), "dataset.cfg"), "r") as target_species_file:
+                dataset_kwargs = dict(line.strip().split("=") for line in target_species_file)
+                for key, value in dataset_kwargs.items():
+                    if key == "species":
+                        try:
+                            config_species = self.get("busco_run", "augustus_species")
+                            if config_species != value:
+                                logger.warning("An augustus species was mentioned in the config file or on the command "
+                                               "line, dataset default species ({}) will be ignored".format(value))
+                        except NoOptionError:
+                            self.set("busco_run", "augustus_species", value)
 
-    def __init__(self, conf_file, args, checks=True):
+                    elif key in ["prodigal_genetic_code", "ambiguous_cd_range_upper", "ambiguous_cd_range_lower"]:
+                        self.set("prodigal", key, value)
+                    else:
+                        self.set("busco_run", key, value)
+
+        except IOError:
+            logger.warning("The dataset you provided does not contain the file dataset.cfg and is not valid for "
+                           "BUSCO v4.0 or higher")
+        return
+
+    @abstractmethod
+    def _create_required_paths(self, main_out):
+        """
+        Mandatory child class method. Overridden by child classes.
+        :return:
+        """
+        if not os.path.exists(main_out):
+            os.makedirs(main_out)
+
+    def set_results_dirname(self, lineage):
+        self.set("busco_run", "lineage_results_dir", "run_{}".format(os.path.basename(lineage)))
+        return
+
+
+class BuscoConfigAuto(BuscoConfig):
+
+    def __init__(self, config, lineage, **kwargs):
+        super().__init__(**kwargs)
+        self._propagate_config(config)
+        self.set_results_dirname(lineage)
+
+        self._create_required_paths()
+        self.download_lineage_file(lineage)
+        self.load_dataset_config()
+
+    def _create_required_paths(self):
+        """
+        Create directory for auto-lineage runs.
+        :return:
+        """
+        main_out = os.path.join(self.get("busco_run", "main_out"), "auto_lineage")
+        super()._create_required_paths(main_out)
+        return
+
+    def _propagate_config(self, config):
+        """
+        Copy all information from BuscoConfigMain sections into this BuscoConfigAuto object.
+        Also copy BuscoDownloadManager object instead of instantiating a second one.
+        :param config:
+        :return:
+        """
+        for key, value in config.items():
+            self[key] = value
+
+        self.downloader = config.downloader
+        return
+
+
+class BuscoConfigMain(BuscoConfig, BaseConfig):
+
+    MANDATORY_USER_PROVIDED_PARAMS = ["in", "out", "mode"]
+
+    CONFIG_STRUCTURE = {"busco_run": ["in", "out", "out_path", "mode", "auto-lineage", "auto-lineage-prok",
+                                  "auto-lineage-euk", "cpu", "force", "download_path", "datasets_version", "evalue",
+                                  "limit", "long", "quiet", "offline", "download_base_url", "lineage_dataset",
+                                  "update-data", "augustus_parameters", "augustus_species"],
+                        "tblastn": ["path", "command"],
+                        "makeblastdb": ["path", "command"],
+                        "prodigal": ["path", "command"],
+                        "sepp": ["path", "command"],
+                        "augustus": ["path", "command"],
+                        "etraining": ["path", "command"],
+                        "gff2gbSmallDNA.pl": ["path", "command"],
+                        "new_species.pl": ["path", "command"],
+                        "optimize_augustus.pl": ["path", "command"],
+                        "hmmsearch": ["path", "command"]}
+
+    def __init__(self, conf_file, params, clargs, **kwargs):
         """
         :param conf_file: a path to a config.ini file
         :type conf_file: str
         :param args: key and values matching BUSCO parameters to override config.ini values
         :type args: dict
-        :param checks: whether to proceed to the mandatory parameters + file dependencies checks,
-         used in a main BUSCO analysis. Default True
-        :type checks: bool
+        """
+        super().__init__(**kwargs)
+        self.conf_file = conf_file
+        self._load_config_file()
+        self._check_allowed_keys()
+
+        self.clargs = clargs
+
+        # Update the config with args provided by the user, else keep config
+        self._update_config_with_args(params)
+
+        self._check_mandatory_keys_exist()
+
+        self._fill_default_values()
+        self._cleanup_config()
+        self._check_required_input_exists()
+        self._create_required_paths()
+
+        self._init_downloader()
+        self.persistent_tools = []
+
+        self.log_config()
+
+    def log_config(self):
+        logger.debug("State of BUSCO config before run:")
+        logger.debug(PrettyLog(vars(self)))
+
+    def check_lineage_present(self):
+        """
+        Check if "lineage_dataset" parameter has been provided by user.
+        :return: True if present, False if not
+        :rtype: bool
         """
         try:
-            super(BuscoConfig, self).__init__(conf_file)
-        except TypeError:
-            try:
-                PipeConfig.__init__(self, conf_file)  # Python 2.7
-            except ParsingError as e:
-                BuscoConfig._logger.error('Error in the config file: %s' % e)
-                raise SystemExit
-        except DuplicateOptionError as e:
-            BuscoConfig._logger.error('Duplicated entry in the config.ini file: %s' % e)
-            raise SystemExit
-        except DuplicateSectionError as e:
-            BuscoConfig._logger.error('Duplicated entry in the config.ini file: %s' % e)
-            raise SystemExit
-        except ParsingError as e:
-            BuscoConfig._logger.error('Error in the config file: %s' % e)
-            raise SystemExit
-
-        try:
-
-            # Update the config with args provided by the user, else keep config
-            for key in args:
-                if args[key] is not None and type(args[key]) is not bool:
-                    self.set('busco', key, str(args[key]))
-                elif args[key] is True:
-                    self.set('busco', key, 'True')
-
-            # Validate that all keys that are mandatory are there
-            if checks:
-                for param in BuscoConfig.MANDATORY_USER_PROVIDED_PARAMS:
-                    try:
-                        self.get('busco', param)
-                    except NoOptionError:
-                        BuscoConfig._logger.error('The parameter \'--%s\' was not provided. '
-                                                  'Please add it in the config '
-                                                  'file or provide it through the command line' % param)
-                        raise SystemExit
-
-            # Edit all path in the config to make them clean
-            for item in self.items('busco'):
-                if item[0].endswith('_path'):
-                    self.set('busco', item[0], BuscoConfig.nice_path(item[1]))
-
-            # load the dataset config, or warn the user if not present
-            # Update the config with the info from dataset, when appropriate
-            domain = None
-            try:
-                target_species_file = open('%sdataset.cfg' % self.get('busco', 'lineage_path'))
-                for l in target_species_file:
-                    if l.split("=")[0] == "name":
-                        self.set('busco', 'clade_name', l.strip().split("=")[1])
-                    elif l.split("=")[0] == "species":
-                        try:
-                            self.get('busco', 'species')
-                            if checks:
-                                BuscoConfig._logger.warning('An augustus species is mentioned in the config file, '
-                                                            'dataset default species (%s) will be ignored'
-                                                            % l.strip().split("=")[1])
-                        except NoOptionError:
-                            self.set('busco', 'species', l.strip().split("=")[1])
-                    elif l.split("=")[0] == "domain":
-                        try:
-                            self.get('busco', 'domain')
-                            if checks:
-                                BuscoConfig._logger.warning('A domain for augustus training is mentioned in the config '
-                                                            'file, dataset default domain (%s) will be ignored'
-                                                            % l.strip().split("=")[1])
-                        except NoOptionError:
-                            self.set('busco', 'domain', l.strip().split("=")[1])
-                        domain = l.strip().split("=")[1]
-                    elif l.split("=")[0] == "creation_date":
-                        self.set('busco', 'dataset_creation_date', l.strip().split("=")[1])
-                    elif l.split("=")[0] == "number_of_BUSCOs":
-                        self.set('busco', 'dataset_nb_buscos', l.strip().split("=")[1])
-                    elif l.split("=")[0] == "number_of_species":
-                        self.set('busco', 'dataset_nb_species', l.strip().split("=")[1])
-                if checks and domain != 'prokaryota' and domain != 'eukaryota':
-                    BuscoConfig._logger.error(
-                        'Corrupted dataset.cfg file: domain is %s, should be eukaryota or prokaryota' % domain)
-                    raise SystemExit
-            except IOError:
-                if checks:
-                    BuscoConfig._logger.warning("The dataset you provided does not contain the file dataset.cfg, "
-                                                "likely because it is an old version. Default species (%s, %s) will be "
-                                                "used as augustus species"
-                                                % (BuscoConfig.DEFAULT_ARGS_VALUES['species'],
-                                                   BuscoConfig.DEFAULT_ARGS_VALUES['domain']))
-
-            # Fill the other with default values if not present
-            for param in list(BuscoConfig.DEFAULT_ARGS_VALUES.keys()):
-                try:
-                    self.get('busco', param)
-                except NoOptionError:
-                    self.set('busco', param, str(BuscoConfig.DEFAULT_ARGS_VALUES[param]))
-
-            # Edit all path in the config to make them clean, again
-            for item in self.items('busco'):
-                if item[0].endswith('_path'):
-                    self.set('busco', item[0], BuscoConfig.nice_path(item[1]))
-
-            # Convert the ~ into full home path
-            if checks:
-                for key in self.sections():
-                    for item in self.items(key):
-                        if item[0].endswith('_path') or item[0] == 'path' or item[0] == 'in':
-                            if item[1].startswith('~'):
-                                self.set(key, item[0], os.path.expanduser(item[1]))
-
-            # And check that in and lineage path and file actually exists
-            if checks:
-                for item in self.items('busco'):
-                    if item[0] == 'lineage_path' or item[0] == 'in':
-                        BuscoConfig.check_path_exist(item[1])
-            # Prevent the user form using "/" in out name
-            if checks:
-                if '/' in self.get('busco', 'out'):
-                    BuscoConfig._logger.error('Please do not provide a full path in --out parameter, no slash.'
-                                              ' Use out_path in the config.ini file to specify the full path.')
-                    raise SystemExit
-
-            # Check the value of limit
-            if checks:
-                if self.getint('busco', 'limit') == 0 or self.getint('busco', 'limit') > 20:
-                    BuscoConfig._logger.error('Limit must be an integer between 1 and 20 (you have used: %s). '
-                                              'Note that this parameter is not needed by the protein mode.'
-                                              % self.getint('busco', 'limit'))
-                    raise SystemExit
-
-            # Warn if custom evalue
-            if checks:
-                if self.getfloat('busco', 'evalue') != BuscoConfig.DEFAULT_ARGS_VALUES['evalue']:
-                    BuscoConfig._logger.warning('You are using a custom e-value cutoff')
-
-        except NoSectionError:
-            BuscoConfig._logger.error('No section [busco] found in %s. Please make sure both the file and this section '
-                                      'exist, see userguide.' % conf_file)
-            raise SystemExit
-
+            lineage_dataset = self.get("busco_run", "lineage_dataset")
+            datasets_version = self.get("busco_run", "datasets_version")
+            if "_odb" in lineage_dataset:
+                dataset_version = lineage_dataset.rsplit("_")[-1]
+                if datasets_version != dataset_version:
+                    logger.warning("There is a conflict in your config. You specified a dataset from {0} while "
+                                   "simultaneously requesting the datasets_version parameter be {1}. Proceeding with "
+                                   "the lineage dataset as specified from {0}".format(dataset_version,
+                                                                                      datasets_version))
+                self.set("busco_run", "datasets_version", dataset_version)
+            else: # Make sure the ODB version is in the dataset name
+                lineage_dataset = "_".join([lineage_dataset, datasets_version])
+                self.set("busco_run", "lineage_dataset", lineage_dataset)
+            return True
         except NoOptionError:
-            pass  # if mandatory options are not requiered because the BuscoConfig instance is not meant to be used
-            # in a regular Busco Analysis but by an additional script.
+            return False
 
-        for item in self.items('busco'):
-            BuscoConfig._logger.debug(item)
+    def _check_evalue(self):
+        """
+        Warn the user if the config contains a non-standard e-value cutoff.
+        :return:
+        """
+        if self.getfloat("busco_run", "evalue") != type(self).DEFAULT_ARGS_VALUES["evalue"]:
+            logger.warning("You are using a custom e-value cutoff")
+        return
+
+    def _check_limit_value(self):
+        """
+        Check the value of limit. Ensure it is between 1 and 20, otherwise raise SystemExit.
+        :return:
+        """
+        limit_val = self.getint("busco_run", "limit")
+        if limit_val <= 0 or limit_val > 20:
+            raise SystemExit("Limit must be an integer between 1 and 20 (you have used: {}). Note that this parameter "
+                             "is not needed by the protein mode.".format(limit_val))
+        return
+
+    @log("Mode is {0}", logger, attr_name="_mode", on_func_exit=True, log_once=True)
+    def _check_mandatory_keys_exist(self):
+        """
+        Make sure all mandatory user-provided parameters are present in the config.
+        :return:
+        """
+        for param in type(self).MANDATORY_USER_PROVIDED_PARAMS:
+            try:
+                value = self.get("busco_run", param)
+                if param == "mode":
+                    synonyms = {"genome": ["genome", "geno", "genomes", "Genome", "Genomes", "Geno"],
+                                "transcriptome": ["transcriptome", "tran", "transcriptomes", "trans", "Transcriptome", "Transcriptomes", "Tran", "Trans"],
+                                "proteins": ["proteins", "prot", "protein", "Proteins", "Protein", "Prot", "proteome", "proteomes", "Proteome", "Proteomes"]}
+                    if value not in list(synonyms["genome"] + synonyms["transcriptome"] + synonyms["proteins"]):
+                        raise SystemExit("Unknown mode {}.\n'Mode' parameter must be one of "
+                                         "['genome', 'transcriptome', 'proteins']".format(value))
+                    if value in synonyms["genome"]:
+                        self.set("busco_run", "mode", "genome")
+                    elif value in synonyms["transcriptome"]:
+                        self.set("busco_run", "mode", "transcriptome")
+                    elif value in synonyms["proteins"]:
+                        self.set("busco_run", "mode", "proteins")
+
+                    self._mode = self.get("busco_run", "mode")
+
+                if param == "out":
+                    if value == "":
+                        raise SystemExit("Please specify an output name for the BUSCO run. "
+                                         "This can be done using the -o flag or in the config file")
+            except NoOptionError:
+                raise SystemExit("The parameter \"{} (--{})\" was not provided. "
+                                 "Please add it in the config file or provide it "
+                                 "through the command line".format(param, param))
+        return
+
+    def _check_allowed_keys(self):
+        for section_name, options in type(self).CONFIG_STRUCTURE.items():
+            for option in self.options(section_name):
+                if option not in options:
+                    raise SystemExit("Unrecognized option '{}' in config file".format(option))
+        return
+
+    def _check_out_value(self):
+        """
+        Prevent the user form using "/" in out name
+        :return:
+        """
+        if "/" in self.get("busco_run", "out"):
+            raise SystemExit("Please do not provide a full path in --out parameter, no slash. "
+                             "Use out_path in the config.ini file to specify the full path.")
+        return
+
+    @log("Input file is {}", logger, attr_name="_input_filepath", on_func_exit=True, log_once=True)
+    def _check_required_input_exists(self):
+        """
+        Test for existence of input file.
+        :return:
+        """
+        self._input_filepath = self.get("busco_run", "in")
+        if not os.path.exists(self._input_filepath):
+            raise SystemExit("Input file {} does not exist".format(self._input_filepath))
+        return
+
+    def _check_no_previous_run(self):
+        out_dir = os.path.join(self.get("busco_run", "out_path"), self.get("busco_run", "out"))
+        if os.path.exists(out_dir):
+            if self.getboolean("busco_run", "force"):
+                self._force_remove_existing_output_dir(out_dir)
+            else:
+                raise SystemExit("A run with the name {} already exists...\n"
+                                 "\tIf you are sure you wish to overwrite existing files, "
+                                 "please use the -f (force) option".format(out_dir))
+
+
+        return
+
+    def _cleanup_config(self):
+        """
+        Collection of housekeeping functions to ensure configuration is suitable.
+        :return:
+        """
+        self._check_out_value()
+        self._check_no_previous_run()
+        self._check_limit_value()
+        self._check_evalue()
+        self._expand_all_paths()
 
     @staticmethod
-    def check_path_exist(path):
+    @log("'Force' option selected; overwriting previous results directory", logger)  # todo: review log messages
+    def _force_remove_existing_output_dir(dirpath):
         """
-        This function checks whether the provided path exists
-        :param path: the path to be tested
-        :type path: str
-        :raises SystemExit: if the path cannot be reached
+        Remove main output folder from a previous BUSCO run.
+        :return:
         """
-        if not os.path.exists(path):
-            BuscoConfig._logger.error('Impossible to read %s' % path)
-            raise SystemExit
+        shutil.rmtree(dirpath)
+        return
 
-    @staticmethod
-    def nice_path(path):
+    def _create_required_paths(self):
         """
-        :param path: a path to check
-        :type path: str
-        :return: the same but cleaned path
-        :rtype str:
+        Create main output directory and tmp directory.
+        :return:
         """
-        try:
-            if path[-1] != '/':
-                path += '/'
-            return path
-        except TypeError:
-            return None
+        self.main_out = os.path.join(self.get("busco_run", "out_path"), self.get("busco_run", "out"))
+        super()._create_required_paths(self.main_out)
+        self.set("busco_run", "main_out", self.main_out)
+        return
+
+    def _expand_all_paths(self):
+        """
+        Convert relative pathnames beginning with "~" or "." into absolute paths.
+        :return:
+        """
+        for key in self.sections():
+            for item in self.items(key):
+                if item[0].endswith("_path") or item[0] == "path" or item[0] == "in":
+                    if item[1].startswith("~"):
+                        self.set(key, item[0], os.path.expanduser(item[1]))
+                    elif item[1].startswith("."):
+                        self.set(key, item[0], os.path.abspath(item[1]))
+        return
+
+    def _fill_default_values(self):
+        """
+        Load default values into config if not provided in config file or on the command line.
+        :return:
+        """
+        for param in list(type(self).DEFAULT_ARGS_VALUES.keys()):
+            try:
+                self.get("busco_run", param)
+            except NoOptionError:
+                self.set("busco_run", param, str(type(self).DEFAULT_ARGS_VALUES[param]))
+
+        # Set auto-lineage to True if either auto-lineage-prok or auto-lineage-euk is selected
+        if self.getboolean("busco_run", "auto-lineage-prok") or self.getboolean("busco_run", "auto-lineage-euk"):
+            self.set("busco_run", "auto-lineage", "True")
+
+        if self.getboolean("busco_run", "auto-lineage-prok") and self.getboolean("busco_run", "auto-lineage-euk"):
+            logger.warning("You have specified both --auto-lineage-prok and --auto-lineage-euk. This has the same behaviour as --auto-lineage.")
+            self.set("busco_run", "auto-lineage-prok", "False")
+            self.set("busco_run", "auto-lineage-euk", "False")
+
+        return
+
+    def _update_config_with_args(self, args):
+        """
+        Include command line arguments in config. Overwrite any values given in the config file.
+        :param args: Dictionary of parsed command line arguments. To see full list, inspect run_BUSCO.py or
+        type busco -h
+        :type args: dict
+        :return:
+        """
+        for key, val in args.items():
+            if val is not None and type(val) is not bool:
+                self.set("busco_run", key, str(val))
+            elif val:  # if True
+                self.set("busco_run", key, "True")
+        return
+
+
+# Code taken from https://dave.dkjones.org/posts/2013/pretty-print-log-python/
+class PrettyLog():
+    def __init__(self, obj):
+        self.obj = obj
+    def __repr__(self):
+        return pprint.pformat(self.obj)
