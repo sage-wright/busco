@@ -8,21 +8,19 @@ Main changes in v4:
 
 - Use prodigal for non-eukaryotic genomes
 
+See the user guide: https://busco.ezlab.org/busco_userguide.html
+and report problems on the BUSCO issue board at https://gitlab.com/ezlab/busco/issues
 
 To install, clone the repository and enter ``sudo python setup.py install`` or ``python setup.py install --user``
+
+Do not forget to create a ``config.ini`` file starting with the example in the ``config/`` subfolder (the script busco_configurator.py can help you filling it). You have to set the ``BUSCO_CONFIG_FILE`` 
+environment variable to define a path (including the filename) to that ``config.ini`` file.
 
 Or use the offical Docker container: https://hub.docker.com/r/ezlabgva/busco/tags
 
 To get help, ``busco -h`` and ``python scripts/generate_plot.py -h``
 
-Do not forget to create a ``config.ini`` file in the ``config/`` subfolder (the script busco_configurator.py can help you filling it). You can set the ``BUSCO_CONFIG_FILE`` 
-environment variable to define a custom path (including the filename) to the ``config.ini`` file, 
-useful for switching between configurations or in a multi-user environment.
-
 **!!!** Don't use "odb9" datasets with BUSCOv4. If you need to reproduce previous analyses, use BUSCOv3 (https://gitlab.com/ezlab/busco/-/tags/3.0.2)
-
-See also the user guide: https://busco.ezlab.org/busco_userguide.html
-and report problems on the BUSCO issue board at https://gitlab.com/ezlab/busco/issues
 
 **How to cite BUSCO**
 
