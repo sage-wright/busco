@@ -8,7 +8,7 @@ Main changes in v4:
 
 - Use prodigal for non-eukaryotic genomes
 
-- **BUSCO is now Python 3.x.x only !**
+- **BUSCO is now Python 3.3+ only !**
 
 To install, clone the repository and enter ``sudo python3 setup.py install`` or ``python3 setup.py install --user``
 
@@ -46,5 +46,5 @@ Felipe A. Simão, Robert M. Waterhouse, Panagiotis Ioannidis, Evgenia V. Krivent
 *Bioinformatics*, published online June 9, 2015 
 doi: 10.1093/bioinformatics/btv351
 
-Copyright (c) 2016-2019, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2020, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.

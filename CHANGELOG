@@ -1,3 +1,9 @@
+4.0.1
+- Issue #164 fixed
+- Issue #166 fixed
+- Issue #169 fixed
+- Enforce single core on BLAST 2.4-2.10 to guarantee consistency of results. We recommend BLAST 2.2 or 2.3 for performance.
+
 4.0.0
 - Add the auto lineage selection through phylogenetic placement
 - Introduce the automated downloads and updates of data files

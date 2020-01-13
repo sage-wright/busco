@@ -19,7 +19,7 @@ automatically runs it.
 
 You can find both the resulting R script for customisation and the figure in the working directory.
 
-Copyright (c) 2016-2019, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2020, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 
 """

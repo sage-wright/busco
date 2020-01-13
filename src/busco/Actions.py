@@ -11,10 +11,16 @@ class ListLineagesAction(argparse.Action):
 
     def __init__(self, option_strings, dest, nargs=0, default="==SUPPRESS==", **kwargs):
         super().__init__(option_strings, dest, nargs=nargs, default=default, **kwargs)
-        self.config_manager = BuscoConfigManager({})
-        self.config = PseudoConfig(self.config_manager.config_file)
 
     def __call__(self, parser, namespace, values, option_string=None):
+        try:
+            self.config_manager = BuscoConfigManager({})
+        except SystemExit as se:
+            logger.error("The config file is necessary here as it contains remote and local path locations for "
+                         "downloading dataset information")
+            logger.error(se)
+            raise SystemExit
+        self.config = PseudoConfig(self.config_manager.config_file)
         try:
             self.config.load()
             self.print_lineages()

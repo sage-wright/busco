@@ -12,6 +12,7 @@ Licensed under the MIT license. See LICENSE.md file.
 """
 
 from abc import ABCMeta, abstractmethod
+import busco
 from busco.BuscoConfig import BuscoConfig, BuscoConfigMain, BuscoConfigAuto
 from busco.BuscoTools import HMMERRunner
 import inspect
@@ -98,6 +99,8 @@ class BuscoAnalysis(metaclass=ABCMeta):
 
     def _check_data_integrity(self):
         self._check_dataset_integrity()
+        if not os.stat(self._input_file).st_size > 0:
+            raise SystemExit("Input file is empty.")
         with open(self._input_file) as f:
             for line in f:
                 if line.startswith(">"):
@@ -174,26 +177,24 @@ class BuscoAnalysis(metaclass=ABCMeta):
         """
         for char in BuscoConfig.FORBIDDEN_HEADER_CHARS:
             if char in header:
-                logger.error(
+                raise SystemExit(
                     "The character \"%s\" is present in the fasta header %s, "
                     "which will crash BUSCO. Please clean the header of your "
                     "input file." % (char, header.strip()))
-                raise SystemExit
+
 
         for char in BuscoConfig.FORBIDDEN_HEADER_CHARS_BEFORE_SPLIT:
             if char in header.split()[0]:
-                logger.error(
+                raise SystemExit(
                     "The character \"%s\" is present in the fasta header %s, "
                     "which will crash Reader. Please clean the header of your"
                     " input file." % (char, header.split()[0].strip()))
-                raise SystemExit
 
         if header.split()[0] == ">":
-            logger.error(
+            raise SystemExit(
                 "A space is present in the fasta header %s, directly after "
                 "\">\" which will crash Reader. Please clean the header of "
                 "your input file." % (header.strip()))
-            raise SystemExit
 
     def check_tool_dependencies(self):
         """
@@ -332,7 +333,7 @@ class BuscoAnalysis(metaclass=ABCMeta):
 
         with open(os.path.join(self.run_folder, "short_summary.txt"), "w") as summary_file:
 
-            self._write_output_header(summary_file)
+            self._write_output_header(summary_file, no_table_header=True)
             summary_file.write("# Summarized benchmarking in BUSCO notation for file {}\n"
                                "# BUSCO was run in mode: {}\n\n".format(self._input_file, self._mode))
 
@@ -508,7 +509,7 @@ class BuscoAnalysis(metaclass=ABCMeta):
 
 
 
-    def _write_output_header(self, file_object, missing_list=False):
+    def _write_output_header(self, file_object, missing_list=False, no_table_header=False):
         """
         Write a standardized file header containing information on the BUSCO run.
         :param file_object: Opened file object ready for writing
@@ -517,12 +518,14 @@ class BuscoAnalysis(metaclass=ABCMeta):
         """
         file_object.write("# BUSCO version is: {} \n"
                           "# The lineage dataset is: {} (Creation date: {}, number of species: {}, number of BUSCOs: {}"
-                          ")\n".format(BuscoConfig.VERSION, self._lineage_name, self._dataset_creation_date,
+                          ")\n".format(busco.__version__, self._lineage_name, self._dataset_creation_date,
                                      self._dataset_nb_species, self._dataset_nb_buscos))
         # if isinstance(self._config, BuscoConfigMain):  # todo: wait until rerun command properly implemented again
         #     file_object.write("# To reproduce this run: {}\n#\n".format(self._rerun_cmd))
 
-        if missing_list:
+        if no_table_header:
+            pass
+        elif missing_list:
             file_object.write("# Busco id\n")
         elif self._mode == "proteins" or self._mode == "transcriptome":
             if self.hmmer_runner.extra_columns:

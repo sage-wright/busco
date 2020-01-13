@@ -20,6 +20,8 @@ from Bio.Seq import reverse_complement, translate
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 from busco.Analysis import NucleotideAnalysis
+from busco.Toolset import Tool
+
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -74,6 +76,31 @@ class TranscriptomeAnalysis(NucleotideAnalysis, BuscoAnalysis):
     def init_tools(self): # todo: This should be an abstract method
 
         super().init_tools()
+        try:
+            assert(isinstance(self._mkblast_tool, Tool))
+        except AttributeError:
+            self._mkblast_tool = Tool("makeblastdb", self._config)
+        except AssertionError:
+            raise SystemExit("mkblast should be a tool")
+
+        try:
+            assert(isinstance(self._tblastn_tool, Tool))
+        except AttributeError:
+            self._tblastn_tool = Tool("tblastn", self._config)
+        except AssertionError:
+            raise SystemExit("tblastn should be a tool")
+
+    def check_tool_dependencies(self):
+        blast_version = self._get_blast_version()
+        if blast_version not in ["2.2", "2.3"]:  # Known problems with multithreading on BLAST 2.4-2.9.
+            if blast_version == "2.9" and self._tblastn_tool.cmd.endswith(
+                    "tblastn_June13"):  # NCBI sent a binary with this name that avoids the multithreading problems.
+                pass
+            else:
+                logger.warning("You are using BLAST version {}. This is known to yield inconsistent results when "
+                               "multithreading. BLAST will run on a single core as a result. For performance improvement, "
+                               "please revert to BLAST 2.2 or 2.3.".format(blast_version))
+                self.blast_cpus = 1
 
     def _cleanup(self):
         """

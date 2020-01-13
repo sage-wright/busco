@@ -110,7 +110,9 @@ class AutoSelectLineage:
             max_mask &= tie_break == ma.max(tie_break)
             max_ind = inds[max_mask]
             if len(max_ind) > 1:
-                if self.s_buscos[max_ind[0]] == 0.0 and self.d_buscos[max_ind[0]] and self.f_buscos[max_ind[0]]:
+                if ((self.s_buscos[max_ind[0]] == 0.0)
+                        and (self.d_buscos[max_ind[0]] == 0.0)
+                        and (self.f_buscos[max_ind[0]] == 0.0)):
                     raise SystemExit("No genes were recognized by BUSCO. Please check the content of your input file.")
                 else:
                     self.s_percents = np.array(self.s_percents)
@@ -123,7 +125,7 @@ class AutoSelectLineage:
 
         return max_ind
 
-    @log("{} selected as the most likely domain.\n", logger, attr_name="best_match_lineage_dataset", apply="basename", on_func_exit=True)
+    @log("{} selected\n", logger, attr_name="best_match_lineage_dataset", apply="basename", on_func_exit=True)
     def get_best_match_lineage(self, runners):
         max_ind = self.evaluate()
         self.selected_runner = runners[int(max_ind)]

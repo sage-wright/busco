@@ -520,15 +520,12 @@ class HMMERRunner:
             for gene_id in list(matches.keys()):
                 if gene_id in self._already_used_genes:
                     busco_dict[busco_id].pop(gene_id)
+                    matched_genes[gene_id].remove(busco_id)
                     if len(busco_dict[busco_id]) == 0:
                         busco_dict.pop(busco_id)
-                        # Can't remove the empty buscos directly here because that would change the size of the
-                        # dictionary we are iterating over
-                        # empty_buscos.append(busco_id)
-                        matched_genes[gene_id].remove(busco_id)
+                    if len(matched_genes[gene_id]) == 0:
+                        matched_genes.pop(gene_id)
 
-        # for busco_id in empty_buscos:
-        #     busco_dict.pop(busco_id)
 
         return
 
@@ -582,7 +579,9 @@ class HMMERRunner:
 
                 best_match_ind = max(range(len(busco_bitscores)), key=busco_bitscores.__getitem__)
                 buscos.remove(busco_matches[best_match_ind])
-                # Remove lower scoring duplicates from dictionary
+                # Remove lower scoring duplicates from dictionary.
+                # Note for future development: the matched_genes dictionary is not updated in this method when
+                # duplicates are removed from busco_dict
                 for duplicate in buscos:
                     busco_dict[duplicate].pop(gene_id)
                     if len(busco_dict[duplicate]) == 0:
@@ -856,7 +855,7 @@ class TBLASTNRunner:
         self.create_dirs()
         self.lineage_dataset = lineage_dataset
         self.blast_db = blast_db
-        if not os.path.exists("{}.nhr".format(self.blast_db)):
+        if not len(os.listdir(os.path.split(self.blast_db)[0])) > 0:
             raise SystemExit("DB {} not found for tblastn job".format(self.blast_db))
         self.e_v_cutoff = e_v_cutoff
         self.cpus = cpus

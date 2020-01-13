@@ -34,6 +34,7 @@ class BuscoRunner:
                 self.mode = "euk_genome"
         analysis_type = type(self).mode_dict[self.mode]
         self.analysis = analysis_type(self.config)
+        self.prok_fail_count = 0  # Needed to check if both bacteria and archaea return no genes.
 
     def run_analysis(self, callback=(lambda *args: None)):
         try:
@@ -50,12 +51,18 @@ class BuscoRunner:
         except NoGenesError as nge:
             no_genes_msg = "{} did not recognize any genes matching the dataset {} in the input file.\n".format(
                 nge.gene_predictor, self.analysis._lineage_name)
-            if isinstance(self.config, BuscoConfigMain):
-                SystemExit(no_genes_msg)
+            fatal = (isinstance(self.config, BuscoConfigMain)
+                     or (self.config.getboolean("busco_run", "auto-lineage-euk") and self.mode == "euk_genome")
+                     or (self.config.getboolean("busco_run", "auto-lineage-prok") and self.mode == "prok_genome")
+                     and self.prok_fail_count == 1)
+            if fatal:
+                raise SystemExit(no_genes_msg)
             else:
                 logger.warning(no_genes_msg)
                 s_buscos = d_buscos = f_buscos = s_percent = d_percent = f_percent = 0.0
-                self.config.persistent_tools.append(self.analysis.prodigal_runner)
+                if self.mode == "prok_genome":
+                    self.config.persistent_tools.append(self.analysis.prodigal_runner)
+                    self.prok_fail_count += 1
 
         except SystemExit as se:
             self.analysis._cleanup()
@@ -155,11 +162,22 @@ class BuscoRunner:
                                 lineage_results_folder.replace("run_", ""), os.path.basename(main_out_folder))))
         return
 
+    @staticmethod  # This is deliberately a staticmethod so it can be called from run_BUSCO() even if BuscoRunner has not yet been initialized.
+    def move_log_file(config):
+        try:
+            log_folder = os.path.join(config.get("busco_run", "main_out"), "logs")
+            if not os.path.exists(log_folder):
+                os.makedirs(log_folder)
+            os.rename("busco_{}.log".format(BuscoLogger.random_id), os.path.join(log_folder, "busco.log"))
+        except OSError:
+            logger.warning("Unable to move 'busco_{}.log' to the 'logs' folder.".format(BuscoLogger.random_id))
+        return
+
 
     def finish(self, elapsed_time, root_lineage=False):
-        if root_lineage:
-            logger.info("Generic lineage selected. Results reproduced here.\n"
-                        "{}".format(" ".join(self.analysis.hmmer_results_lines)))
+        # if root_lineage:
+        #     logger.info("Generic lineage selected. Results reproduced here.\n"
+        #                 "{}".format(" ".join(self.analysis.hmmer_results_lines)))
 
         final_output_results = self.format_results()
         logger.info("".join(final_output_results))
@@ -176,10 +194,7 @@ class BuscoRunner:
 
         logger.info("Results written in {}\n".format(self.analysis.main_out))
 
-        try:
-            os.rename("busco_{}.log".format(BuscoLogger.random_id), os.path.join(self.config.get("busco_run", "main_out"), "logs", "busco.log"))
-        except OSError:
-            logger.warning("Unable to move 'busco_{}.log' to the 'logs' folder.".format(BuscoLogger.random_id))
+        self.move_log_file(self.config)
 
 
 class SmartBox:

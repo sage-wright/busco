@@ -35,15 +35,18 @@ class BuscoConfigManager:
         if os.environ.get("BUSCO_CONFIG_FILE") and os.access(os.environ.get("BUSCO_CONFIG_FILE"), os.R_OK):
             self.config_file = os.environ.get("BUSCO_CONFIG_FILE")
         else:
-            self.config_file = os.path.join(sys.prefix, "config", "config.ini")
+            raise SystemExit("Please specify a BUSCO config file using either "
+                             "(i) an environment variable by entering 'export BUSCO_CONFIG_FILE=/path/to/config.ini' "
+                             "or (ii) using the command line flag --config /path/to/config.ini")
         return self.config_file
 
     @log("Configuring BUSCO with {}", logger, attr_name="config_file")
     def load_busco_config(self, clargs):
         self.config = BuscoConfigMain(self.config_file, self.params, clargs)
+        self.config.validate()
         if not self.config.check_lineage_present():
             if not self.config.getboolean("busco_run", "auto-lineage") and not self.config.getboolean("busco_run", "auto-lineage-prok"):# and not self.config.getboolean("busco_run", "auto-lineage-euk"):
-                logger.warning("Running Auto Lineage Selector as no lineage dataset was specified. This may take a "
+                logger.warning("Running Auto Lineage Selector as no lineage dataset was specified. This will take a "
                                "little longer than normal. If you know what lineage dataset you want to use, please "
                                "specify this in the config file or using the -l (--lineage-dataset) flag in the "
                                "command line.")

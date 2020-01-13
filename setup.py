@@ -4,7 +4,7 @@
 .. versionadded:: 3.0.0
 .. versionchanged:: 4.0.beta1
 
-Copyright (c) 2016-2019, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2020, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 
 This script proceeds to the BUSCO packages installation
@@ -27,6 +27,5 @@ setup(name='BUSCO',
       platforms='Unix like',
       packages=['busco'],
       package_dir={'busco': 'src/busco'},
-      scripts=['bin/busco'],
-      data_files=[('config', ['config/config.ini'])]
+      scripts=['bin/busco']
       )

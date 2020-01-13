@@ -12,7 +12,7 @@ To get help, ``busco -h``. See also the user guide.
 
 And visit our website `<http://busco.ezlab.org/>`_
 
-Copyright (c) 2016-2019, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2020, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 
 """
@@ -23,6 +23,7 @@ import sys
 import argparse
 import os
 from argparse import RawTextHelpFormatter
+import busco
 from busco.BuscoLogger import BuscoLogger
 from busco.BuscoLogger import LogDecorator as log
 from busco.ConfigManager import BuscoConfigManager
@@ -45,7 +46,7 @@ def _parse_args():
     parser = argparse.ArgumentParser(
         description='Welcome to BUSCO %s: the Benchmarking Universal Single-Copy Ortholog assessment tool.\n'
                     'For more detailed usage information, please review the README file provided with '
-                    'this distribution and the BUSCO user guide.' % BuscoConfigMain.VERSION,
+                    'this distribution and the BUSCO user guide.' % busco.__version__,
         usage='busco -i [SEQUENCE_FILE] -l [LINEAGE] -o [OUTPUT_NAME] -m [MODE] [OTHER OPTIONS]',
         formatter_class=RawTextHelpFormatter, add_help=False)
 
@@ -135,7 +136,7 @@ def _parse_args():
         '--config', dest='config_file', required=False, help='Provide a config file')
 
     optional.add_argument('-v', '--version', action=CleanVersionAction, help="Show this version and exit",
-                          version='BUSCO %s' % BuscoConfigMain.VERSION)
+                          version='BUSCO %s' % busco.__version__)
 
     optional.add_argument('-h', '--help', action=CleanHelpAction, help="Show this help message and exit")
 
@@ -155,7 +156,7 @@ def main():
     params = _parse_args()
     run_BUSCO(params)
 
-@log('***** Start a BUSCO analysis, current time: %s *****' % (time.strftime('%m/%d/%Y %H:%M:%S')), logger)
+@log('***** Start a BUSCO v{} analysis, current time: {} *****'.format(busco.__version__, time.strftime('%m/%d/%Y %H:%M:%S')), logger)
 def run_BUSCO(params):
     start_time = time.time()
 
@@ -205,6 +206,15 @@ def run_BUSCO(params):
         logger.error(
             "Check the logs, read the user guide, and check the BUSCO issue board on "
             "https://gitlab.com/ezlab/busco/issues")
+        try:
+            BuscoRunner.move_log_file(config)
+        except NameError:
+            try:
+                BuscoRunner.move_log_file(config_manager.config)
+            except:
+                pass
+        except:
+            pass
         raise SystemExit
 
     except KeyboardInterrupt:

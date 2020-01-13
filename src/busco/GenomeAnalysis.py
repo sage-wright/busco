@@ -59,6 +59,7 @@ class GenomeAnalysis(NucleotideAnalysis, BuscoAnalysis, metaclass=ABCMeta):
         """
         super().init_tools()
 
+
     # def _run_tarzip_augustus_output(self): # Todo: rewrite using tarfile
     #     """
     #     This function tarzips results folder
@@ -263,6 +264,19 @@ class GenomeAnalysisEukaryotes(GenomeAnalysis):
     def create_dirs(self):
         super().create_dirs()
 
+    def check_tool_dependencies(self):
+        blast_version = self._get_blast_version()
+        if blast_version not in ["2.2", "2.3"]:  # Known problems with multithreading on BLAST 2.4-2.9.
+            if blast_version == "2.9" and self._tblastn_tool.cmd.endswith(
+                    "tblastn_June13"):  # NCBI sent a binary with this name that avoids the multithreading problems.
+                pass
+            else:
+                logger.warning("You are using BLAST version {}. This is known to yield inconsistent results when "
+                               "multithreading. BLAST will run on a single core as a result. For performance improvement, "
+                               "please revert to BLAST 2.2 or 2.3.".format(blast_version))
+                self.blast_cpus = 1
+        super().check_tool_dependencies()
+
     def init_tools(self):
         """
         Initialize all required tools for Genome Eukaryote Analysis:
@@ -270,6 +284,19 @@ class GenomeAnalysisEukaryotes(GenomeAnalysis):
         :return:
         """
         super().init_tools()
+        try:
+            assert(isinstance(self._mkblast_tool, Tool))
+        except AttributeError:
+            self._mkblast_tool = Tool("makeblastdb", self._config)
+        except AssertionError:
+            raise SystemExit("mkblast should be a tool")
+
+        try:
+            assert(isinstance(self._tblastn_tool, Tool))
+        except AttributeError:
+            self._tblastn_tool = Tool("tblastn", self._config)
+        except AssertionError:
+            raise SystemExit("tblastn should be a tool")
         try:
             assert(isinstance(self._augustus_tool, Tool))
         except AttributeError:

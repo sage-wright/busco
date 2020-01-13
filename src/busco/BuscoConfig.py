@@ -6,7 +6,6 @@ from busco.BuscoLogger import BuscoLogger
 from busco.BuscoLogger import LogDecorator as log
 from abc import ABCMeta, abstractmethod
 from busco.BuscoDownloadManager import BuscoDownloadManager
-import busco
 import os
 import shutil
 import glob
@@ -106,8 +105,6 @@ class BuscoConfig(ConfigParser, metaclass=ABCMeta):
 
     HMMER_VERSION = 3.1
 
-    VERSION = busco.__version__
-
     def __init__(self, **kwargs):
 
         super().__init__(**kwargs)
@@ -205,7 +202,7 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
     CONFIG_STRUCTURE = {"busco_run": ["in", "out", "out_path", "mode", "auto-lineage", "auto-lineage-prok",
                                   "auto-lineage-euk", "cpu", "force", "download_path", "datasets_version", "evalue",
                                   "limit", "long", "quiet", "offline", "download_base_url", "lineage_dataset",
-                                  "update-data", "augustus_parameters", "augustus_species"],
+                                  "update-data", "augustus_parameters", "augustus_species", "main_out"],
                         "tblastn": ["path", "command"],
                         "makeblastdb": ["path", "command"],
                         "prodigal": ["path", "command"],
@@ -227,19 +224,21 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
         super().__init__(**kwargs)
         self.conf_file = conf_file
         self._load_config_file()
-        self._check_allowed_keys()
-
         self.clargs = clargs
-
         # Update the config with args provided by the user, else keep config
         self._update_config_with_args(params)
-
-        self._check_mandatory_keys_exist()
-
         self._fill_default_values()
+
+
+
+    def validate(self):
+        self._check_mandatory_keys_exist()
+        self._check_no_previous_run()
+        self._create_required_paths()
+
+        self._check_allowed_keys()
         self._cleanup_config()
         self._check_required_input_exists()
-        self._create_required_paths()
 
         self._init_downloader()
         self.persistent_tools = []
@@ -270,6 +269,13 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
             else: # Make sure the ODB version is in the dataset name
                 lineage_dataset = "_".join([lineage_dataset, datasets_version])
                 self.set("busco_run", "lineage_dataset", lineage_dataset)
+
+            datasets_version = self.get("busco_run", "datasets_version")
+            if datasets_version != "odb10":
+                raise SystemExit("BUSCO v4 only works with datasets from OrthoDB v10 (with the suffix '_odb10'). "
+                                 "For a full list of available datasets, enter 'busco --list-datasets'. "
+                                 "You can also run BUSCO using auto-lineage, to allow BUSCO to automatically select "
+                                 "the best dataset for your input data.")
             return True
         except NoOptionError:
             return False
@@ -358,14 +364,14 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
         return
 
     def _check_no_previous_run(self):
-        out_dir = os.path.join(self.get("busco_run", "out_path"), self.get("busco_run", "out"))
-        if os.path.exists(out_dir):
+        self.main_out = os.path.join(self.get("busco_run", "out_path"), self.get("busco_run", "out"))
+        if os.path.exists(self.main_out):
             if self.getboolean("busco_run", "force"):
-                self._force_remove_existing_output_dir(out_dir)
+                self._force_remove_existing_output_dir(self.main_out)
             else:
                 raise SystemExit("A run with the name {} already exists...\n"
                                  "\tIf you are sure you wish to overwrite existing files, "
-                                 "please use the -f (force) option".format(out_dir))
+                                 "please use the -f (force) option".format(self.main_out))
 
 
         return
@@ -376,7 +382,6 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
         :return:
         """
         self._check_out_value()
-        self._check_no_previous_run()
         self._check_limit_value()
         self._check_evalue()
         self._expand_all_paths()
@@ -396,7 +401,6 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
         Create main output directory and tmp directory.
         :return:
         """
-        self.main_out = os.path.join(self.get("busco_run", "out_path"), self.get("busco_run", "out"))
         super()._create_required_paths(self.main_out)
         self.set("busco_run", "main_out", self.main_out)
         return
@@ -446,10 +450,11 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
         :return:
         """
         for key, val in args.items():
-            if val is not None and type(val) is not bool:
-                self.set("busco_run", key, str(val))
-            elif val:  # if True
-                self.set("busco_run", key, "True")
+            if key in type(self).CONFIG_STRUCTURE["busco_run"]:
+                if val is not None and type(val) is not bool:
+                    self.set("busco_run", key, str(val))
+                elif val:  # if True
+                    self.set("busco_run", key, "True")
         return
 
 
