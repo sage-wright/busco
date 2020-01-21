@@ -53,7 +53,7 @@ RCODE = '######################################\n'\
         '# @version 4.0.0\n'\
         '# @since BUSCO 2.0.0\n'\
         '# \n' \
-        '# Copyright (c) 2016-2017, Evgeny Zdobnov (ez@ezlab.org)\n'\
+        '# Copyright (c) 2016-2020, Evgeny Zdobnov (ez@ezlab.org)\n'\
         '# Licensed under the MIT license. See LICENSE.md file.\n'\
         '#\n'\
         '######################################\n'\

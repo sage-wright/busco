@@ -29,6 +29,14 @@ To get help on BUSCO use: ``busco -h`` and ``python3 scripts/generate_plot.py -h
 
 **!!!** Don't use "odb9" datasets with BUSCOv4. If you need to reproduce previous analyses, use BUSCOv3 (https://gitlab.com/ezlab/busco/-/tags/3.0.2)
 
+Note: When running auto-lineage, the initial results for eukaryotes are incomplete. This is deliberate, as these initial 
+results are used merely to determine whether the genome scores highest against the bacteria, archaea or eukaryota 
+datasets. If the eukaryota dataset is selected, BUSCO then attempts to place the input assembly on the eukaryote 
+phylogenetic tree before running a complete BUSCO assessment using the selected child dataset. Unless the top-level 
+eukaryota dataset is selected as the best match for the input file, the eukaryota dataset run will not complete. So 
+while the specific dataset run will return accurate results, the generic eukaryota dataset run should be considered 
+unreliable.
+
 **How to cite BUSCO**
 
 *BUSCO: Assessing Genome Assembly and Annotation Completeness.*
