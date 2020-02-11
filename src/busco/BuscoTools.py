@@ -693,7 +693,7 @@ class HMMERRunner:
         return links_info
 
 
-    def _format_output_lines(self, busco_dict):
+    def _format_output_lines(self, busco_dict, label):
         """
         Format BUSCO matches from input dictionary into output lines for writing to a file.
         :param busco_dict: one of [self.single_copy_buscos, self.multi_copy_buscos, self.fragmented_buscos]
@@ -716,22 +716,27 @@ class HMMERRunner:
                             desc = links_info[busco]["description"]
                             link = links_info[busco]["link"]
                             self.extra_columns = True
-                            output_lines.append("{}\tComplete\t{}\t{}\t{}\t{}\t{}\n".format(busco, gene_id, bit_score,
-                                                                                            match_length, link, desc))
+                            output_lines.append("{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(busco, label, gene_id, bit_score,
+                                                                                      match_length, link, desc))
                         except KeyError:
-                            output_lines.append("{}\tComplete\t{}\t{}\t{}\n".format(busco, gene_id,bit_score,
-                                                                                    match_length))
+                            output_lines.append("{}\t{}\t{}\t{}\t{}\n".format(busco, label, gene_id,bit_score,
+                                                                              match_length))
                     elif self.mode == "genome":
                         scaffold = self.gene_details[gene_id][m]
+                        location_pattern = ":{}-{}".format(scaffold["gene_start"], scaffold["gene_end"])
+                        if gene_id.endswith(location_pattern):
+                            gene_id = gene_id.replace(location_pattern, "")
                         try:
                             desc = links_info[busco]["description"]
                             link = links_info[busco]["link"]
-                            output_lines.append("{}\tComplete\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(
-                                busco, gene_id, scaffold["gene_start"], scaffold["gene_end"], bit_score, match_length,
-                                link, desc))
+                            self.extra_columns = True
+                            output_lines.append("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(
+                                busco, label, gene_id, scaffold["gene_start"], scaffold["gene_end"], bit_score,
+                                match_length, link, desc))
                         except KeyError:
-                            output_lines.append("{}\tComplete\t{}\t{}\t{}\t{}\t{}\n".format(
-                                busco, gene_id, scaffold["gene_start"], scaffold["gene_end"], bit_score, match_length))
+                            output_lines.append("{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(
+                                busco, label, gene_id, scaffold["gene_start"], scaffold["gene_end"], bit_score,
+                                match_length))
         return output_lines
 
     def _create_output_content(self):
@@ -741,8 +746,11 @@ class HMMERRunner:
         :rtype: list
         """
         output_lines = []
-        for busco_dict in [self.single_copy_buscos, self.multi_copy_buscos, self.fragmented_buscos]:
-            output_lines += self._format_output_lines(busco_dict)
+        dict_labels = {"Complete": self.single_copy_buscos,
+                       "Duplicated": self.multi_copy_buscos,
+                       "Fragmented": self.fragmented_buscos}
+        for label, busco_dict in dict_labels.items():
+            output_lines += self._format_output_lines(busco_dict, label)
 
         return output_lines
 
@@ -884,6 +892,7 @@ class TBLASTNRunner:
         if not os.path.exists(self.output_seqs):
             os.makedirs(self.output_seqs)
 
+    @log("Running a BLAST search for BUSCOs against created database", logger)
     def run(self):
         self.tblastn_tool.total = 0
         self.tblastn_tool.nb_done = 0
@@ -943,8 +952,8 @@ class TBLASTNRunner:
                 if any(b in record.id for b in self.incomplete_buscos):
                     # Remove the ancestral variant identifier ("_1" etc) so it matches all other BUSCO IDs.
                     # The identifier is still present in the "name" and "description" Sequence Record attributes.
+                    logger.debug("Found ancestral proteins for {}".format(record.id))
                     record.id = record.id.split("_")[0]
-                    logger.debug("Found contig {}".format(record.id))
                     busco_ids_retrieved.add(record.id)
                     matched_seqs.append(record)
 
@@ -1195,8 +1204,18 @@ class TBLASTNRunner:
                         SeqIO.write(record, out, "fasta")
         return
 
+class AugustusParsingError(Exception):
+
+    def __init__(self):
+        pass
 
 class AugustusRunner:
+
+    ACCEPTED_PARAMETERS = ["strand", "genemodel", "singlestrand", "hintsfile", "extrinsicCfgFile", "maxDNAPieceSize",
+                           "protein", "introns", "start", "stop", "cds", "AUGUSTUS_CONFIG_PATH",
+                           "alternatives-from-evidence", "alternatives-from-sampling", "sample", "minexonintronprob",
+                           "minmeanexonintronprob", "maxtracks", "gff3", "UTR", "outfile", "noInFrameStop",
+                           "noprediction", "contentmodels", "translation_table", "temperature"]
 
     def __init__(self, augustus_tool, output_folder, seqs_path, target_species, lineage_dataset, params, coords, cpus,
                  log_path, sequences_aa, sequences_nt):
@@ -1207,6 +1226,8 @@ class AugustusRunner:
         self.target_species = target_species
         self.lineage_dataset = lineage_dataset
         self.params = params
+        self.param_keys = []
+        self.param_values = []
         self.coords = coords
         self.cpus = cpus
 
@@ -1234,11 +1255,40 @@ class AugustusRunner:
             os.makedirs(self.tmp_dir)
         return
 
+    def parse_parameters(self):
+        accepted_keys = []
+        accepted_values = []
+        if self.params:
+            self.params = self.params.strip("\" \'")
+            try:
+                if self.params.startswith("--"):
+                    key_val_pairs = self.params.split(" --")
+                    for kv in key_val_pairs:
+                        key_vals = kv.strip("- ").split("=")
+                        if len(key_vals) == 2:
+                            key, val = key_vals
+                            if key in type(self).ACCEPTED_PARAMETERS:
+                                accepted_keys.append(key.strip())
+                                accepted_values.append(val.strip())
+                            else:
+                                logger.warning("{} is not an accepted parameter for Augustus.".format(key))
+                        else:
+                            raise AugustusParsingError
+                else:
+                    raise AugustusParsingError
+            except AugustusParsingError:
+                logger.warning(
+                    "Augustus parameters are not correctly formatted. Please enter them as follows: "
+                    "\"--param1=value1 --param2=value2\" etc. Proceeding without additional parameters.")
+                return [], []
+        return accepted_keys, accepted_values
+
     def run(self):
         # Todo: refactor logger calls into decorator pattern
         logger.info("Running Augustus prediction using {} as species:".format(self.target_species))
         if self.params:
             logger.info("Additional parameters for Augustus are {}: ".format(self.params))
+            self.param_keys, self.param_values = self.parse_parameters()
 
         self.augustus_tool.total = self._count_jobs()
         self.augustus_tool.count_jobs_created = False
@@ -1253,6 +1303,9 @@ class AugustusRunner:
         files = [f for f in sorted(os.listdir(self.pred_genes_dir)) if any(busco_id in f for busco_id in self.coords)]
         for filename in files:
             self._extract_genes_from_augustus_output(filename)
+
+        self.output_sequences = [os.path.join(self.extracted_prot_dir, f) for f in
+                                     os.listdir(self.extracted_prot_dir) if f.split(".")[-2] == "faa"]
 
         if not self.any_gene_found:
             raise NoGenesError("Augustus")
@@ -1313,9 +1366,8 @@ class AugustusRunner:
         augustus_job.add_parameter("--predictionStart={}".format(contig_start))
         augustus_job.add_parameter("--predictionEnd={}".format(contig_end))
         augustus_job.add_parameter("--species={}".format(self.target_species))
-        for p in self.params.split():
-            if len(p) > 2:
-                augustus_job.add_parameter(p)
+        for k, key in enumerate(self.param_keys):
+            augustus_job.add_parameter("--{}={}".format(key, self.param_values[k]))
         augustus_job.add_parameter(os.path.join(self.seqs_path, contig_tmp_file))
         return
 
@@ -1418,7 +1470,7 @@ class AugustusRunner:
 
         output_fna = os.path.join(self.extracted_prot_dir, filename.replace("out", "fna"))
         output_faa = os.path.join(self.extracted_prot_dir, filename.replace("out", "faa"))
-        self.output_sequences.append(output_faa)
+        # self.output_sequences.append(output_faa)
 
         with open(output_fna, "w") as out_fna:
             SeqIO.write(sequences_nt, out_fna, "fasta")

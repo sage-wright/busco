@@ -202,25 +202,13 @@ class AutoSelectLineage:
         run_folder = os.path.join(out_path, "auto_lineage", self.selected_runner.config.get("busco_run", "lineage_results_dir"))
         bp = BuscoPlacer(self.selected_runner.config, run_folder, protein_seqs, self.selected_runner.analysis.hmmer_runner.single_copy_buscos)
         dataset_details, placement_file_versions = bp.define_dataset()
+        self.config.placement_files = placement_file_versions  # Necessary to pass these filenames to the final run to be recorded.
         lineage, supporting_markers, placed_markers = dataset_details
         lineage = "{}_{}".format(lineage, self.config.get("busco_run", "datasets_version"))  # todo: this should probably be done in buscoplacer
         self.best_match_lineage_dataset = os.path.join(self.config.get("busco_run", "download_path"),
                                                        "lineages",
                                                        os.path.basename(lineage))
-        self.record_placement_file_versions(run_folder, placement_file_versions)
         return
-
-    def record_placement_file_versions(self, run_folder, placement_file_versions):
-        try:
-            with open(os.path.join(run_folder, "short_summary.txt"), "a") as summary_file:
-                summary_file.write("\nPlacement file versions:\n")
-                for placement_file in placement_file_versions:
-                    summary_file.write("{}\n".format(placement_file))
-        except OSError:
-            pass
-        return
-
-
 
     def _run_3_datasets(self, mollicutes_runner=None):
         if mollicutes_runner:

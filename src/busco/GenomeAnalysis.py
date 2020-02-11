@@ -12,7 +12,7 @@ Licensed under the MIT license. See LICENSE.md file.
 """
 from busco.BuscoAnalysis import BuscoAnalysis
 from busco.Analysis import NucleotideAnalysis
-from busco.BuscoTools import ProdigalRunner, AugustusRunner, GFF2GBRunner, NewSpeciesRunner, ETrainingRunner, OptimizeAugustusRunner
+from busco.BuscoTools import ProdigalRunner, AugustusRunner, GFF2GBRunner, NewSpeciesRunner, ETrainingRunner, OptimizeAugustusRunner, NoGenesError
 from busco.BuscoConfig import BuscoConfigAuto
 import os
 import shutil
@@ -344,6 +344,10 @@ class GenomeAnalysisEukaryotes(GenomeAnalysis):
         output_dir = os.path.join(self.run_folder, "augustus_output")
         if not os.path.exists(output_dir):  # TODO: consider grouping all create_dir calls into one function for all tools
             os.mkdir(output_dir)
+        # if self.augustus_runner:
+        #     self.augustus_runner.coords = coords
+        #     self.augustus_runner.target_species = self._target_species
+        # else:
         self.augustus_runner = AugustusRunner(self._augustus_tool, output_dir, self.tblastn_runner.output_seqs, self._target_species,
                                               self._lineage_dataset, self._augustus_parameters, coords,
                                               self._cpus, self.log_folder, self.sequences_aa, self.sequences_nt)
@@ -410,9 +414,10 @@ class GenomeAnalysisEukaryotes(GenomeAnalysis):
         self._run_augustus(coords)
         self._gene_details = self.augustus_runner.gene_details
         self.run_hmmer(self.augustus_runner.output_sequences)
-        if self.busco_type == "main":
-            self.rerun_analysis()
+        self.rerun_analysis()
 
+    @log("Starting second step of analysis. The gene predictor Augustus is retrained using the results from the "
+         "initial run to yield more accurate results.", logger)
     def rerun_analysis(self):
 
         # self._fix_restart_augustus_folder()  # todo: reintegrate this when checkpoints are restored
@@ -435,17 +440,20 @@ class GenomeAnalysisEukaryotes(GenomeAnalysis):
             self._run_optimize_augustus(new_species_name)
             self._run_etraining()
 
-        self._rerun_augustus(coords)
-        self._gene_details.update(self.augustus_runner.gene_details)
-        self.run_hmmer(self.augustus_runner.output_sequences)
-        self._write_buscos_to_file(self.sequences_aa, self.sequences_nt)
+        try:
+            self._rerun_augustus(coords)
+            self._gene_details.update(self.augustus_runner.gene_details)
+            self.run_hmmer(self.augustus_runner.output_sequences)
+            self._write_buscos_to_file(self.sequences_aa, self.sequences_nt)
+        except NoGenesError:
+            logger.warning("No genes found on Augustus rerun.")
 
-        self._move_retraining_parameters()  # todo: clean species folder on systemexit
+        # self._move_retraining_parameters()
         # if self._tarzip:
         #     self._run_tarzip_augustus_output()
         #     self._run_tarzip_hmmer_output()
         # remove the checkpoint, run is done
-        self._set_checkpoint()
+        # self._set_checkpoint()
         return
 
     def _check_file_dependencies(self):  # todo: currently only implemented for GenomeAnalysisEukaryotes, checking Augustus dirs. Does it need to be rolled out for all analyses?
@@ -493,6 +501,11 @@ class GenomeAnalysisEukaryotes(GenomeAnalysis):
             augustus_tmp = self.augustus_runner.tmp_dir
             if os.path.exists(augustus_tmp):
                 shutil.rmtree(augustus_tmp)
+        except:
+            pass
+        try:
+            if self._target_species.startswith("BUSCO"):
+                self._move_retraining_parameters()
         except:
             pass
         super()._cleanup()

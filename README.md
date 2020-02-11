@@ -29,13 +29,18 @@ To get help on BUSCO use: ``busco -h`` and ``python3 scripts/generate_plot.py -h
 
 **!!!** Don't use "odb9" datasets with BUSCOv4. If you need to reproduce previous analyses, use BUSCOv3 (https://gitlab.com/ezlab/busco/-/tags/3.0.2)
 
-Note: When running auto-lineage, the initial results for eukaryotes are incomplete. This is deliberate, as these initial 
-results are used merely to determine whether the genome scores highest against the bacteria, archaea or eukaryota 
-datasets. If the eukaryota dataset is selected, BUSCO then attempts to place the input assembly on the eukaryote 
-phylogenetic tree before running a complete BUSCO assessment using the selected child dataset. Unless the top-level 
-eukaryota dataset is selected as the best match for the input file, the eukaryota dataset run will not complete. So 
-while the specific dataset run will return accurate results, the generic eukaryota dataset run should be considered 
-unreliable.
+Note: While preparing the release of v4.0.3, we found and fixed a bug in the genome mode for the eukaryote pipeline. We recommend repeating 
+any affected runs done using previous 4.x versions with the updated version of the software.
+
+Note: For v4.0.2 and before, when running auto-lineage, the initial results for eukaryotes were incomplete. This was 
+deliberate, as these initial results are used merely to determine whether the genome scores highest against the 
+bacteria, archaea or eukaryota datasets. If the eukaryota dataset was selected, BUSCO then attempts to place the input 
+assembly on the eukaryote phylogenetic tree before running a complete BUSCO assessment using the selected child dataset. 
+Unless the top-level eukaryota dataset was selected as the best match for the input file, the eukaryota dataset run 
+would not complete. So while the specific dataset run returned accurate results, the generic eukaryota dataset run 
+should be considered unreliable. 
+This has been changed in v4.0.3. The eukaryota run now always completes so the final generic eukaryota results can be 
+considered reliable.
 
 **How to cite BUSCO**
 

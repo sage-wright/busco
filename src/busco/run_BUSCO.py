@@ -65,6 +65,10 @@ def _parse_args():
              'Output folders and files will be labelled with this name. WARNING: do not provide a path')
 
     optional.add_argument(
+        '--out_path', dest='out_path', required=False, metavar='OUTPUT_PATH',
+        help='Optional location for results folder, excluding results folder name. Default is current working directory.')
+
+    optional.add_argument(
         '-e', '--evalue', dest='evalue', required=False, metavar='N', type=float,
         help='E-value cutoff for BLAST searches. '
              'Allowed formats, 0.001 or 1e-03 (Default: %.0e)' % BuscoConfigMain.DEFAULT_ARGS_VALUES['evalue'])
@@ -174,8 +178,7 @@ def run_BUSCO(params):
         if config.getboolean("busco_run", "auto-lineage"):
             if lineage_basename.startswith(("bacteria", "archaea", "eukaryota")):
                 busco_run = config_manager.runner
-                if lineage_basename.startswith("eukaryota") and busco_run.mode == "genome":
-                    busco_run.complete_eukaryote_run()
+
             # It is possible that the following lineages were arrived at either by the Prodigal genetic code shortcut or by
             # BuscoPlacer. If the former, the run will have already been completed. If the latter it still needs to be done.
             elif lineage_basename.startswith(("mollicutes", "mycoplasmatales", "entomoplasmatales")) and \

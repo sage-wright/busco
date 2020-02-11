@@ -132,11 +132,19 @@ class BuscoDownloadManager:
             raise SystemExit("{} does not exist".format(data_name))
         if self.offline:
             if category == 'lineages':
-                return os.path.join(self.local_download_path, category, data_name)
+                local_dataset = os.path.join(self.local_download_path, category, data_name)
+                if os.path.exists(local_dataset):
+                    return local_dataset
+                else:
+                    raise SystemExit("Unable to run BUSCO in offline mode. Dataset {} does not exist.".format(local_dataset))
             else:
                 basename, extension = os.path.splitext(data_name)
-                return sorted(glob.glob(os.path.join(
-                    self.local_download_path, category, "{}.*.{}".format(basename, extension))))[-1]
+                placement_files = sorted(glob.glob(os.path.join(
+                    self.local_download_path, category, "{}.*{}".format(basename, extension))))
+                if len(placement_files) > 0:
+                    return placement_files[-1]  # todo: for offline mode, log which files are being used (in case of more than one glob match)
+                else:
+                    raise SystemExit("Unable to run BUSCO placer in offline mode. Cannot find necessary placement files in {}".format(self.local_download_path))
         data_basename = os.path.basename(data_name)
         local_filepath = os.path.join(self.local_download_path, category, data_basename)
         present, up_to_date, latest_version, local_filepath, hash = self._check_existing_version(local_filepath, category,

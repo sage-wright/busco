@@ -80,15 +80,21 @@ class NucleotideAnalysis(metaclass=ABCMeta):
         super().check_tool_dependencies()
 
     def _get_blast_version(self):
-        blast_version_call = subprocess.check_output([self._tblastn_tool.cmd, "-version"], shell=False)
-        blast_version = ".".join(blast_version_call.decode("utf-8").split("\n")[0].split()[1].rsplit(".")[:-1])
-        return blast_version
+        mkblastdb_version_call = subprocess.check_output([self._mkblast_tool.cmd, "-version"], shell=False)
+        mkblastdb_version = ".".join(mkblastdb_version_call.decode("utf-8").split("\n")[0].split()[1].rsplit(".")[:-1])
+
+        tblastn_version_call = subprocess.check_output([self._tblastn_tool.cmd, "-version"], shell=False)
+        tblastn_version = ".".join(tblastn_version_call.decode("utf-8").split("\n")[0].split()[1].rsplit(".")[:-1])
+
+        if mkblastdb_version != tblastn_version:
+            logger.warning("You are using version {} of mkblastdb and version {} of tblastn.".format(mkblastdb_version, tblastn_version))
+
+        return tblastn_version
 
     def _run_mkblast(self):
         self.mkblast_runner = MKBLASTRunner(self._mkblast_tool, self._input_file, self.main_out, self._cpus)
         self.mkblast_runner.run()
 
-    @log("Running a BLAST search for BUSCOs against created database", logger)
     def _run_tblastn(self, missing_and_frag_only=False, ancestral_variants=False):
 
         incomplete_buscos = (self.hmmer_runner.missing_buscos + list(self.hmmer_runner.fragmented_buscos.keys())

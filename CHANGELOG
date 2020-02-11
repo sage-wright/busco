@@ -1,3 +1,11 @@
+4.0.3
+- Issue #190 fixed
+- Issue #191 fixed
+- Issue #196 fixed
+- Issue #200 fixed
+- Reintroduce full retraining for all eukaryote runs
+- Fix retraining bug
+
 4.0.2
 - Issue #182 partially fixed
 

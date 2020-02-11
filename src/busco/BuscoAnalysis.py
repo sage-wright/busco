@@ -82,6 +82,7 @@ class BuscoAnalysis(metaclass=ABCMeta):
         self.s_percent = None
         self.d_percent = None
         self.f_percent = None
+        self.all_single_copy_buscos = {}
         self._log_count = 0  # Dummy variable used to skip logging for intermediate eukaryote pipeline results.
 
     # TODO: catch unicode encoding exception and report invalid character line instead of doing content validation
@@ -320,8 +321,8 @@ class BuscoAnalysis(metaclass=ABCMeta):
         self.hmmer_results_lines = []
         self.hmmer_results_lines.append("***** Results: *****\n\n")
         self.one_line_summary = "C:{}%[S:{}%,D:{}%],F:{}%,M:{}%,n:{}\t{}\n".format(
-            round(self.s_percent + self.d_percent, 1), self.s_percent, self.d_percent, self.f_percent,
-            round(100 - self.s_percent - self.d_percent - self.f_percent, 1), total_buscos, "   ")
+            round(self.s_percent + self.d_percent, 1), self.s_percent, self.d_percent,
+            self.f_percent, abs(round(100 - self.s_percent - self.d_percent - self.f_percent, 1)), total_buscos, "   ")
         self.hmmer_results_lines.append(self.one_line_summary)
         self.hmmer_results_lines.append("{}\tComplete BUSCOs (C)\t\t\t{}\n".format(single_copy + multi_copy, "   "))
         self.hmmer_results_lines.append("{}\tComplete and single-copy BUSCOs (S)\t{}\n".format(single_copy, "   "))
@@ -339,6 +340,13 @@ class BuscoAnalysis(metaclass=ABCMeta):
 
             for line in self.hmmer_results_lines:
                 summary_file.write("\t{}".format(line))
+
+            if self._config.getboolean("busco_run", "auto-lineage") and isinstance(self._config, BuscoConfigMain) \
+                    and hasattr(self._config, "placement_files"):
+                summary_file.write("\nPlacement file versions:\n")
+                for placement_file in self._config.placement_files:
+                    summary_file.write("{}\n".format(placement_file))
+
 
         if isinstance(self._config, BuscoConfigAuto):  # todo: rework this if/else block
             self._one_line_hmmer_summary()
@@ -381,6 +389,7 @@ class BuscoAnalysis(metaclass=ABCMeta):
         self.hmmer_runner.load_buscos()
         self.hmmer_runner.run()
         self.hmmer_runner.process_output()
+        self.all_single_copy_buscos.update(self.hmmer_runner.single_copy_buscos)
         self._write_hmmer_results()
         self._produce_hmmer_summary()
         return
@@ -482,9 +491,9 @@ class BuscoAnalysis(metaclass=ABCMeta):
         """
 
         with open(os.path.join(self.run_folder, "full_table.tsv"), "w") as f_out:
-            self._write_output_header(f_out)
 
             output_lines = self.hmmer_runner._create_output_content()
+            self._write_output_header(f_out)
 
             with open(os.path.join(self.run_folder, "missing_busco_list.tsv"), "w") as miss_out:
 

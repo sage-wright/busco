@@ -49,7 +49,8 @@ class BuscoRunner:
                 self.analysis._cleanup()
 
         except NoGenesError as nge:
-            no_genes_msg = "{} did not recognize any genes matching the dataset {} in the input file.\n".format(
+            no_genes_msg = "{0} did not recognize any genes matching the dataset {1} in the input file. " \
+                           "If this is unexpected, check your input file and your installation of {0}\n".format(
                 nge.gene_predictor, self.analysis._lineage_name)
             fatal = (isinstance(self.config, BuscoConfigMain)
                      or (self.config.getboolean("busco_run", "auto-lineage-euk") and self.mode == "euk_genome")
@@ -68,14 +69,6 @@ class BuscoRunner:
             self.analysis._cleanup()
             raise se
         return callback(s_buscos, d_buscos, f_buscos, s_percent, d_percent, f_percent)
-
-    def complete_eukaryote_run(self):
-        try:
-            assert self.config.get("busco_run", "domain") == "eukaryota"
-            self.analysis.rerun_analysis()
-
-        except AssertionError:
-            raise SystemExit("Eukaryote analysis can only be completed using the eukaryota domain")
 
     def format_results(self):
         framed_output = []
@@ -187,8 +180,8 @@ class BuscoRunner:
         if not logger.has_warning():
             logger.info("BUSCO analysis done. Total running time: {} seconds".format(str(round(elapsed_time))))
         else:
-            logger.info("BUSCO analysis done with WARNING(s). Total running time: {} seconds\n"
-                        "***** Summary of warnings: *****\n".format(str(round(elapsed_time))))
+            logger.info("BUSCO analysis done with WARNING(s). Total running time: {} seconds\n\n"
+                        "***** Summary of warnings: *****".format(str(round(elapsed_time))))
             for item in type(logger).warn_output.getvalue().split("\n"):
                 print(item)
 
