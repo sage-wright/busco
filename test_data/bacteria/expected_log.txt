@@ -1,4 +1,4 @@
-INFO:	***** Start a BUSCO v4.0.3 analysis, current time: 02/11/2020 14:22:28 *****
+INFO:	***** Start a BUSCO v4.0.4 analysis, current time: 02/12/2020 16:38:00 *****
 INFO:	Configuring BUSCO with /busco/config/config.ini
 INFO:	Mode is genome
 INFO:	Input file is genome.fna
@@ -24,6 +24,7 @@ INFO:	[hmmsearch]	20 of 194 task(s) completed
 INFO:	[hmmsearch]	39 of 194 task(s) completed
 INFO:	[hmmsearch]	59 of 194 task(s) completed
 INFO:	[hmmsearch]	78 of 194 task(s) completed
+INFO:	[hmmsearch]	97 of 194 task(s) completed
 INFO:	[hmmsearch]	117 of 194 task(s) completed
 INFO:	[hmmsearch]	136 of 194 task(s) completed
 INFO:	[hmmsearch]	156 of 194 task(s) completed
@@ -41,8 +42,9 @@ INFO:	Running 124 job(s) on hmmsearch
 INFO:	[hmmsearch]	13 of 124 task(s) completed
 INFO:	[hmmsearch]	25 of 124 task(s) completed
 INFO:	[hmmsearch]	38 of 124 task(s) completed
+INFO:	[hmmsearch]	50 of 124 task(s) completed
+INFO:	[hmmsearch]	63 of 124 task(s) completed
 INFO:	[hmmsearch]	75 of 124 task(s) completed
-INFO:	[hmmsearch]	87 of 124 task(s) completed
 INFO:	[hmmsearch]	100 of 124 task(s) completed
 INFO:	[hmmsearch]	112 of 124 task(s) completed
 INFO:	[hmmsearch]	124 of 124 task(s) completed
@@ -106,10 +108,9 @@ INFO:	[augustus]	13 of 14 task(s) completed
 INFO:	[augustus]	14 of 14 task(s) completed
 INFO:	Extracting predicted proteins...
 INFO:	***** Run HMMER on gene sequences *****
-INFO:	[hmmsearch]	1 of 4 task(s) completed
-INFO:	[hmmsearch]	2 of 4 task(s) completed
-INFO:	[hmmsearch]	3 of 4 task(s) completed
-INFO:	[hmmsearch]	4 of 4 task(s) completed
+INFO:	[hmmsearch]	1 of 3 task(s) completed
+INFO:	[hmmsearch]	2 of 3 task(s) completed
+INFO:	[hmmsearch]	3 of 3 task(s) completed
 WARNING:	BUSCO did not find any match. Make sure to check the log files if this is unexpected.
 INFO:	Results:	C:0.0%[S:0.0%,D:0.0%],F:0.0%,M:100.0%,n:255	   
 
@@ -147,7 +148,7 @@ INFO:
 	|97	Missing BUSCOs (M)                        |
 	|124	Total BUSCO groups searched               |
 	--------------------------------------------------
-INFO:	BUSCO analysis done with WARNING(s). Total running time: 80 seconds
+INFO:	BUSCO analysis done with WARNING(s). Total running time: 81 seconds
 
 ***** Summary of warnings: *****
 WARNING:busco.ConfigManager	Running Auto Lineage Selector as no lineage dataset was specified. This will take a little longer than normal. If you know what lineage dataset you want to use, please specify this in the config file or using the -l (--lineage-dataset) flag in the command line.

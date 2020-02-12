@@ -1,4 +1,4 @@
-INFO:	***** Start a BUSCO v4.0.3 analysis, current time: 02/11/2020 10:15:18 *****
+INFO:	***** Start a BUSCO v4.0.4 analysis, current time: 02/12/2020 16:40:52 *****
 INFO:	Configuring BUSCO with /busco/config/config.ini
 INFO:	Mode is genome
 INFO:	Input file is genome.fna
@@ -27,7 +27,6 @@ INFO:	[hmmsearch]	78 of 194 task(s) completed
 INFO:	[hmmsearch]	97 of 194 task(s) completed
 INFO:	[hmmsearch]	117 of 194 task(s) completed
 INFO:	[hmmsearch]	136 of 194 task(s) completed
-INFO:	[hmmsearch]	156 of 194 task(s) completed
 INFO:	[hmmsearch]	175 of 194 task(s) completed
 INFO:	[hmmsearch]	194 of 194 task(s) completed
 INFO:	Results:	C:1.0%[S:1.0%,D:0.0%],F:0.5%,M:98.5%,n:194	   
@@ -39,6 +38,7 @@ INFO:	***** Run Prodigal on input to predict and extract genes *****
 INFO:	Genetic code 11 selected as optimal
 INFO:	***** Run HMMER on gene sequences *****
 INFO:	Running 124 job(s) on hmmsearch
+INFO:	[hmmsearch]	13 of 124 task(s) completed
 INFO:	[hmmsearch]	25 of 124 task(s) completed
 INFO:	[hmmsearch]	38 of 124 task(s) completed
 INFO:	[hmmsearch]	50 of 124 task(s) completed
@@ -125,15 +125,16 @@ INFO:	[augustus]	36 of 39 task(s) completed
 INFO:	[augustus]	39 of 39 task(s) completed
 INFO:	Extracting predicted proteins...
 INFO:	***** Run HMMER on gene sequences *****
-INFO:	[hmmsearch]	8 of 76 task(s) completed
-INFO:	[hmmsearch]	16 of 76 task(s) completed
-INFO:	[hmmsearch]	23 of 76 task(s) completed
-INFO:	[hmmsearch]	31 of 76 task(s) completed
-INFO:	[hmmsearch]	38 of 76 task(s) completed
-INFO:	[hmmsearch]	54 of 76 task(s) completed
-INFO:	[hmmsearch]	61 of 76 task(s) completed
-INFO:	[hmmsearch]	69 of 76 task(s) completed
-INFO:	[hmmsearch]	76 of 76 task(s) completed
+INFO:	[hmmsearch]	4 of 37 task(s) completed
+INFO:	[hmmsearch]	8 of 37 task(s) completed
+INFO:	[hmmsearch]	12 of 37 task(s) completed
+INFO:	[hmmsearch]	15 of 37 task(s) completed
+INFO:	[hmmsearch]	19 of 37 task(s) completed
+INFO:	[hmmsearch]	23 of 37 task(s) completed
+INFO:	[hmmsearch]	26 of 37 task(s) completed
+INFO:	[hmmsearch]	30 of 37 task(s) completed
+INFO:	[hmmsearch]	34 of 37 task(s) completed
+INFO:	[hmmsearch]	37 of 37 task(s) completed
 INFO:	Results:	C:18.8%[S:18.8%,D:0.0%],F:0.4%,M:80.8%,n:255	   
 
 INFO:	eukaryota_odb10 selected
@@ -197,6 +198,7 @@ INFO:	Training Augustus using Single-Copy Complete BUSCOs:
 INFO:	Converting predicted genes to short genbank files
 INFO:	Running 29 job(s) on gff2gbSmallDNA.pl
 INFO:	[gff2gbSmallDNA.pl]	3 of 29 task(s) completed
+INFO:	[gff2gbSmallDNA.pl]	6 of 29 task(s) completed
 INFO:	[gff2gbSmallDNA.pl]	9 of 29 task(s) completed
 INFO:	[gff2gbSmallDNA.pl]	12 of 29 task(s) completed
 INFO:	[gff2gbSmallDNA.pl]	15 of 29 task(s) completed
@@ -225,16 +227,14 @@ INFO:	[augustus]	133 of 147 task(s) completed
 INFO:	[augustus]	147 of 147 task(s) completed
 INFO:	Extracting predicted proteins...
 INFO:	***** Run HMMER on gene sequences *****
-INFO:	[hmmsearch]	17 of 169 task(s) completed
-INFO:	[hmmsearch]	34 of 169 task(s) completed
-INFO:	[hmmsearch]	51 of 169 task(s) completed
-INFO:	[hmmsearch]	68 of 169 task(s) completed
-INFO:	[hmmsearch]	85 of 169 task(s) completed
-INFO:	[hmmsearch]	102 of 169 task(s) completed
-INFO:	[hmmsearch]	119 of 169 task(s) completed
-INFO:	[hmmsearch]	136 of 169 task(s) completed
-INFO:	[hmmsearch]	153 of 169 task(s) completed
-INFO:	[hmmsearch]	169 of 169 task(s) completed
+INFO:	[hmmsearch]	15 of 144 task(s) completed
+INFO:	[hmmsearch]	29 of 144 task(s) completed
+INFO:	[hmmsearch]	44 of 144 task(s) completed
+INFO:	[hmmsearch]	58 of 144 task(s) completed
+INFO:	[hmmsearch]	73 of 144 task(s) completed
+INFO:	[hmmsearch]	116 of 144 task(s) completed
+INFO:	[hmmsearch]	130 of 144 task(s) completed
+INFO:	[hmmsearch]	144 of 144 task(s) completed
 INFO:	Results:	C:2.0%[S:2.0%,D:0.0%],F:0.1%,M:97.9%,n:2137	   
 
 INFO:	
@@ -262,7 +262,7 @@ INFO:
 	|2092	Missing BUSCOs (M)                        |
 	|2137	Total BUSCO groups searched               |
 	--------------------------------------------------
-INFO:	BUSCO analysis done with WARNING(s). Total running time: 227 seconds
+INFO:	BUSCO analysis done with WARNING(s). Total running time: 212 seconds
 
 ***** Summary of warnings: *****
 WARNING:busco.ConfigManager	Running Auto Lineage Selector as no lineage dataset was specified. This will take a little longer than normal. If you know what lineage dataset you want to use, please specify this in the config file or using the -l (--lineage-dataset) flag in the command line.

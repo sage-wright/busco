@@ -1304,9 +1304,6 @@ class AugustusRunner:
         for filename in files:
             self._extract_genes_from_augustus_output(filename)
 
-        self.output_sequences = [os.path.join(self.extracted_prot_dir, f) for f in
-                                     os.listdir(self.extracted_prot_dir) if f.split(".")[-2] == "faa"]
-
         if not self.any_gene_found:
             raise NoGenesError("Augustus")
 
@@ -1470,7 +1467,7 @@ class AugustusRunner:
 
         output_fna = os.path.join(self.extracted_prot_dir, filename.replace("out", "fna"))
         output_faa = os.path.join(self.extracted_prot_dir, filename.replace("out", "faa"))
-        # self.output_sequences.append(output_faa)
+        self.output_sequences.append(output_faa)
 
         with open(output_fna, "w") as out_fna:
             SeqIO.write(sequences_nt, out_fna, "fasta")

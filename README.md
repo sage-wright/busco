@@ -29,9 +29,6 @@ To get help on BUSCO use: ``busco -h`` and ``python3 scripts/generate_plot.py -h
 
 **!!!** Don't use "odb9" datasets with BUSCOv4. If you need to reproduce previous analyses, use BUSCOv3 (https://gitlab.com/ezlab/busco/-/tags/3.0.2)
 
-Note: While preparing the release of v4.0.3, we found and fixed a bug in the genome mode for the eukaryote pipeline. We recommend repeating 
-any affected runs done using previous 4.x versions with the updated version of the software.
-
 Note: For v4.0.2 and before, when running auto-lineage, the initial results for eukaryotes were incomplete. This was 
 deliberate, as these initial results are used merely to determine whether the genome scores highest against the 
 bacteria, archaea or eukaryota datasets. If the eukaryota dataset was selected, BUSCO then attempts to place the input 

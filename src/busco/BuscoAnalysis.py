@@ -389,7 +389,7 @@ class BuscoAnalysis(metaclass=ABCMeta):
         self.hmmer_runner.load_buscos()
         self.hmmer_runner.run()
         self.hmmer_runner.process_output()
-        self.all_single_copy_buscos.update(self.hmmer_runner.single_copy_buscos)
+        # self.all_single_copy_buscos.update(self.hmmer_runner.single_copy_buscos)
         self._write_hmmer_results()
         self._produce_hmmer_summary()
         return
