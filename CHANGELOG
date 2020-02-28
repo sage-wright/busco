@@ -1,3 +1,6 @@
+4.0.5
+- Constrain to use Augustus v3.2.3 on conda and Docker
+
 4.0.4
 - Fix inefficiency introduced in 4.0.3
 

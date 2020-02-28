@@ -430,7 +430,7 @@ class GenomeAnalysisEukaryotes(GenomeAnalysis):
 
         logger.info("All files converted to short genbank files, now running the training scripts")
         new_species_name = self._run_new_species()
-        self._target_species = new_species_name
+        self._target_species = new_species_name  # todo: check new species folder can be read/written - detect any silent Augustus issues
 
         self._merge_gb_files()
 

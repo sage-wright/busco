@@ -1,4 +1,4 @@
-INFO:	***** Start a BUSCO v4.0.4 analysis, current time: 02/12/2020 16:40:52 *****
+INFO:	***** Start a BUSCO v4.0.5 analysis, current time: 02/12/2020 16:40:52 *****
 INFO:	Configuring BUSCO with /busco/config/config.ini
 INFO:	Mode is genome
 INFO:	Input file is genome.fna

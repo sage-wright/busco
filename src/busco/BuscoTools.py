@@ -1157,8 +1157,8 @@ class TBLASTNRunner:
         if append_busco_coords:
             coords[busco_name][contig]["busco_coords"].append([busco_start, busco_end])
 
-        if blast_eval < coords[busco_name][contig]["blast_eval"]:
-            coords[busco_name][contig]["blast_eval"] = blast_eval
+            if blast_eval < coords[busco_name][contig]["blast_eval"]:
+                coords[busco_name][contig]["blast_eval"] = blast_eval
 
         return coords
 

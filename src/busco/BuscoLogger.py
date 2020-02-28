@@ -247,9 +247,9 @@ class BuscoLogger(logging.getLoggerClass()):
         self._err_hdlr.setFormatter(self._normal_formatter)
         self.addHandler(self._err_hdlr)
 
-        # Random id used in filename to avoid complications for parallel BUSCO runs.
         if not os.access(os.getcwd(), os.W_OK):
             raise SystemExit("No permission to write in the current directory.")
+        # Random id used in filename to avoid complications for parallel BUSCO runs.
         self._file_hdlr = logging.FileHandler("busco_{}.log".format(type(self).random_id), mode="a")
         self._file_hdlr.setLevel(logging.DEBUG)
         self._file_hdlr.setFormatter(self._verbose_formatter)
