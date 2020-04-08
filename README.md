@@ -23,11 +23,6 @@ export BUSCO_CONFIG_FILE="/path/to/myconfig.ini"
 
 If you have trouble installing one of the many third-party tools, try the official Docker container: https://hub.docker.com/r/ezlabgva/busco/tags
 
-***Note regarding Augustus version:**
-If using BUSCO on eukaryota genomes, Augustus is the gene predictor used. We have noticed significant discrepancies between the results using Augustus v3.3.x and v3.2.x.
-Until this is resolved, we recommend using Augustus v3.2.3.*
-
-
 Report problems on the BUSCO issue board at https://gitlab.com/ezlab/busco/issues
 
 To get help on BUSCO use: ``busco -h`` and ``python3 scripts/generate_plot.py -h``

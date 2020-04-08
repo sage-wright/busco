@@ -1218,7 +1218,7 @@ class AugustusRunner:
                            "noprediction", "contentmodels", "translation_table", "temperature"]
 
     def __init__(self, augustus_tool, output_folder, seqs_path, target_species, lineage_dataset, params, coords, cpus,
-                 log_path, sequences_aa, sequences_nt):
+                 log_path, sequences_aa, sequences_nt, rerun):
         self.augustus_tool = augustus_tool
         self.output_folder = output_folder
         self.seqs_path = seqs_path
@@ -1230,9 +1230,11 @@ class AugustusRunner:
         self.param_values = []
         self.coords = coords
         self.cpus = cpus
+        self.run_num = 2 if rerun else 1
 
         self.extracted_prot_dir = os.path.join(self.output_folder, "extracted_proteins")
-        self.pred_genes_dir = os.path.join(self.output_folder, "predicted_genes")
+        self.pred_genes_dir = os.path.join(self.output_folder, "predicted_genes_rerun") if rerun \
+            else os.path.join(self.output_folder, "predicted_genes")
         self.gff_dir = os.path.join(self.output_folder, "gff")
         self.create_dirs()
 
@@ -1298,13 +1300,14 @@ class AugustusRunner:
             jobs_to_run = next(job_controller)
 
         self._merge_stderr_logs()
+        self._remove_individual_err_logs()
 
         logger.info("Extracting predicted proteins...")
         files = [f for f in sorted(os.listdir(self.pred_genes_dir)) if any(busco_id in f for busco_id in self.coords)]
         for filename in files:
             self._extract_genes_from_augustus_output(filename)
 
-        if not self.any_gene_found:
+        if not self.any_gene_found and self.run_num == 1:
             raise NoGenesError("Augustus")
 
         return
@@ -1347,6 +1350,10 @@ class AugustusRunner:
                     f.writelines(content)
         return
 
+    def _remove_individual_err_logs(self):
+        shutil.rmtree(self.tmp_dir)
+        return
+
     def _configure_augustus_job(self, busco_group, contig_tmp_file, contig_start, contig_end, out_filename):
         # Augustus does not provide an option to write to an output file, so have to change the pipe target from the
         # log file to the desired output file
@@ -1372,7 +1379,10 @@ class AugustusRunner:
 
         gene_id = None
         gene_info = []
-        gff_filename = os.path.join(self.gff_dir, filename.split(".")[0] + ".gff")
+        filename_parts = filename.split(".")
+        busco_id = filename_parts[0]
+        match_number = filename_parts[-1]
+        gff_filename = os.path.join(self.gff_dir, busco_id + ".gff")
         sequences_aa = []
         sequences_nt = []
         gene_found = False
@@ -1429,6 +1439,7 @@ class AugustusRunner:
                 if line.startswith("# coding sequence"):
                     with open(gff_filename, "a") as g:
                         g.write("\n".join(gene_info) + "\n")
+                    gene_info = []
                     gene_info_section = False
                     nt_sequence_section = True
                     line = line.strip().rstrip("]").split("[")  # Extract sequence part of line
@@ -1440,6 +1451,11 @@ class AugustusRunner:
                     seq_name = line[0]
                     gene_start = line[3]
                     gene_end = line[4]
+                    gene_id_info = line[-1]
+                    line[-1] = self.edit_gene_identifier(gene_id_info, match_number)
+                    if len(line) == 12:
+                        gene_id_info_2 = line[-3]
+                        line[-3] = self.edit_gene_identifier(gene_id_info_2, match_number)
                     if not gene_id:
                         gene_id = "{}:{}-{}".format(seq_name, gene_start, gene_end)
                         self.gene_details[gene_id].append({"gene_start": gene_start, "gene_end": gene_end})
@@ -1462,6 +1478,10 @@ class AugustusRunner:
             self._write_sequences_to_file(filename, sequences_nt, sequences_aa)
 
         return
+
+    def edit_gene_identifier(self, orig_str, match_num):
+        modified_str = re.sub(r"g([0-9])", r"r{}.m{}.g\1".format(self.run_num, match_num), orig_str)
+        return modified_str
 
     def _write_sequences_to_file(self, filename, sequences_nt, sequences_aa):
 

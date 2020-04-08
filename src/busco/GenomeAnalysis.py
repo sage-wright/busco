@@ -33,7 +33,6 @@ class GenomeAnalysis(NucleotideAnalysis, BuscoAnalysis, metaclass=ABCMeta):
     _mode = "genome"
 
     def __init__(self, config):
-        self._target_species = config.get("busco_run", "augustus_species")
         super().__init__(config)
 
     @abstractmethod
@@ -250,6 +249,10 @@ class GenomeAnalysisEukaryotes(GenomeAnalysis):
         """
         self._augustus_config_path = os.environ.get("AUGUSTUS_CONFIG_PATH")
         try:
+            self._target_species = config.get("busco_run", "augustus_species")
+        except KeyError:
+            raise SystemExit("Something went wrong. Eukaryota datasets should specify an augustus species.")
+        try:
             self._augustus_parameters = config.get("busco_run", "augustus_parameters").replace(',', ' ')
         except NoOptionError:
             self._augustus_parameters = ""
@@ -340,7 +343,7 @@ class GenomeAnalysisEukaryotes(GenomeAnalysis):
         return
 
     @log("Running Augustus gene predictor on BLAST search results.", logger)
-    def _run_augustus(self, coords):
+    def _run_augustus(self, coords, rerun=False):
         output_dir = os.path.join(self.run_folder, "augustus_output")
         if not os.path.exists(output_dir):  # TODO: consider grouping all create_dir calls into one function for all tools
             os.mkdir(output_dir)
@@ -350,7 +353,7 @@ class GenomeAnalysisEukaryotes(GenomeAnalysis):
         # else:
         self.augustus_runner = AugustusRunner(self._augustus_tool, output_dir, self.tblastn_runner.output_seqs, self._target_species,
                                               self._lineage_dataset, self._augustus_parameters, coords,
-                                              self._cpus, self.log_folder, self.sequences_aa, self.sequences_nt)
+                                              self._cpus, self.log_folder, self.sequences_aa, self.sequences_nt, rerun)
         self.augustus_runner.run()
         self.sequences_nt = self.augustus_runner.sequences_nt
         self.sequences_aa = self.augustus_runner.sequences_aa
@@ -364,7 +367,7 @@ class GenomeAnalysisEukaryotes(GenomeAnalysis):
             len(missing_and_fragmented_buscos)))
         missing_and_fragmented_coords = {busco: coords[busco] for busco in coords if busco in missing_and_fragmented_buscos}
         logger.debug('Trained species folder is {}'.format(self._target_species))
-        self._run_augustus(missing_and_fragmented_coords)
+        self._run_augustus(missing_and_fragmented_coords, rerun=True)
         return
 
     def _set_checkpoint(self, id=None):
@@ -498,7 +501,7 @@ class GenomeAnalysisEukaryotes(GenomeAnalysis):
         This function cleans temporary files
         """
         try:
-            augustus_tmp = self.augustus_runner.tmp_dir
+            augustus_tmp = self.augustus_runner.tmp_dir  # Should be already done if AugustusRunner ran correctly
             if os.path.exists(augustus_tmp):
                 shutil.rmtree(augustus_tmp)
         except:
