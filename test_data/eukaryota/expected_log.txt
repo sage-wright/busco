@@ -1,4 +1,4 @@
-INFO:	***** Start a BUSCO v4.0.6 analysis, current time: 02/12/2020 16:40:52 *****
+INFO:	***** Start a BUSCO v4.1.0 analysis, current time: 07/01/2020 17:20:41 *****
 INFO:	Configuring BUSCO with /busco/config/config.ini
 INFO:	Mode is genome
 INFO:	Input file is genome.fna
@@ -14,12 +14,12 @@ INFO:	Downloading file 'https://busco-data.ezlab.org/v4/data/lineages/archaea_od
 INFO:	Decompressing file '/busco_wd/busco_downloads/lineages/archaea_odb10.tar.gz'
 INFO:	Running BUSCO using lineage dataset archaea_odb10 (prokaryota, 2019-01-04)
 INFO:	***** Run Prodigal on input to predict and extract genes *****
-INFO:	Running prodigal with genetic code 11 in single mode
-INFO:	Running 1 job(s) on prodigal
+INFO:	Running Prodigal with genetic code 11 in single mode
+INFO:	Running 1 job(s) on prodigal, starting at 07/01/2020 17:20:42
 INFO:	[prodigal]	1 of 1 task(s) completed
 INFO:	Genetic code 11 selected as optimal
 INFO:	***** Run HMMER on gene sequences *****
-INFO:	Running 194 job(s) on hmmsearch
+INFO:	Running 194 job(s) on hmmsearch, starting at 07/01/2020 17:20:42
 INFO:	[hmmsearch]	20 of 194 task(s) completed
 INFO:	[hmmsearch]	39 of 194 task(s) completed
 INFO:	[hmmsearch]	59 of 194 task(s) completed
@@ -27,6 +27,8 @@ INFO:	[hmmsearch]	78 of 194 task(s) completed
 INFO:	[hmmsearch]	97 of 194 task(s) completed
 INFO:	[hmmsearch]	117 of 194 task(s) completed
 INFO:	[hmmsearch]	136 of 194 task(s) completed
+INFO:	[hmmsearch]	156 of 194 task(s) completed
+INFO:	[hmmsearch]	156 of 194 task(s) completed
 INFO:	[hmmsearch]	175 of 194 task(s) completed
 INFO:	[hmmsearch]	194 of 194 task(s) completed
 INFO:	Results:	C:1.0%[S:1.0%,D:0.0%],F:0.5%,M:98.5%,n:194	   
@@ -37,7 +39,7 @@ INFO:	Running BUSCO using lineage dataset bacteria_odb10 (prokaryota, 2019-06-26
 INFO:	***** Run Prodigal on input to predict and extract genes *****
 INFO:	Genetic code 11 selected as optimal
 INFO:	***** Run HMMER on gene sequences *****
-INFO:	Running 124 job(s) on hmmsearch
+INFO:	Running 124 job(s) on hmmsearch, starting at 07/01/2020 17:20:45
 INFO:	[hmmsearch]	13 of 124 task(s) completed
 INFO:	[hmmsearch]	25 of 124 task(s) completed
 INFO:	[hmmsearch]	38 of 124 task(s) completed
@@ -54,15 +56,15 @@ INFO:	Results:	C:0.0%[S:0.0%,D:0.0%],F:0.0%,M:100.0%,n:124
 INFO:	Downloading file 'https://busco-data.ezlab.org/v4/data/lineages/eukaryota_odb10.2019-11-20.tar.gz'
 INFO:	Decompressing file '/busco_wd/busco_downloads/lineages/eukaryota_odb10.tar.gz'
 INFO:	Running BUSCO using lineage dataset eukaryota_odb10 (eukaryota, 2019-11-20)
+INFO:	Running 1 job(s) on makeblastdb, starting at 07/01/2020 17:20:48
 INFO:	Creating BLAST database with input file
-INFO:	Running 1 job(s) on makeblastdb
 INFO:	[makeblastdb]	1 of 1 task(s) completed
 INFO:	Running a BLAST search for BUSCOs against created database
-INFO:	Running 1 job(s) on tblastn
+INFO:	Running 1 job(s) on tblastn, starting at 07/01/2020 17:20:48
 INFO:	[tblastn]	1 of 1 task(s) completed
 INFO:	Running Augustus gene predictor on BLAST search results.
 INFO:	Running Augustus prediction using fly as species:
-INFO:	Running 52 job(s) on augustus
+INFO:	Running 52 job(s) on augustus, starting at 07/01/2020 17:20:48
 INFO:	[augustus]	6 of 52 task(s) completed
 INFO:	[augustus]	11 of 52 task(s) completed
 INFO:	[augustus]	16 of 52 task(s) completed
@@ -75,7 +77,7 @@ INFO:	[augustus]	47 of 52 task(s) completed
 INFO:	[augustus]	52 of 52 task(s) completed
 INFO:	Extracting predicted proteins...
 INFO:	***** Run HMMER on gene sequences *****
-INFO:	Running 50 job(s) on hmmsearch
+INFO:	Running 50 job(s) on hmmsearch, starting at 07/01/2020 17:21:44
 INFO:	[hmmsearch]	5 of 50 task(s) completed
 INFO:	[hmmsearch]	10 of 50 task(s) completed
 INFO:	[hmmsearch]	15 of 50 task(s) completed
@@ -91,10 +93,10 @@ INFO:	Results:	C:15.3%[S:15.3%,D:0.0%],F:1.2%,M:83.5%,n:255
 INFO:	Starting second step of analysis. The gene predictor Augustus is retrained using the results from the initial run to yield more accurate results.
 INFO:	Extracting missing and fragmented buscos from the file ancestral_variants...
 INFO:	Running a BLAST search for BUSCOs against created database
+INFO:	Running 1 job(s) on tblastn, starting at 07/01/2020 17:21:45
 INFO:	[tblastn]	1 of 1 task(s) completed
-INFO:	Training Augustus using Single-Copy Complete BUSCOs:
 INFO:	Converting predicted genes to short genbank files
-INFO:	Running 39 job(s) on gff2gbSmallDNA.pl
+INFO:	Running 39 job(s) on gff2gbSmallDNA.pl, starting at 07/01/2020 17:21:49
 INFO:	[gff2gbSmallDNA.pl]	4 of 39 task(s) completed
 INFO:	[gff2gbSmallDNA.pl]	8 of 39 task(s) completed
 INFO:	[gff2gbSmallDNA.pl]	12 of 39 task(s) completed
@@ -105,14 +107,15 @@ INFO:	[gff2gbSmallDNA.pl]	28 of 39 task(s) completed
 INFO:	[gff2gbSmallDNA.pl]	32 of 39 task(s) completed
 INFO:	[gff2gbSmallDNA.pl]	36 of 39 task(s) completed
 INFO:	[gff2gbSmallDNA.pl]	39 of 39 task(s) completed
-INFO:	All files converted to short genbank files, now running the training scripts
-INFO:	Running 1 job(s) on new_species.pl
+INFO:	All files converted to short genbank files, now training Augustus using Single-Copy Complete BUSCOs
+INFO:	Running 1 job(s) on new_species.pl, starting at 07/01/2020 17:21:49
 INFO:	[new_species.pl]	1 of 1 task(s) completed
-INFO:	Running 1 job(s) on etraining
+INFO:	Running 1 job(s) on etraining, starting at 07/01/2020 17:21:50
 INFO:	[etraining]	1 of 1 task(s) completed
 INFO:	Re-running Augustus with the new metaparameters, number of target BUSCOs: 216
 INFO:	Running Augustus gene predictor on BLAST search results.
 INFO:	Running Augustus prediction using BUSCO_test_eukaryota as species:
+INFO:	Running 39 job(s) on augustus, starting at 07/01/2020 17:21:50
 INFO:	[augustus]	4 of 39 task(s) completed
 INFO:	[augustus]	8 of 39 task(s) completed
 INFO:	[augustus]	12 of 39 task(s) completed
@@ -125,17 +128,18 @@ INFO:	[augustus]	36 of 39 task(s) completed
 INFO:	[augustus]	39 of 39 task(s) completed
 INFO:	Extracting predicted proteins...
 INFO:	***** Run HMMER on gene sequences *****
-INFO:	[hmmsearch]	4 of 37 task(s) completed
-INFO:	[hmmsearch]	8 of 37 task(s) completed
-INFO:	[hmmsearch]	12 of 37 task(s) completed
-INFO:	[hmmsearch]	15 of 37 task(s) completed
-INFO:	[hmmsearch]	19 of 37 task(s) completed
-INFO:	[hmmsearch]	23 of 37 task(s) completed
-INFO:	[hmmsearch]	26 of 37 task(s) completed
-INFO:	[hmmsearch]	30 of 37 task(s) completed
-INFO:	[hmmsearch]	34 of 37 task(s) completed
-INFO:	[hmmsearch]	37 of 37 task(s) completed
-INFO:	Results:	C:18.8%[S:18.8%,D:0.0%],F:0.4%,M:80.8%,n:255	   
+INFO:	Running 34 job(s) on hmmsearch, starting at 07/01/2020 17:22:01
+INFO:	[hmmsearch]	4 of 34 task(s) completed
+INFO:	[hmmsearch]	7 of 34 task(s) completed
+INFO:	[hmmsearch]	11 of 34 task(s) completed
+INFO:	[hmmsearch]	14 of 34 task(s) completed
+INFO:	[hmmsearch]	17 of 34 task(s) completed
+INFO:	[hmmsearch]	21 of 34 task(s) completed
+INFO:	[hmmsearch]	24 of 34 task(s) completed
+INFO:	[hmmsearch]	28 of 34 task(s) completed
+INFO:	[hmmsearch]	31 of 34 task(s) completed
+INFO:	[hmmsearch]	34 of 34 task(s) completed
+INFO:	Results:	C:18.8%[S:18.8%,D:0.0%],F:1.2%,M:80.0%,n:255	   
 
 INFO:	eukaryota_odb10 selected
 
@@ -155,18 +159,18 @@ INFO:	Decompressing file '/busco_wd/busco_downloads/placement_files/mapping_taxi
 INFO:	Downloading file 'https://busco-data.ezlab.org/v4/data/placement_files/mapping_taxid-lineage.eukaryota_odb10.2019-12-16.txt.tar.gz'
 INFO:	Decompressing file '/busco_wd/busco_downloads/placement_files/mapping_taxid-lineage.eukaryota_odb10.2019-12-16.txt.tar.gz'
 INFO:	Place the markers on the reference tree...
-INFO:	Running 1 job(s) on sepp
+INFO:	Running 1 job(s) on sepp, starting at 07/01/2020 17:22:02
 INFO:	[sepp]	1 of 1 task(s) completed
 INFO:	Lineage saccharomycetes is selected, supported by 16 markers out of 17
 INFO:	Downloading file 'https://busco-data.ezlab.org/v4/data/lineages/saccharomycetes_odb10.2019-11-20.tar.gz'
 INFO:	Decompressing file '/busco_wd/busco_downloads/lineages/saccharomycetes_odb10.tar.gz'
 INFO:	Running BUSCO using lineage dataset saccharomycetes_odb10 (eukaryota, 2019-11-20)
 INFO:	Running a BLAST search for BUSCOs against created database
-INFO:	Running 1 job(s) on tblastn
+INFO:	Running 1 job(s) on tblastn, starting at 07/01/2020 17:25:10
 INFO:	[tblastn]	1 of 1 task(s) completed
 INFO:	Running Augustus gene predictor on BLAST search results.
 INFO:	Running Augustus prediction using aspergillus_nidulans as species:
-INFO:	Running 98 job(s) on augustus
+INFO:	Running 98 job(s) on augustus, starting at 07/01/2020 17:25:14
 INFO:	[augustus]	10 of 98 task(s) completed
 INFO:	[augustus]	20 of 98 task(s) completed
 INFO:	[augustus]	30 of 98 task(s) completed
@@ -179,7 +183,7 @@ INFO:	[augustus]	89 of 98 task(s) completed
 INFO:	[augustus]	98 of 98 task(s) completed
 INFO:	Extracting predicted proteins...
 INFO:	***** Run HMMER on gene sequences *****
-INFO:	Running 63 job(s) on hmmsearch
+INFO:	Running 63 job(s) on hmmsearch, starting at 07/01/2020 17:25:54
 INFO:	[hmmsearch]	7 of 63 task(s) completed
 INFO:	[hmmsearch]	13 of 63 task(s) completed
 INFO:	[hmmsearch]	19 of 63 task(s) completed
@@ -193,10 +197,10 @@ INFO:	[hmmsearch]	63 of 63 task(s) completed
 INFO:	Starting second step of analysis. The gene predictor Augustus is retrained using the results from the initial run to yield more accurate results.
 INFO:	Extracting missing and fragmented buscos from the file ancestral_variants...
 INFO:	Running a BLAST search for BUSCOs against created database
+INFO:	Running 1 job(s) on tblastn, starting at 07/01/2020 17:26:02
 INFO:	[tblastn]	1 of 1 task(s) completed
-INFO:	Training Augustus using Single-Copy Complete BUSCOs:
 INFO:	Converting predicted genes to short genbank files
-INFO:	Running 29 job(s) on gff2gbSmallDNA.pl
+INFO:	Running 29 job(s) on gff2gbSmallDNA.pl, starting at 07/01/2020 17:27:08
 INFO:	[gff2gbSmallDNA.pl]	3 of 29 task(s) completed
 INFO:	[gff2gbSmallDNA.pl]	6 of 29 task(s) completed
 INFO:	[gff2gbSmallDNA.pl]	9 of 29 task(s) completed
@@ -207,14 +211,16 @@ INFO:	[gff2gbSmallDNA.pl]	21 of 29 task(s) completed
 INFO:	[gff2gbSmallDNA.pl]	24 of 29 task(s) completed
 INFO:	[gff2gbSmallDNA.pl]	27 of 29 task(s) completed
 INFO:	[gff2gbSmallDNA.pl]	29 of 29 task(s) completed
-INFO:	All files converted to short genbank files, now running the training scripts
-INFO:	Running 1 job(s) on new_species.pl
+INFO:	[gff2gbSmallDNA.pl]	29 of 29 task(s) completed
+INFO:	All files converted to short genbank files, now training Augustus using Single-Copy Complete BUSCOs
+INFO:	Running 1 job(s) on new_species.pl, starting at 07/01/2020 17:27:09
 INFO:	[new_species.pl]	1 of 1 task(s) completed
-INFO:	Running 1 job(s) on etraining
+INFO:	Running 1 job(s) on etraining, starting at 07/01/2020 17:27:09
 INFO:	[etraining]	1 of 1 task(s) completed
 INFO:	Re-running Augustus with the new metaparameters, number of target BUSCOs: 2108
 INFO:	Running Augustus gene predictor on BLAST search results.
 INFO:	Running Augustus prediction using BUSCO_test_eukaryota as species:
+INFO:	Running 147 job(s) on augustus, starting at 07/01/2020 17:27:10
 INFO:	[augustus]	15 of 147 task(s) completed
 INFO:	[augustus]	30 of 147 task(s) completed
 INFO:	[augustus]	45 of 147 task(s) completed
@@ -227,42 +233,45 @@ INFO:	[augustus]	133 of 147 task(s) completed
 INFO:	[augustus]	147 of 147 task(s) completed
 INFO:	Extracting predicted proteins...
 INFO:	***** Run HMMER on gene sequences *****
-INFO:	[hmmsearch]	15 of 144 task(s) completed
-INFO:	[hmmsearch]	29 of 144 task(s) completed
-INFO:	[hmmsearch]	44 of 144 task(s) completed
-INFO:	[hmmsearch]	58 of 144 task(s) completed
-INFO:	[hmmsearch]	73 of 144 task(s) completed
-INFO:	[hmmsearch]	116 of 144 task(s) completed
-INFO:	[hmmsearch]	130 of 144 task(s) completed
-INFO:	[hmmsearch]	144 of 144 task(s) completed
-INFO:	Results:	C:2.0%[S:2.0%,D:0.0%],F:0.1%,M:97.9%,n:2137	   
+INFO:	Running 140 job(s) on hmmsearch, starting at 07/01/2020 17:27:58
+INFO:	[hmmsearch]	14 of 140 task(s) completed
+INFO:	[hmmsearch]	28 of 140 task(s) completed
+INFO:	[hmmsearch]	42 of 140 task(s) completed
+INFO:	[hmmsearch]	56 of 140 task(s) completed
+INFO:	[hmmsearch]	70 of 140 task(s) completed
+INFO:	[hmmsearch]	84 of 140 task(s) completed
+INFO:	[hmmsearch]	98 of 140 task(s) completed
+INFO:	[hmmsearch]	112 of 140 task(s) completed
+INFO:	[hmmsearch]	126 of 140 task(s) completed
+INFO:	[hmmsearch]	140 of 140 task(s) completed
+INFO:	Results:	C:2.0%[S:2.0%,D:0.0%],F:0.3%,M:97.7%,n:2137	   
 
 INFO:	
 
 	--------------------------------------------------
 	|Results from generic domain eukaryota_odb10      |
 	--------------------------------------------------
-	|C:18.8%[S:18.8%,D:0.0%],F:0.4%,M:80.8%,n:255     |
+	|C:18.8%[S:18.8%,D:0.0%],F:1.2%,M:80.0%,n:255     |
 	|48	Complete BUSCOs (C)                       |
 	|48	Complete and single-copy BUSCOs (S)       |
 	|0	Complete and duplicated BUSCOs (D)        |
-	|1	Fragmented BUSCOs (F)                     |
-	|206	Missing BUSCOs (M)                        |
+	|3	Fragmented BUSCOs (F)                     |
+	|204	Missing BUSCOs (M)                        |
 	|255	Total BUSCO groups searched               |
 	--------------------------------------------------
 
 	--------------------------------------------------
 	|Results from dataset saccharomycetes_odb10       |
 	--------------------------------------------------
-	|C:2.0%[S:2.0%,D:0.0%],F:0.1%,M:97.9%,n:2137      |
+	|C:2.0%[S:2.0%,D:0.0%],F:0.3%,M:97.7%,n:2137      |
 	|42	Complete BUSCOs (C)                       |
 	|42	Complete and single-copy BUSCOs (S)       |
 	|0	Complete and duplicated BUSCOs (D)        |
-	|3	Fragmented BUSCOs (F)                     |
-	|2092	Missing BUSCOs (M)                        |
+	|6	Fragmented BUSCOs (F)                     |
+	|2089	Missing BUSCOs (M)                        |
 	|2137	Total BUSCO groups searched               |
 	--------------------------------------------------
-INFO:	BUSCO analysis done with WARNING(s). Total running time: 212 seconds
+INFO:	BUSCO analysis done with WARNING(s). Total running time: 440 seconds
 
 ***** Summary of warnings: *****
 WARNING:busco.ConfigManager	Running Auto Lineage Selector as no lineage dataset was specified. This will take a little longer than normal. If you know what lineage dataset you want to use, please specify this in the config file or using the -l (--lineage-dataset) flag in the command line.

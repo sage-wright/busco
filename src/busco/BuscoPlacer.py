@@ -35,9 +35,13 @@ class BuscoPlacer:
         self._params = config
         self.mode = self._config.get("busco_run", "mode")
         self.cpus = self._config.get("busco_run", "cpu")
+        self.restart = self._config.getboolean("busco_run", "restart")
         self.run_folder = run_folder
         self.placement_folder = os.path.join(run_folder, "placement_files")
-        os.mkdir(self.placement_folder)
+        if self.restart:
+            os.makedirs(self.placement_folder, exist_ok=True)
+        else:
+            os.mkdir(self.placement_folder)
         self.downloader = self._config.downloader
         self.datasets_version = self._config.get("busco_run", "datasets_version")
         self.protein_seqs = protein_seqs
@@ -92,12 +96,14 @@ class BuscoPlacer:
         return dataset, placement_file_versions
 
     def _init_tools(self):
-        try:
-            assert isinstance(self._sepp, Tool)
-        except AttributeError:
-            self._sepp = Tool("sepp", self._config)
-        except AssertionError:
-            raise SystemExit("SEPP should be a tool")
+        setattr(SEPPRunner, "config", self._config)
+        self.sepp_runner = SEPPRunner()
+        # try:
+        #     assert isinstance(self._sepp, Tool)
+        # except AttributeError:
+        #     self._sepp = Tool("sepp", self._config)
+        # except AssertionError:
+        #     raise SystemExit("SEPP should be a tool")
 
     def _pick_dataset(self):
 
@@ -273,10 +279,16 @@ class BuscoPlacer:
 
     @log("Place the markers on the reference tree...", logger)
     def _run_sepp(self):
-        self.sepp_runner = SEPPRunner(self._sepp, self.run_folder, self.placement_folder, self.tree_nwk_file,
-                                      self.tree_metadata_file, self.supermatrix_file, self.downloader,
-                                      self.datasets_version, self.cpus)
-        self.sepp_runner.run()
+        # self.sepp_runner = SEPPRunner(self._sepp, self.run_folder, self.placement_folder, self.tree_nwk_file,
+        #                               self.tree_metadata_file, self.supermatrix_file, self.downloader,
+        #                               self.datasets_version, self.cpus)
+        self.sepp_runner.configure_runner(self.tree_nwk_file, self.tree_metadata_file, self.supermatrix_file, self.downloader)
+        if self.restart and self.sepp_runner.check_previous_completed_run():
+            logger.info("Skipping SEPP run as it has already been completed")
+        else:
+            self.restart = False
+            self._config.set("busco_run", "restart", str(self.restart))
+            self.sepp_runner.run()
 
     def _extract_marker_sequences(self):
         """

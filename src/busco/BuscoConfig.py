@@ -15,7 +15,7 @@ logger = BuscoLogger.get_logger(__name__)
 
 class BaseConfig(ConfigParser):
 
-    DEFAULT_ARGS_VALUES = {"out_path": os.getcwd(), "cpu": 1, "force": False, "evalue": 1e-3,
+    DEFAULT_ARGS_VALUES = {"out_path": os.getcwd(), "cpu": 1, "force": False, "restart": False, "evalue": 1e-3,
                            "limit": 3, "long": False, "quiet": False,
                            "download_path": os.path.join(os.getcwd(), "busco_downloads"), "datasets_version": "odb10",
                            "offline": False, "download_base_url": "https://busco-data.ezlab.org/v4/data/",
@@ -48,6 +48,10 @@ class BaseConfig(ConfigParser):
         """
         self.downloader = BuscoDownloadManager(self)
         return
+
+    # @log("Setting value in config")
+    # def set(self, *args, **kwargs):
+    #     super().set(*args, **kwargs)
 
 
 class PseudoConfig(BaseConfig):
@@ -200,9 +204,10 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
     MANDATORY_USER_PROVIDED_PARAMS = ["in", "out", "mode"]
 
     CONFIG_STRUCTURE = {"busco_run": ["in", "out", "out_path", "mode", "auto-lineage", "auto-lineage-prok",
-                                  "auto-lineage-euk", "cpu", "force", "download_path", "datasets_version", "evalue",
-                                  "limit", "long", "quiet", "offline", "download_base_url", "lineage_dataset",
-                                  "update-data", "augustus_parameters", "augustus_species", "main_out"],
+                                      "auto-lineage-euk", "cpu", "force", "restart", "download_path",
+                                      "datasets_version", "evalue", "limit", "long", "quiet", "offline",
+                                      "download_base_url", "lineage_dataset", "update-data", "augustus_parameters",
+                                      "augustus_species", "main_out"],
                         "tblastn": ["path", "command"],
                         "makeblastdb": ["path", "command"],
                         "prodigal": ["path", "command"],
@@ -241,7 +246,6 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
         self._check_required_input_exists()
 
         self._init_downloader()
-        self.persistent_tools = []
 
         self.log_config()
 
@@ -259,7 +263,7 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
             lineage_dataset = self.get("busco_run", "lineage_dataset")
             datasets_version = self.get("busco_run", "datasets_version")
             if "_odb" in lineage_dataset:
-                dataset_version = lineage_dataset.rsplit("_")[-1]
+                dataset_version = lineage_dataset.rsplit("_")[-1].rstrip("/")
                 if datasets_version != dataset_version:
                     logger.warning("There is a conflict in your config. You specified a dataset from {0} while "
                                    "simultaneously requesting the datasets_version parameter be {1}. Proceeding with "
@@ -368,11 +372,15 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
         if os.path.exists(self.main_out):
             if self.getboolean("busco_run", "force"):
                 self._force_remove_existing_output_dir(self.main_out)
+            elif self.getboolean("busco_run", "restart"):
+                logger.info("Attempting to restart the run using the following directory: {}".format(self.main_out))
             else:
                 raise SystemExit("A run with the name {} already exists...\n"
                                  "\tIf you are sure you wish to overwrite existing files, "
                                  "please use the -f (force) option".format(self.main_out))
-
+        elif self.getboolean("busco_run", "restart"):
+            logger.warning("Restart mode not available as directory {} does not exist.".format(self.main_out))
+            self.set("busco_run", "restart", "False")
 
         return
 

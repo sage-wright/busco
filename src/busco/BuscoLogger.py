@@ -83,11 +83,12 @@ class LogDecorator:
 
                 try:
                     string_arg = getattr(obj_inst, self.attr_name)
-                    # string_arg = attr
                     if self.apply == 'join' and isinstance(string_arg, list):
+                        string_arg = [str(arg) for arg in string_arg]  # Ensure all parameters are joinable strings
                         string_arg = ' '.join(string_arg)
                     elif self.apply == "basename" and isinstance(string_arg, str):
                         string_arg = os.path.basename(string_arg)
+
                     log_msg = self.msg.format(string_arg)
                 except TypeError:  # if there are multiple attributes specified
                     string_args = (getattr(obj_inst, attr) for attr in self.attr_name)

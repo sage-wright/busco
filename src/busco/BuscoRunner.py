@@ -1,15 +1,17 @@
+from busco.BuscoAnalysis import BuscoAnalysis
 from busco.GenomeAnalysis import GenomeAnalysisEukaryotes
 from busco.TranscriptomeAnalysis import TranscriptomeAnalysis
 from busco.GeneSetAnalysis import GeneSetAnalysis
 from busco.GenomeAnalysis import GenomeAnalysisProkaryotes
 from busco.BuscoLogger import BuscoLogger
 from busco.BuscoConfig import BuscoConfigMain
-from busco.BuscoTools import NoGenesError
+from busco.BuscoTools import NoGenesError, BaseRunner
 from configparser import NoOptionError
 import os
 import shutil
 
 logger = BuscoLogger.get_logger(__name__)
+
 
 class BuscoRunner:
 
@@ -23,6 +25,8 @@ class BuscoRunner:
     def __init__(self, config):
 
         self.config = config
+        setattr(BaseRunner, "config", config)
+        setattr(BuscoAnalysis, "config", config)
 
         self.mode = self.config.get("busco_run", "mode")
         self.domain = self.config.get("busco_run", "domain")
@@ -33,25 +37,24 @@ class BuscoRunner:
             elif self.domain == "eukaryota":
                 self.mode = "euk_genome"
         analysis_type = type(self).mode_dict[self.mode]
-        self.analysis = analysis_type(self.config)
+        self.analysis = analysis_type()
         self.prok_fail_count = 0  # Needed to check if both bacteria and archaea return no genes.
 
     def run_analysis(self, callback=(lambda *args: None)):
         try:
             self.analysis.run_analysis()
-            s_buscos = self.analysis.single_copy
-            d_buscos = self.analysis.multi_copy
-            f_buscos = self.analysis.only_fragments
-            s_percent = self.analysis.s_percent
-            d_percent = self.analysis.d_percent
-            f_percent = self.analysis.f_percent
-            if isinstance(self.config, BuscoConfigMain):
-                self.analysis._cleanup()
+            s_buscos = self.analysis.hmmer_runner.single_copy
+            d_buscos = self.analysis.hmmer_runner.multi_copy
+            f_buscos = self.analysis.hmmer_runner.only_fragments
+            s_percent = self.analysis.hmmer_runner.s_percent
+            d_percent = self.analysis.hmmer_runner.d_percent
+            f_percent = self.analysis.hmmer_runner.f_percent
+            self.analysis.cleanup()
 
         except NoGenesError as nge:
             no_genes_msg = "{0} did not recognize any genes matching the dataset {1} in the input file. " \
-                           "If this is unexpected, check your input file and your installation of {0}\n".format(
-                nge.gene_predictor, self.analysis._lineage_name)
+                           "If this is unexpected, check your input file and your " \
+                           "installation of {0}\n".format(nge.gene_predictor, self.analysis._lineage_name)
             fatal = (isinstance(self.config, BuscoConfigMain)
                      or (self.config.getboolean("busco_run", "auto-lineage-euk") and self.mode == "euk_genome")
                      or (self.config.getboolean("busco_run", "auto-lineage-prok") and self.mode == "prok_genome")
@@ -62,11 +65,10 @@ class BuscoRunner:
                 logger.warning(no_genes_msg)
                 s_buscos = d_buscos = f_buscos = s_percent = d_percent = f_percent = 0.0
                 if self.mode == "prok_genome":
-                    self.config.persistent_tools.append(self.analysis.prodigal_runner)
                     self.prok_fail_count += 1
 
         except SystemExit as se:
-            self.analysis._cleanup()
+            self.analysis.cleanup()
             raise se
         return callback(s_buscos, d_buscos, f_buscos, s_percent, d_percent, f_percent)
 
@@ -96,14 +98,16 @@ class BuscoRunner:
                 missing_in_parasitic_buscos = [entry.strip() for entry in parasitic_file.readlines()]
             if len(self.analysis.hmmer_runner.missing_buscos) >= 0.8*len(missing_in_parasitic_buscos) \
                     and len(missing_in_parasitic_buscos) > 0:
-                intersection = [mb for mb in self.analysis.hmmer_runner.missing_buscos if mb in missing_in_parasitic_buscos]
-                percent_missing_in_parasites = round(100*len(intersection)/len(self.analysis.hmmer_runner.missing_buscos), 1)
+                intersection = [mb for mb in self.analysis.hmmer_runner.missing_buscos
+                                if mb in missing_in_parasitic_buscos]
+                percent_missing_in_parasites = round(
+                    100*len(intersection)/len(self.analysis.hmmer_runner.missing_buscos), 1)
                 if percent_missing_in_parasites >= 80.0:
                     corrected_summary = self._recalculate_parasitic_scores(len(missing_in_parasitic_buscos))
                     positive_parasitic_line = "\n!!! The missing BUSCOs match the pattern of a parasitic-reduced " \
                                               "genome. {}% of your missing BUSCOs are typically missing in these. " \
                                               "A corrected score would be: \n{}\n".format(percent_missing_in_parasites,
-                                                                                       corrected_summary)
+                                                                                          corrected_summary)
                     final_output_results.append(positive_parasitic_line)
                     if not self.config.getboolean("busco_run", "auto-lineage"):
                         auto_lineage_line = "\nConsider using the auto-lineage mode to select a more specific lineage."
@@ -115,28 +119,29 @@ class BuscoRunner:
         return final_output_results
 
     def _recalculate_parasitic_scores(self, num_missing_in_parasitic):
-        total_buscos = self.analysis.total_buscos - num_missing_in_parasitic
-        single_copy = self.analysis.single_copy
-        multi_copy = self.analysis.multi_copy
-        fragmented_copy = self.analysis.only_fragments
+        total_buscos = self.analysis.hmmer_runner.total_buscos - num_missing_in_parasitic
+        single_copy = self.analysis.hmmer_runner.single_copy
+        multi_copy = self.analysis.hmmer_runner.multi_copy
+        fragmented_copy = self.analysis.hmmer_runner.only_fragments
         s_percent = abs(round(100*single_copy/total_buscos, 1))
         d_percent = abs(round(100*multi_copy/total_buscos, 1))
         f_percent = abs(round(100*fragmented_copy/total_buscos, 1))
 
         one_line_summary = "C:{}%[S:{}%,D:{}%],F:{}%,M:{}%,n:{}\t\n".format(
-            round(s_percent + d_percent, 1), s_percent, d_percent, f_percent, round(100-s_percent-d_percent-f_percent, 1), total_buscos)
+            round(s_percent + d_percent, 1), s_percent, d_percent, f_percent,
+            round(100-s_percent-d_percent-f_percent, 1), total_buscos)
         return one_line_summary
-
-
 
     def organize_final_output(self):
         main_out_folder = self.config.get("busco_run", "main_out")
 
         try:
             domain_results_folder = self.config.get("busco_run", "domain_run_name")
-            root_domain_output_folder = os.path.join(main_out_folder, "auto_lineage", "run_{}".format(domain_results_folder))
+            root_domain_output_folder = os.path.join(main_out_folder, "auto_lineage",
+                                                     "run_{}".format(domain_results_folder))
             root_domain_output_folder_final = os.path.join(main_out_folder, "run_{}".format(domain_results_folder))
             os.rename(root_domain_output_folder, root_domain_output_folder_final)
+            os.symlink(root_domain_output_folder_final, root_domain_output_folder)
             shutil.copyfile(os.path.join(root_domain_output_folder_final, "short_summary.txt"),
                             os.path.join(main_out_folder, "short_summary.generic.{}.{}.txt".format(
                                 domain_results_folder.replace("run_", ""), os.path.basename(main_out_folder))))
@@ -155,8 +160,10 @@ class BuscoRunner:
                                 lineage_results_folder.replace("run_", ""), os.path.basename(main_out_folder))))
         return
 
-    @staticmethod  # This is deliberately a staticmethod so it can be called from run_BUSCO() even if BuscoRunner has not yet been initialized.
+    @staticmethod
     def move_log_file(config):
+        # This is deliberately a staticmethod so it can be called from run_BUSCO() even if BuscoRunner has not yet
+        # been initialized.
         try:
             log_folder = os.path.join(config.get("busco_run", "main_out"), "logs")
             if not os.path.exists(log_folder):
@@ -166,11 +173,7 @@ class BuscoRunner:
             logger.warning("Unable to move 'busco_{}.log' to the 'logs' folder.".format(BuscoLogger.random_id))
         return
 
-
-    def finish(self, elapsed_time, root_lineage=False):
-        # if root_lineage:
-        #     logger.info("Generic lineage selected. Results reproduced here.\n"
-        #                 "{}".format(" ".join(self.analysis.hmmer_results_lines)))
+    def finish(self, elapsed_time):
 
         final_output_results = self.format_results()
         logger.info("".join(final_output_results))
@@ -265,5 +268,3 @@ class SmartBox:
             box_lines.append("\t{}".format(line))
         box_lines.append("\t{}".format(self.add_horizontal()))
         return "\n".join(box_lines)
-
-

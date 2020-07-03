@@ -24,17 +24,17 @@ class GeneSetAnalysis(ProteinAnalysis, BuscoAnalysis):
     """
     _mode = 'proteins'
 
-    def __init__(self, config):
+    def __init__(self):
         """
         Initialize an instance.
         :param params: Values of all parameters that have to be defined
         :type params: PipeConfig
         """
-        super().__init__(config)
+        super().__init__()
         self.sequences_aa = {record.id: record for record in list(SeqIO.parse(self._input_file, "fasta"))}
 
-    def _cleanup(self):
-        super()._cleanup()
+    def cleanup(self):
+        super().cleanup()
 
     def run_analysis(self):
         """
@@ -42,11 +42,7 @@ class GeneSetAnalysis(ProteinAnalysis, BuscoAnalysis):
         """
         super().run_analysis()
         self.run_hmmer(self._input_file)
-        self._write_buscos_to_file(self.sequences_aa)
-        self._cleanup()
+        self.hmmer_runner.write_buscos_to_file(self.sequences_aa)
         # if self._tarzip:
         #     self._run_tarzip_hmmer_output()
         return
-
-    def create_dirs(self):
-        super().create_dirs()

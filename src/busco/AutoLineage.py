@@ -71,7 +71,7 @@ class AutoSelectLineage:
         root_runners = self.run_lineages_list(self.all_lineages)
         self.get_best_match_lineage(root_runners)
         self.config.set("busco_run", "domain_run_name", os.path.basename(self.best_match_lineage_dataset))
-        BuscoRunner.final_results.append(self.selected_runner.analysis.hmmer_results_lines)
+        BuscoRunner.final_results.append(self.selected_runner.analysis.hmmer_runner.hmmer_results_lines)
         BuscoRunner.results_datasets.append(os.path.basename(self.best_match_lineage_dataset))
         return
 
@@ -80,9 +80,6 @@ class AutoSelectLineage:
         for l in lineages_list:
             self.current_lineage = "{}_{}".format(l, self.dataset_version)
             autoconfig = BuscoConfigAuto(self.config, self.current_lineage)
-            # The following line creates a direct reference, so whenever one analysis run adds a tool to this list it
-            # is automatically updated here too.
-            autoconfig.persistent_tools = self.config.persistent_tools
             busco_run = BuscoRunner(autoconfig)
             busco_run.run_analysis(callback=self.callback)
             root_runners.append(busco_run)  # Save all root runs so they can be recalled if chosen
@@ -136,7 +133,7 @@ class AutoSelectLineage:
 
     def cleanup_disused_runs(self, disused_runners):
         for runner in disused_runners:
-            runner.analysis._cleanup()
+            runner.analysis.cleanup()
 
 
     def get_lineage_dataset(self):  # todo: rethink structure after BuscoPlacer is finalized and protein mode with mollicutes is fixed.
@@ -159,14 +156,16 @@ class AutoSelectLineage:
             else:
                 logger.info("Mollicutes dataset is a better match for your data. Testing subclades...")
                 self._run_3_datasets(self.selected_runner)
-                BuscoRunner.final_results.append(self.selected_runner.analysis.hmmer_results_lines)
+                BuscoRunner.final_results.append(self.selected_runner.analysis.hmmer_runner.hmmer_results_lines)
                 BuscoRunner.results_datasets.append(os.path.basename(self.best_match_lineage_dataset))
-        elif ("geno" in self.selected_runner.mode and self.selected_runner.analysis.code_4_selected and
-              os.path.basename(self.selected_runner.config.get("busco_run", "lineage_dataset")).startswith("bacteria")):
+        elif ("geno" in self.selected_runner.mode
+              and self.selected_runner.analysis.prodigal_runner.current_gc == "4"
+              and os.path.basename(
+                    self.selected_runner.config.get("busco_run", "lineage_dataset")).startswith("bacteria")):
             logger.info("The results from the Prodigal gene predictor indicate that your data belongs to the "
                         "mollicutes clade. Testing subclades...")
             self._run_3_datasets()
-            BuscoRunner.final_results.append(self.selected_runner.analysis.hmmer_results_lines)
+            BuscoRunner.final_results.append(self.selected_runner.analysis.hmmer_runner.hmmer_results_lines)
             BuscoRunner.results_datasets.append(os.path.basename(self.best_match_lineage_dataset))
         else:
             self.run_busco_placer()
@@ -181,12 +180,12 @@ class AutoSelectLineage:
         self.f_percents = []
         runners = self.run_lineages_list(["mollicutes"])
         runners.append(self.selected_runner)
-        self.s_buscos.append(self.selected_runner.analysis.single_copy)
-        self.d_buscos.append(self.selected_runner.analysis.multi_copy)
-        self.f_buscos.append(self.selected_runner.analysis.only_fragments)
-        self.s_percents.append(self.selected_runner.analysis.s_percent)
-        self.d_percents.append(self.selected_runner.analysis.d_percent)
-        self.f_percents.append(self.selected_runner.analysis.f_percent)
+        self.s_buscos.append(self.selected_runner.analysis.hmmer_runner.single_copy)
+        self.d_buscos.append(self.selected_runner.analysis.hmmer_runner.multi_copy)
+        self.f_buscos.append(self.selected_runner.analysis.hmmer_runner.only_fragments)
+        self.s_percents.append(self.selected_runner.analysis.hmmer_runner.s_percent)
+        self.d_percents.append(self.selected_runner.analysis.hmmer_runner.d_percent)
+        self.f_percents.append(self.selected_runner.analysis.hmmer_runner.f_percent)
         self.get_best_match_lineage(runners)
         return
 
@@ -215,12 +214,12 @@ class AutoSelectLineage:
     def _run_3_datasets(self, mollicutes_runner=None):
         if mollicutes_runner:
             datasets = ["mycoplasmatales", "entomoplasmatales"]
-            self.s_buscos = [mollicutes_runner.analysis.single_copy]
-            self.d_buscos = [mollicutes_runner.analysis.multi_copy]
-            self.f_buscos = [mollicutes_runner.analysis.only_fragments]
-            self.s_percents = [mollicutes_runner.analysis.s_percent]
-            self.d_percents = [mollicutes_runner.analysis.d_percent]
-            self.f_percents = [mollicutes_runner.analysis.f_percent]
+            self.s_buscos = [mollicutes_runner.analysis.hmmer_runner.single_copy]
+            self.d_buscos = [mollicutes_runner.analysis.hmmer_runner.multi_copy]
+            self.f_buscos = [mollicutes_runner.analysis.hmmer_runner.only_fragments]
+            self.s_percents = [mollicutes_runner.analysis.hmmer_runner.s_percent]
+            self.d_percents = [mollicutes_runner.analysis.hmmer_runner.d_percent]
+            self.f_percents = [mollicutes_runner.analysis.hmmer_runner.f_percent]
             dataset_runners = [mollicutes_runner]
         else:
             datasets = ["mollicutes", "mycoplasmatales", "entomoplasmatales"]

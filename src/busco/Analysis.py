@@ -1,11 +1,8 @@
 from Bio import SeqIO
 from busco.BuscoTools import TBLASTNRunner, MKBLASTRunner
-from busco.Toolset import Tool
 from busco.BuscoLogger import BuscoLogger
-from busco.BuscoLogger import LogDecorator as log
-import subprocess
 import os
-from abc import ABCMeta, abstractmethod
+from abc import ABCMeta
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -17,26 +14,13 @@ class NucleotideAnalysis(metaclass=ABCMeta):
     # explanation of ambiguous codes found here: https://www.dnabaser.com/articles/IUPAC%20ambiguity%20codes.html
     AMBIGUOUS_CODES = ["Y", "R", "W", "S", "K", "M", "D", "V", "H", "B"]
 
-    MAX_FLANK = 20000
+    def __init__(self):
 
-    def __init__(self, config):
-        # Variables inherited from BuscoAnalysis
-        self._config = None
-        self._cpus = None
-        self._input_file = None
-
-        super().__init__(config)  # Initialize BuscoAnalysis
-        self._long = self._config.getboolean("busco_run", "long")
-        self._flank = self._define_flank()
-        self._ev_cutoff = self._config.getfloat("busco_run", "evalue")
-        self._region_limit = self._config.getint("busco_run", "limit")
-        self.blast_cpus = self._cpus
-
+        super().__init__()  # Initialize BuscoAnalysis
         if not self.check_nucleotide_file(self._input_file):
             raise SystemExit("Please provide a nucleotide file as input")
 
     def check_nucleotide_file(self, filename):
-
         i = 0
         for record in SeqIO.parse(filename, "fasta"):
             for letter in record.seq.upper():
@@ -51,66 +35,43 @@ class NucleotideAnalysis(metaclass=ABCMeta):
 
         return True
 
-    def _define_flank(self):
-        """
-        TODO: Add docstring
-        :return:
-        """
-        try:
-            size = os.path.getsize(self._input_file) / 1000  # size in mb
-            flank = int(size / 50)  # proportional flank size
-            # Ensure value is between 5000 and MAX_FLANK
-            flank = min(max(flank, 5000), type(self).MAX_FLANK)
-        except IOError:  # Input data is only validated during run_analysis. This will catch any IO issues before that.
-            raise SystemExit("Impossible to read the fasta file {}".format(self._input_file))
-
-        return flank
-
-    @abstractmethod
-    def init_tools(self):  # todo: This should be an abstract method
-        """
-        Initialize all required tools for Genome Eukaryote Analysis:
-        MKBlast, TBlastn, Augustus and Augustus scripts: GFF2GBSmallDNA, new_species, etraining
-        :return:
-        """
+    def init_tools(self):
         super().init_tools()
+        self.mkblast_runner = MKBLASTRunner()
+        self.tblastn_runner = TBLASTNRunner()
 
-
-    def check_tool_dependencies(self):
-        super().check_tool_dependencies()
-
-    def _get_blast_version(self):
-        mkblastdb_version_call = subprocess.check_output([self._mkblast_tool.cmd, "-version"], shell=False)
-        mkblastdb_version = ".".join(mkblastdb_version_call.decode("utf-8").split("\n")[0].split()[1].rsplit(".")[:-1])
-
-        tblastn_version_call = subprocess.check_output([self._tblastn_tool.cmd, "-version"], shell=False)
-        tblastn_version = ".".join(tblastn_version_call.decode("utf-8").split("\n")[0].split()[1].rsplit(".")[:-1])
-
-        if mkblastdb_version != tblastn_version:
-            logger.warning("You are using version {} of mkblastdb and version {} of tblastn.".format(mkblastdb_version, tblastn_version))
-
-        return tblastn_version
+        if self.mkblast_runner.version != self.tblastn_runner.version:
+            logger.warning("You are using version {} of makeblastdb and version {} of tblastn.".format(
+                self.mkblast_runner.version, self.tblastn_runner.version))
 
     def _run_mkblast(self):
-        self.mkblast_runner = MKBLASTRunner(self._mkblast_tool, self._input_file, self.main_out, self._cpus)
-        self.mkblast_runner.run()
+        if self.restart and self.mkblast_runner.check_previous_completed_run():
+            logger.info("Skipping makeblastdb as BLAST DB already exists at {}".format(self.mkblast_runner.output_db))
+        else:
+            self.restart = False  # Turn off restart mode if this is the entry point
+            self.config.set("busco_run", "restart", str(self.restart))
+            self.mkblast_runner.run()
+        if len(os.listdir(os.path.split(self.mkblast_runner.output_db)[0])) == 0:
+            raise SystemExit("makeblastdb failed to create a BLAST DB at {}".format(self.mkblast_runner.output_db))
 
     def _run_tblastn(self, missing_and_frag_only=False, ancestral_variants=False):
 
         incomplete_buscos = (self.hmmer_runner.missing_buscos + list(self.hmmer_runner.fragmented_buscos.keys())
                              if missing_and_frag_only else None)  # This parameter is only used on the re-run
 
-        self.tblastn_runner = TBLASTNRunner(self._tblastn_tool, self._input_file, self.run_folder, self._lineage_dataset,
-                                            self.mkblast_runner.output_db, self._ev_cutoff, self.blast_cpus,
-                                            self._region_limit, self._flank, missing_and_frag_only, ancestral_variants,
-                                            incomplete_buscos)
-
-        self.tblastn_runner.run()
-        coords = self.tblastn_runner._get_coordinates()
-        coords = self.tblastn_runner._filter_best_matches(coords)  # Todo: remove underscores from non-hidden methods
-        self.tblastn_runner._write_coordinates_to_file(coords)  # writes to "coordinates.tsv"
-        self.tblastn_runner._write_contigs(coords)
-        return coords
+        self.tblastn_runner.configure_runner(self.mkblast_runner.output_db, missing_and_frag_only,
+                                             ancestral_variants, incomplete_buscos)
+        if self.restart and self.tblastn_runner.check_previous_completed_run():
+            logger.info("Skipping tblastn as results already exist at {}".format(self.tblastn_runner.blast_filename))
+        else:
+            self.restart = False
+            self.config.set("busco_run", "restart", str(self.restart))
+            self.tblastn_runner.run()
+        self.tblastn_runner.get_coordinates()
+        self.tblastn_runner.filter_best_matches()
+        self.tblastn_runner.write_coordinates_to_file()  # writes to "coordinates.tsv"
+        self.tblastn_runner.write_contigs()
+        return
 
 
 class ProteinAnalysis:
@@ -118,8 +79,8 @@ class ProteinAnalysis:
     LETTERS = ["F", "L", "I", "M", "V", "S", "P", "T", "A", "Y", "X", "H", "Q", "N", "K", "D", "E", "C", "W", "R", "G"]
     NUCL_LETTERS = ["A", "C", "T", "G", "N"]
 
-    def __init__(self, config):
-        super().__init__(config)
+    def __init__(self):
+        super().__init__()
         if not self.check_protein_file(self._input_file):
             raise SystemExit('Please provide a protein file as input')
 

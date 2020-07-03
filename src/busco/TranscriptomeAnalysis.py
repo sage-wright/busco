@@ -11,8 +11,6 @@ Licensed under the MIT license. See LICENSE.md file.
 
 """
 import os
-import time
-
 from busco.BuscoAnalysis import BuscoAnalysis
 from busco.BuscoLogger import BuscoLogger
 from busco.BuscoLogger import LogDecorator as log
@@ -20,12 +18,12 @@ from Bio.Seq import reverse_complement, translate
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 from busco.Analysis import NucleotideAnalysis
-from busco.Toolset import Tool
 
 
 logger = BuscoLogger.get_logger(__name__)
 
 # todo: catch multiple buscos on one transcript
+
 
 class TranscriptomeAnalysis(NucleotideAnalysis, BuscoAnalysis):
     """
@@ -34,14 +32,11 @@ class TranscriptomeAnalysis(NucleotideAnalysis, BuscoAnalysis):
 
     _mode = "transcriptome"
 
-    def __init__(self, config):
+    def __init__(self):
         """
         Initialize an instance.
-        :param config: Values of all parameters that have to be defined
-        :type config: BuscoConfig
         """
-        super().__init__(config)
-
+        super().__init__()
 
     def run_analysis(self):
         """
@@ -58,57 +53,29 @@ class TranscriptomeAnalysis(NucleotideAnalysis, BuscoAnalysis):
         # if checkpoint < 1:
 
         self._run_mkblast()
-        coords = self._run_tblastn(ancestral_variants=self._has_variants_file)
+        self._run_tblastn(ancestral_variants=self._has_variants_file)
 
-        protein_seq_files = self._translate_seqs(coords)
+        protein_seq_files = self._translate_seqs(self.tblastn_runner.coords)
 
         self.run_hmmer(protein_seq_files)
-        # Note BUSCO matches are not written to file, as we have not yet developed a suitable protocol for Transcriptomes
-        self._cleanup()
+        # Note BUSCO matches are not written to file, as we have not yet developed a suitable protocol for
+        # Transcriptomes
         # if self._tarzip:
         #     self._run_tarzip_hmmer_output()
         #     self._run_tarzip_translated_proteins()
         return
 
-    def create_dirs(self): # todo: remove this as abstract method, review all abstract methods
-        super().create_dirs()
-
-    def init_tools(self): # todo: This should be an abstract method
-
+    def init_tools(self):
         super().init_tools()
-        try:
-            assert(isinstance(self._mkblast_tool, Tool))
-        except AttributeError:
-            self._mkblast_tool = Tool("makeblastdb", self._config)
-        except AssertionError:
-            raise SystemExit("mkblast should be a tool")
 
-        try:
-            assert(isinstance(self._tblastn_tool, Tool))
-        except AttributeError:
-            self._tblastn_tool = Tool("tblastn", self._config)
-        except AssertionError:
-            raise SystemExit("tblastn should be a tool")
-
-    def check_tool_dependencies(self):
-        blast_version = self._get_blast_version()
-        if blast_version not in ["2.2", "2.3"]:  # Known problems with multithreading on BLAST 2.4-2.9.
-            if blast_version == "2.9" and self._tblastn_tool.cmd.endswith(
-                    "tblastn_June13"):  # NCBI sent a binary with this name that avoids the multithreading problems.
-                pass
-            else:
-                logger.warning("You are using BLAST version {}. This is known to yield inconsistent results when "
-                               "multithreading. BLAST will run on a single core as a result. For performance improvement, "
-                               "please revert to BLAST 2.2 or 2.3.".format(blast_version))
-                self.blast_cpus = 1
-
-    def _cleanup(self):
+    def cleanup(self):
         """
         This function cleans temporary files.
         """
-        super()._cleanup()
+        super().cleanup()
 
-    def six_frame_translation(self, seq):
+    @staticmethod
+    def six_frame_translation(seq):
         """
         Gets the sixframe translation for the provided sequence
         :param seq: the sequence to be translated
@@ -132,7 +99,8 @@ class TranscriptomeAnalysis(NucleotideAnalysis, BuscoAnalysis):
             translated_seqs[descriptions[-(i+1)]] = (translate(anti[i:i + fragment_length], stop_symbol="X"))
         return translated_seqs
 
-    def _reformats_seq_id(self, seq_id):
+    @staticmethod
+    def _reformats_seq_id(seq_id):
         """
         This function reformats the sequence id to its original values
         :param seq_id: the seq id to reformats
@@ -160,8 +128,10 @@ class TranscriptomeAnalysis(NucleotideAnalysis, BuscoAnalysis):
             protein_seq_files.append(output_filename)
             translated_records = []
             for contig_name in contig_info:
-                tmp_filename = os.path.join(self.tblastn_runner.output_seqs, "{}.temp".format(contig_name[:100]))  # Avoid very long filenames
-                for record in SeqIO.parse(tmp_filename, "fasta"):  # These files will only ever have one sequence, but BioPython examples always parse them in an iterator.
+                tmp_filename = os.path.join(self.tblastn_runner.output_seqs, "{}.temp".format(
+                    contig_name[:100]))  # Avoid very long filenames
+                for record in SeqIO.parse(tmp_filename, "fasta"):  # These files will only ever have one sequence,
+                    # but BioPython examples always parse them in an iterator.
                     translated_seqs = self.six_frame_translation(record.seq)
                     for desc_id in translated_seqs:  # There are six possible translated sequences
                         prot_seq = translated_seqs[desc_id]
@@ -171,7 +141,6 @@ class TranscriptomeAnalysis(NucleotideAnalysis, BuscoAnalysis):
                 SeqIO.write(translated_records, out_faa, "fasta")
 
         return protein_seq_files
-
 
     # def _run_tarzip_translated_proteins(self):
     #     """

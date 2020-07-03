@@ -50,7 +50,8 @@ class BuscoDownloadManager:
 
     def _create_main_download_dir(self):
         if not os.path.exists(self.local_download_path):
-            os.makedirs(self.local_download_path)
+            # exist_ok=True to allow for multiple parallel BUSCO runs each trying to create this folder simultaneously
+            os.makedirs(self.local_download_path, exist_ok=True)
 
     def _load_versions(self):
         try:
@@ -83,7 +84,8 @@ class BuscoDownloadManager:
         # if the category folder does not exist, create it
         category_folder = os.path.join(self.local_download_path, category)
         if not os.path.exists(category_folder):
-            os.mkdir(category_folder)
+            # exist_ok=True to allow for multiple parallel BUSCO runs, each trying to create this folder
+            os.makedirs(category_folder, exist_ok=True)
         return
 
     @staticmethod
@@ -100,7 +102,10 @@ class BuscoDownloadManager:
         return dataset_date
 
     def _check_existing_version(self, local_filepath, category, data_basename):
-        latest_update = type(self).version_files[data_basename][0]
+        try:
+            latest_update = type(self).version_files[data_basename][0]
+        except KeyError:
+            raise SystemExit("{} is not a valid option for '{}'".format(data_basename, category))
         path_basename, extension = os.path.splitext(data_basename)
 
         if category == "lineages":
@@ -136,19 +141,22 @@ class BuscoDownloadManager:
                 if os.path.exists(local_dataset):
                     return local_dataset
                 else:
-                    raise SystemExit("Unable to run BUSCO in offline mode. Dataset {} does not exist.".format(local_dataset))
+                    raise SystemExit("Unable to run BUSCO in offline mode. Dataset {} does not "
+                                     "exist.".format(local_dataset))
             else:
                 basename, extension = os.path.splitext(data_name)
                 placement_files = sorted(glob.glob(os.path.join(
                     self.local_download_path, category, "{}.*{}".format(basename, extension))))
                 if len(placement_files) > 0:
-                    return placement_files[-1]  # todo: for offline mode, log which files are being used (in case of more than one glob match)
+                    return placement_files[-1]
+                    # todo: for offline mode, log which files are being used (in case of more than one glob match)
                 else:
-                    raise SystemExit("Unable to run BUSCO placer in offline mode. Cannot find necessary placement files in {}".format(self.local_download_path))
+                    raise SystemExit("Unable to run BUSCO placer in offline mode. Cannot find necessary placement "
+                                     "files in {}".format(self.local_download_path))
         data_basename = os.path.basename(data_name)
         local_filepath = os.path.join(self.local_download_path, category, data_basename)
-        present, up_to_date, latest_version, local_filepath, hash = self._check_existing_version(local_filepath, category,
-                                                                                  data_basename)
+        present, up_to_date, latest_version, local_filepath, hash = self._check_existing_version(
+            local_filepath, category, data_basename)
 
         if (not up_to_date and self.update_data) or not present:
             # download
@@ -169,7 +177,8 @@ class BuscoDownloadManager:
 
         return local_filepath
 
-    def _rename_old_version(self, local_filepath):
+    @staticmethod
+    def _rename_old_version(local_filepath):
         if os.path.exists(local_filepath):
             try:
                 os.rename(local_filepath, "{}.old".format(local_filepath))
@@ -179,7 +188,7 @@ class BuscoDownloadManager:
                     timestamp = time.time()
                     os.rename(local_filepath, "{}.old.{}".format(local_filepath, timestamp))
                     logger.info("Renaming {} into {}.old.{}".format(local_filepath, local_filepath, timestamp))
-                except OSError as e:
+                except OSError:
                     pass
         return
 
@@ -189,7 +198,8 @@ class BuscoDownloadManager:
             urllib.request.urlretrieve(remote_filepath, local_filepath)
             observed_hash = type(self)._md5(local_filepath)
             if observed_hash != expected_hash:
-                logger.error("md5 hash is incorrect: {} while {} expected".format(str(observed_hash), str(expected_hash)))
+                logger.error("md5 hash is incorrect: {} while {} expected".format(str(observed_hash),
+                                                                                  str(expected_hash)))
                 logger.info("deleting corrupted file {}".format(local_filepath))
                 os.remove(local_filepath)
                 raise SystemExit("BUSCO was unable to download or update all necessary files")
@@ -207,7 +217,6 @@ class BuscoDownloadManager:
             for chunk in iter(lambda: f.read(4096), b""):
                 hash_md5.update(chunk)
         return hash_md5.hexdigest()
-
 
     @log("Decompressing file {}", logger, func_arg=1)
     def _decompress_file(self, local_filepath):

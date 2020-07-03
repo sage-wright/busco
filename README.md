@@ -1,5 +1,7 @@
 **BUSCOv4 - Benchmarking sets of Universal Single-Copy Orthologs.**
 
+For full documentation please consult the user guide: https://busco.ezlab.org/busco_userguide.html
+
 Main changes in v4:
 
 - Automated selection of lineages issued from https://www.orthodb.org/ release 10
@@ -14,30 +16,22 @@ To install, clone the repository and enter ``sudo python3 setup.py install`` or 
 
 More details in the user guide: https://busco.ezlab.org/busco_userguide.html#manual-installation
 
-Do not forget to edit the ``config/config.ini`` file to match your environment. The script `scripts/busco_configurator.py` can help you filling it. You also have to set the ``BUSCO_CONFIG_FILE`` 
-environment variable to define the path (including the filename) to that ``config.ini`` file. It can be located anywhere.
+Do not forget to edit the ``config/config.ini`` file to match your environment. The script `scripts/busco_configurator.py` can help with this. 
+You can set the ``BUSCO_CONFIG_FILE`` environment variable to define the path (including the filename) to that ``config.ini`` file. 
 
 ```
 export BUSCO_CONFIG_FILE="/path/to/myconfig.ini"
 ```
+Alternatively you can pass the config file path as a command line argument using ``--config /path/to/config.ini``.
+
 
 If you have trouble installing one of the many third-party tools, try the official Docker container: https://hub.docker.com/r/ezlabgva/busco/tags
 
 Report problems on the BUSCO issue board at https://gitlab.com/ezlab/busco/issues
 
-To get help on BUSCO use: ``busco -h`` and ``python3 scripts/generate_plot.py -h``
+To get help with BUSCO use: ``busco -h`` and ``python3 scripts/generate_plot.py -h``
 
-**!!!** Don't use "odb9" datasets with BUSCOv4. If you need to reproduce previous analyses, use BUSCOv3 (https://gitlab.com/ezlab/busco/-/tags/3.0.2)
-
-Note: For v4.0.2 and before, when running auto-lineage, the initial results for eukaryotes were incomplete. This was 
-deliberate, as these initial results are used merely to determine whether the genome scores highest against the 
-bacteria, archaea or eukaryota datasets. If the eukaryota dataset was selected, BUSCO then attempts to place the input 
-assembly on the eukaryote phylogenetic tree before running a complete BUSCO assessment using the selected child dataset. 
-Unless the top-level eukaryota dataset was selected as the best match for the input file, the eukaryota dataset run 
-would not complete. So while the specific dataset run returned accurate results, the generic eukaryota dataset run 
-should be considered unreliable. 
-This has been changed in v4.0.3. The eukaryota run now always completes so the final generic eukaryota results can be 
-considered reliable.
+**!!!** Do not use "odb9" datasets with BUSCOv4. If you need to reproduce previous analyses, use BUSCOv3 (https://gitlab.com/ezlab/busco/-/tags/3.0.2)
 
 **How to cite BUSCO**
 

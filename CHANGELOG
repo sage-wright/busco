@@ -1,3 +1,11 @@
+4.0.7
+- Reintroduce restart mode (Issues #203, #229, #251)
+- Fix augustus hanging problem (Issues #224, #232, #266)
+- Allow multiple cores for BLAST 2.10.1+
+- Issue #271 fixed
+- Issue #247 fixed
+- Issue #234 fixed
+
 4.0.6
 - Fix Augustus GFF parsing bug. Remove constraint on Augustus version.
 

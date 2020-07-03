@@ -66,7 +66,8 @@ def _parse_args():
 
     optional.add_argument(
         '--out_path', dest='out_path', required=False, metavar='OUTPUT_PATH',
-        help='Optional location for results folder, excluding results folder name. Default is current working directory.')
+        help='Optional location for results folder, excluding results folder name. '
+             'Default is current working directory.')
 
     optional.add_argument(
         '-e', '--evalue', dest='evalue', required=False, metavar='N', type=float,
@@ -88,6 +89,10 @@ def _parse_args():
         '-f', '--force', action='store_true', required=False, dest='force',
         help='Force rewriting of existing files. '
              'Must be used when output files with the provided name already exist.')
+
+    optional.add_argument(
+        '-r', '--restart', action='store_true', required=False, dest='restart',
+        help='Continue a run that had already partially completed.')
 
     optional.add_argument(
         '--limit', dest='limit', metavar='REGION_LIMIT', required=False,
@@ -117,7 +122,8 @@ def _parse_args():
     #     action="store_true")
 
     optional.add_argument(
-        '--auto-lineage', dest='auto-lineage', action="store_true", required=False, help='Run auto-lineage to find optimum lineage path')
+        '--auto-lineage', dest='auto-lineage', action="store_true", required=False,
+        help='Run auto-lineage to find optimum lineage path')
 
     optional.add_argument(
         '--auto-lineage-prok', dest='auto-lineage-prok', action="store_true", required=False,
@@ -144,7 +150,8 @@ def _parse_args():
 
     optional.add_argument('-h', '--help', action=CleanHelpAction, help="Show this help message and exit")
 
-    optional.add_argument('--list-datasets', action=ListLineagesAction, help="Print the list of available BUSCO datasets")
+    optional.add_argument('--list-datasets', action=ListLineagesAction,
+                          help="Print the list of available BUSCO datasets")
 
     return vars(parser.parse_args())
 
@@ -160,7 +167,9 @@ def main():
     params = _parse_args()
     run_BUSCO(params)
 
-@log('***** Start a BUSCO v{} analysis, current time: {} *****'.format(busco.__version__, time.strftime('%m/%d/%Y %H:%M:%S')), logger)
+
+@log('***** Start a BUSCO v{} analysis, current time: {} *****'.format(busco.__version__,
+                                                                       time.strftime('%m/%d/%Y %H:%M:%S')), logger)
 def run_BUSCO(params):
     start_time = time.time()
 
@@ -173,14 +182,16 @@ def run_BUSCO(params):
 
         lineage_basename = os.path.basename(config.get("busco_run", "lineage_dataset"))
         main_out_folder = config.get("busco_run", "main_out")
-        lineage_results_folder = os.path.join(main_out_folder, "auto_lineage", config.get("busco_run", "lineage_results_dir"))
+        lineage_results_folder = os.path.join(main_out_folder, "auto_lineage",
+                                              config.get("busco_run", "lineage_results_dir"))
 
         if config.getboolean("busco_run", "auto-lineage"):
             if lineage_basename.startswith(("bacteria", "archaea", "eukaryota")):
                 busco_run = config_manager.runner
 
-            # It is possible that the following lineages were arrived at either by the Prodigal genetic code shortcut or by
-            # BuscoPlacer. If the former, the run will have already been completed. If the latter it still needs to be done.
+            # It is possible that the following lineages were arrived at either by the Prodigal genetic code shortcut
+            # or by BuscoPlacer. If the former, the run will have already been completed. If the latter it still needs
+            # to be done.
             elif lineage_basename.startswith(("mollicutes", "mycoplasmatales", "entomoplasmatales")) and \
                     os.path.exists(lineage_results_folder):
                 busco_run = config_manager.runner
@@ -190,13 +201,13 @@ def run_BUSCO(params):
             busco_run = BuscoRunner(config)
 
         if os.path.exists(lineage_results_folder):
-            os.rename(lineage_results_folder, os.path.join(main_out_folder, config.get("busco_run", "lineage_results_dir")))
-            busco_run.finish(time.time()-start_time, root_lineage=True)
+            os.rename(lineage_results_folder, os.path.join(main_out_folder,
+                                                           config.get("busco_run", "lineage_results_dir")))
         else:
             busco_run.run_analysis()
-            BuscoRunner.final_results.append(busco_run.analysis.hmmer_results_lines)
+            BuscoRunner.final_results.append(busco_run.analysis.hmmer_runner.hmmer_results_lines)
             BuscoRunner.results_datasets.append(lineage_basename)
-            busco_run.finish(time.time()-start_time)
+        busco_run.finish(time.time()-start_time)
 
     except ToolException as e:
         logger.error(e)
@@ -226,7 +237,8 @@ def run_BUSCO(params):
 
     except BaseException:
         exc_type, exc_value, exc_traceback = sys.exc_info()
-        logger.critical("Unhandled exception occurred:\n{}\n".format("".join(traceback.format_exception(exc_type, exc_value, exc_traceback))))
+        logger.critical("Unhandled exception occurred:\n{}\n".format(
+            "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))))
         raise SystemExit
 
 
