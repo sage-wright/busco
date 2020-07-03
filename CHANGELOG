@@ -1,4 +1,4 @@
-4.0.7
+4.1.0
 - Reintroduce restart mode (Issues #203, #229, #251)
 - Fix augustus hanging problem (Issues #224, #232, #266)
 - Allow multiple cores for BLAST 2.10.1+
