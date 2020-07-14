@@ -436,25 +436,10 @@ class HMMERRunner(BaseRunner):
                                                         "multi_copy_busco_sequences")
         self.fragmented_sequences_folder = os.path.join(self.run_folder, "busco_sequences",
                                                         "fragmented_busco_sequences")
-
         self.short_summary_file = os.path.join(self.run_folder, "short_summary.txt")
-
         self.cutoff_dict = {}
-        self.matched_bitscores = {}
-        self.matched_genes_complete = {}
-        self.matched_genes_vlarge = {}
-        self.matched_genes_fragment = {}
-        self.is_complete = {}
-        self.is_fragment = {}
-        self.is_very_large = {}
-        self._already_used_genes = set()
-        self.single_copy_buscos = {}
-        self.multi_copy_buscos = {}
-        self.fragmented_buscos = {}
-        self.missing_buscos = []
         self.extra_columns = False
         self.log_count = 0  # Dummy variable used to skip logging for intermediate eukaryote pipeline results.
-        self.hmmer_results_lines = []
         self.one_line_summary = None
 
         # to be initialized before run time
@@ -478,7 +463,19 @@ class HMMERRunner(BaseRunner):
         self.input_sequences = input_sequences
         self.busco_ids = busco_ids
         self.mode = mode
+        self.single_copy_buscos = {}
+        self.multi_copy_buscos = {}
+        self.fragmented_buscos = {}
+        self.is_complete = {}
+        self.is_fragment = {}
+        self.is_very_large = {}
+        self.matched_bitscores = {}
+        self.matched_genes_complete = {}
+        self.matched_genes_vlarge = {}
+        self.matched_genes_fragment = {}
+        self._already_used_genes = set()
         self.hmmer_results_lines = []
+        self.missing_buscos = []
         self.gene_details = gene_details
         if len(self.cutoff_dict) == 0:
             self.load_buscos()
@@ -584,10 +581,10 @@ class HMMERRunner(BaseRunner):
     def process_output(self):
         # Re-initialize dictionaries as defaultdicts - necessary because defaultdicts are not picklable and so they
         # cannot appear in the __init__ when using multiprocessing within the class
-        self.matched_bitscores = defaultdict(list)
         self.matched_genes_complete = defaultdict(list)
         self.matched_genes_vlarge = defaultdict(list)
         self.matched_genes_fragment = defaultdict(list)
+        self.matched_bitscores = defaultdict(lambda: defaultdict(list))
         self.is_complete = defaultdict(lambda: defaultdict(list))  # dict of a dict of lists of dicts
         self.is_fragment = defaultdict(lambda: defaultdict(list))
         self.is_very_large = defaultdict(lambda: defaultdict(list))
@@ -649,7 +646,7 @@ class HMMERRunner(BaseRunner):
                         # Store bitscore matches for each gene match. If match below cutoff, discard.
                         if bit_score >= float(self.cutoff_dict[busco_query]["score"]):
                             # todo: introduce upper bound - consult to see what a reasonable value would be
-                            self.matched_bitscores[gene_id].append(bit_score)
+                            self.matched_bitscores[busco_query][gene_id].append(bit_score)
                         else:
                             continue
 
@@ -694,7 +691,7 @@ class HMMERRunner(BaseRunner):
                 match_type = self.matched_genes_fragment
 
             # Add information about match to dict
-            busco_type[gene_id].append(dict({"bitscore": max(self.matched_bitscores[gene_id]),
+            busco_type[gene_id].append(dict({"bitscore": max(self.matched_bitscores[busco_query][gene_id]),
                                              "length": matched_lengths[gene_id]}))
             # Reference which busco_queries are associated with each gene match
             match_type[gene_id].append(busco_query)
@@ -710,11 +707,10 @@ class HMMERRunner(BaseRunner):
         if self.run_number == 1:
             hmmer_results_files = sorted([os.path.join(self.results_dir, f) for f in os.listdir(self.results_dir)])
         elif self.run_number == 2:
+            hmmer_initial_run_files = [os.path.join(self.initial_results_dir, f)
+                                            for f in os.listdir(self.initial_results_dir)]
             hmmer_rerun_files = [os.path.join(self.rerun_results_dir, f)
                                             for f in os.listdir(self.rerun_results_dir)]
-            rerun_buscos = [os.path.basename(f).split(".")[0] for f in hmmer_rerun_files]
-            hmmer_initial_run_files = [os.path.join(self.initial_results_dir, f)
-                                          for f in os.listdir(self.initial_results_dir) if not any(g in f for g in rerun_buscos)]
             hmmer_results_files = sorted(hmmer_initial_run_files + hmmer_rerun_files)
         else:
             raise ValueError("HMMER should not be run more than twice in the same Run instance.")
@@ -833,12 +829,15 @@ class HMMERRunner(BaseRunner):
                         busco_bitscores.append(bitscore)
                         busco_matches.append(busco)
 
+                if len(set(buscos)) == 1:  # If only one busco is matched twice (initial run and rerun), don't remove it
+                    continue
                 best_match_ind = max(range(len(busco_bitscores)), key=busco_bitscores.__getitem__)
                 buscos.remove(busco_matches[best_match_ind])
                 # Remove lower scoring duplicates from dictionary.
                 # Note for future development: the matched_genes dictionary is not updated in this method when
                 # duplicates are removed from busco_dict
-                for duplicate in buscos:
+                for duplicate in list(set(buscos)):
+                    # Use set to account for any duplicate entries (matched in both initial run and rerun)
                     busco_dict[duplicate].pop(gene_id)
                     if len(busco_dict[duplicate]) == 0:
                         busco_dict.pop(duplicate)
@@ -909,7 +908,6 @@ class HMMERRunner(BaseRunner):
         Remove all duplicate matches and any matches below 85% of the top match for each BUSCO.
         :return:
         """
-        self._already_used_genes = set()
         self._remove_duplicates()
         self._remove_low_scoring_matches(self.is_complete)
         self._remove_low_scoring_matches(self.is_very_large)
@@ -1016,7 +1014,6 @@ class HMMERRunner(BaseRunner):
         :return: output_lines, missing_buscos
         :rtype: list, list
         """
-        self.missing_buscos = []
         output_lines = []
         for busco_group in self.cutoff_dict:
             if not any(busco_group in d for d in [self.is_complete, self.is_very_large, self.is_fragment]):

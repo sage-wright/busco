@@ -248,10 +248,14 @@ class BuscoLogger(logging.getLoggerClass()):
         self._err_hdlr.setFormatter(self._normal_formatter)
         self.addHandler(self._err_hdlr)
 
-        if not os.access(os.getcwd(), os.W_OK):
-            raise SystemExit("No permission to write in the current directory.")
-        # Random id used in filename to avoid complications for parallel BUSCO runs.
-        self._file_hdlr = logging.FileHandler("busco_{}.log".format(type(self).random_id), mode="a")
+        try:
+            # Random id used in filename to avoid complications for parallel BUSCO runs.
+            self._file_hdlr = logging.FileHandler("busco_{}.log".format(type(self).random_id), mode="a")
+        except IOError as e:
+            errStr = "No permission to write in the current directory: {}".format(os.getcwd()) if e.errno == 13 \
+                else "IO error({0}): {1}".format(e.errno, e.strerror)
+            raise SystemExit(errStr)
+
         self._file_hdlr.setLevel(logging.DEBUG)
         self._file_hdlr.setFormatter(self._verbose_formatter)
         self.addHandler(self._file_hdlr)
