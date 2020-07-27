@@ -766,14 +766,16 @@ class HMMERRunner(BaseRunner):
             if busco_id in higher_rank_buscos:
                 busco_dict.pop(busco_id)
                 for gene_id in matches:
-                    matched_genes[gene_id].remove(busco_id)
+                    matched_genes[gene_id] = [x for x in matched_genes[gene_id] if x != busco_id]  # Remove all occurences of busco_id
+                    if len(matched_genes[gene_id]) == 0:
+                        matched_genes.pop(gene_id)
                 continue
 
             # Remove any genes that have previously been processed under a different and higher ranking busco match
             for gene_id in list(matches.keys()):
                 if gene_id in self._already_used_genes:
                     busco_dict[busco_id].pop(gene_id)
-                    matched_genes[gene_id].remove(busco_id)
+                    matched_genes[gene_id] = [x for x in matched_genes[gene_id] if x != busco_id]  # Remove all occurences of busco_id
                     if len(busco_dict[busco_id]) == 0:
                         busco_dict.pop(busco_id)
                     if len(matched_genes[gene_id]) == 0:
@@ -832,7 +834,7 @@ class HMMERRunner(BaseRunner):
                 if len(set(buscos)) == 1:  # If only one busco is matched twice (initial run and rerun), don't remove it
                     continue
                 best_match_ind = max(range(len(busco_bitscores)), key=busco_bitscores.__getitem__)
-                buscos.remove(busco_matches[best_match_ind])
+                buscos = [x for x in buscos if x != busco_matches[best_match_ind]]
                 # Remove lower scoring duplicates from dictionary.
                 # Note for future development: the matched_genes dictionary is not updated in this method when
                 # duplicates are removed from busco_dict

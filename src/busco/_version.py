@@ -6,4 +6,4 @@ Copyright (c) 2016-2020, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 
 """
-__version__ = "4.1.1"
+__version__ = "4.1.2"
