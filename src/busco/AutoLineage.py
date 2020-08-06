@@ -194,9 +194,7 @@ class AutoSelectLineage:
             if self.selected_runner.domain == "prokaryota":
                 protein_seqs = self.selected_runner.analysis.prodigal_runner.output_faa
             elif self.selected_runner.domain == "eukaryota":
-                protein_seqs_dir = self.selected_runner.analysis.augustus_runner.extracted_prot_dir
-                protein_seqs = [os.path.join(protein_seqs_dir, f) for f in os.listdir(protein_seqs_dir)
-                                     if f.split(".")[-2] == "faa"]
+                protein_seqs = self.selected_runner.analysis.metaeuk_runner.pred_protein_seqs_modified
         else:
             protein_seqs = self.selected_runner.config.get("busco_run", "in")
         out_path = self.config.get("busco_run", "main_out")

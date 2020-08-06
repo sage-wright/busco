@@ -14,10 +14,8 @@ Licensed under the MIT license. See LICENSE.md file.
 import os
 import subprocess
 from subprocess import TimeoutExpired
-# import threading
 from multiprocessing import Process, Pool, Value, Lock
 import time
-from shutil import which
 from abc import ABCMeta, abstractmethod
 from busco.BuscoLogger import BuscoLogger, ToolLogger
 from busco.BuscoLogger import LogDecorator as log
@@ -26,12 +24,12 @@ import logging
 
 logger = BuscoLogger.get_logger(__name__)
 
-class Job(Process):#threading.Thread):
+class Job(Process):
     """
     Build and executes one work item in an external process
     """
 
-    def __init__(self, tool_name, cmd, job_outlogger, job_errlogger, timeout, **kwargs):
+    def __init__(self, tool_name, cmd, job_outlogger, job_errlogger, timeout, cwd, **kwargs):
         """
         :param name: a name of an executable / script ("a tool") to be run
         :type cmd: list
@@ -46,6 +44,7 @@ class Job(Process):#threading.Thread):
         self.job_outlogger = job_outlogger
         self.job_errlogger = job_errlogger
         self.timeout = timeout
+        self.cwd = cwd
         self.kwargs = kwargs
 
     def add_parameter(self, parameter):
@@ -62,12 +61,12 @@ class Job(Process):#threading.Thread):
         Start external process and block the current thread's execution
         till the process' run is over
         """
-        with StreamLogger(logging.DEBUG, self.job_outlogger, **self.kwargs) as out:  # kwargs only provided to out to capture augustus stdout
+        with StreamLogger(logging.DEBUG, self.job_outlogger, **self.kwargs) as out:
             with StreamLogger(logging.ERROR, self.job_errlogger) as err:
                 try:
                     # Stick with Popen(), communicate() and wait() instead of just run() to ensure compatibility with
                     # Python versions < 3.5.
-                    p = subprocess.Popen(self.cmd_line, shell=False, stdout=out, stderr=err)
+                    p = subprocess.Popen(self.cmd_line, shell=False, stdout=out, stderr=err, cwd=self.cwd)
                     p.wait(self.timeout)
                 except TimeoutExpired:
                     p.kill()
@@ -111,18 +110,15 @@ class Tool(metaclass=ABCMeta):
         # if not self.check_tool_available():
         #     raise ToolException("{} tool cannot be found. Please check the 'path' and 'command' parameters "
         #                         "provided in the config file. Do not include the command in the path!".format(self.name))
-        if self.name == "augustus":
-            self.kwargs = {"augustus_out": True}
-            self.timeout = 3600
-        else:
-            self.kwargs = {}
-            self.timeout = None
+        self.kwargs = {}
+        self.timeout = None
         self.jobs_to_run = []
         self.jobs_running = []
         self.nb_done = 0
         self.total = 0
         self.cpus = None
         self.chunksize = None
+        self.cwd = os.getcwd()
         # self.count_jobs_created = True
         # self.logged_header = False
 
@@ -152,7 +148,7 @@ class Tool(metaclass=ABCMeta):
         """
         self.tool_outlogger = ToolLogger(self.logfile_path_out)
         self.tool_errlogger = ToolLogger(self.logfile_path_err)
-        job = Job(self.name, self.cmd[:], self.tool_outlogger, self.tool_errlogger, self.timeout, **self.kwargs)
+        job = Job(self.name, self.cmd[:], self.tool_outlogger, self.tool_errlogger, self.timeout, self.cwd, **self.kwargs)
         self.jobs_to_run.append(job)
         # if self.count_jobs_created:
         #     self.total += 1

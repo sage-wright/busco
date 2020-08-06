@@ -27,10 +27,10 @@ import busco
 from busco.BuscoLogger import BuscoLogger
 from busco.BuscoLogger import LogDecorator as log
 from busco.ConfigManager import BuscoConfigManager
-from busco.BuscoConfig import BuscoConfigMain
 from busco.Toolset import ToolException
 from busco.BuscoRunner import BuscoRunner
 from busco.Actions import ListLineagesAction, CleanHelpAction, CleanVersionAction
+from busco.ConfigManager import BuscoConfigMain
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -100,21 +100,12 @@ def _parse_args():
                        % str(BuscoConfigMain.DEFAULT_ARGS_VALUES['limit']))
 
     optional.add_argument(
-        '--long', action='store_true', required=False, dest='long',
-        help='Optimization mode Augustus '
-             'self-training (Default: Off) adds considerably to the run time, '
-             'but can improve results for some non-model organisms')
-
-    optional.add_argument(
         '-q', '--quiet', dest='quiet', required=False, help='Disable the info logs, displays only errors',
         action="store_true")
 
-    optional.add_argument('--augustus_parameters', dest='augustus_parameters', required=False,
-                          help="Pass additional arguments to Augustus. All arguments should be contained within a "
+    optional.add_argument('--metaeuk_parameters', dest='metaeuk_parameters', required=False,
+                          help="Pass additional arguments to Metaeuk. All arguments should be contained within a "
                                "single pair of quotation marks, separated by commas. E.g. \'--param1=1,--param2=2\'")
-
-    optional.add_argument('--augustus_species', dest='augustus_species', required=False,
-                          help="Specify a species for Augustus training.")
 
     # optional.add_argument(
     #     '-z', '--tarzip', dest='tarzip', required=False, help='Tarzip the output folders likely to '

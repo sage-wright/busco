@@ -1,14 +1,10 @@
-**BUSCOv4 - Benchmarking sets of Universal Single-Copy Orthologs.**
+**BUSCOv5.beta - Benchmarking sets of Universal Single-Copy Orthologs.**
 
 For full documentation please consult the user guide: https://busco.ezlab.org/busco_userguide.html
 
-Main changes in v4:
+Main changes in v5:
 
-- Automated selection of lineages issued from https://www.orthodb.org/ release 10
-
-- Automated download of all necessary files and datasets to conduct a run
-
-- Use prodigal for non-eukaryotic genomes
+- Replace Augustus gene predictor with Metaeuk (https://github.com/soedinglab/metaeuk)
 
 - **BUSCO is now Python 3.3+ only !**
 

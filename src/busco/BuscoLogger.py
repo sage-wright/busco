@@ -141,44 +141,13 @@ class ToolLogger(logging.getLoggerClass()):
 
 
 class StreamLogger(io.IOBase):
-    def __init__(self, level, logger, augustus_out=False):
+    def __init__(self, level, logger):
         self.logger = logger
         self.level = level
-        self.augustus_out = augustus_out
         self._run = None
         self.pipe = os.pipe()
-        if self.augustus_out:
-            self.gene_found = False
-            self.output_complete = False
-            self.thread = threading.Thread(target=self._flusher_augustus_out)
-        else:
-            self.thread = threading.Thread(target=self._flusher)
+        self.thread = threading.Thread(target=self._flusher)
         self.thread.start()
-
-    def _flusher_augustus_out(self):
-        self._run = True
-        buf = b''
-        timeout = 10
-        read_only = select.POLLIN | select.POLLPRI | select.POLLHUP | select.POLLERR
-        # Switched from select.select() to select.poll() using examples at https://pymotw.com/2/select/
-        # This is necessary to handle greater than 1024 file descriptors, but makes BUSCO incompatible with Windows.
-        poller = select.poll()
-        server = self.pipe[0]
-        poller.register(server, read_only)
-        while self._run or (self.gene_found and not self.output_complete):
-            events = poller.poll(timeout)
-            for fd, flag in events:
-                if flag & (select.POLLIN | select.POLLPRI):
-                    buf += os.read(fd, 4096)
-                    while b"\n" in buf:
-                        if b"start gene" in buf:
-                            self.gene_found = True
-                        if b"command line" in buf:
-                            self.output_complete = True
-                        data, buf = buf.split(b'\n', 1)
-                        self.write(data.decode())
-
-        self._run = None
 
     def _flusher(self):
         self._run = True

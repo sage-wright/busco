@@ -15,12 +15,11 @@ logger = BuscoLogger.get_logger(__name__)
 
 class BaseConfig(ConfigParser):
 
-    DEFAULT_ARGS_VALUES = {"out_path": os.getcwd(), "cpu": 1, "force": False, "restart": False, "evalue": 1e-3,
-                           "limit": 3, "long": False, "quiet": False,
+    DEFAULT_ARGS_VALUES = {"out_path": os.getcwd(), "cpu": 1, "force": False, "restart": False, "quiet": False,
                            "download_path": os.path.join(os.getcwd(), "busco_downloads"), "datasets_version": "odb10",
                            "offline": False, "download_base_url": "https://busco-data.ezlab.org/v4/data/",
                            "auto-lineage": False, "auto-lineage-prok": False, "auto-lineage-euk": False,
-                           "update-data": False}
+                           "update-data": False, "evalue": 1e-3, "limit": 3}
 
     def __init__(self):
         super().__init__()
@@ -132,16 +131,7 @@ class BuscoConfig(ConfigParser, metaclass=ABCMeta):
             with open(os.path.join(self.get("busco_run", "lineage_dataset"), "dataset.cfg"), "r") as target_species_file:
                 dataset_kwargs = dict(line.strip().split("=") for line in target_species_file)
                 for key, value in dataset_kwargs.items():
-                    if key == "species":
-                        try:
-                            config_species = self.get("busco_run", "augustus_species")
-                            if config_species != value:
-                                logger.warning("An augustus species was mentioned in the config file or on the command "
-                                               "line, dataset default species ({}) will be ignored".format(value))
-                        except NoOptionError:
-                            self.set("busco_run", "augustus_species", value)
-
-                    elif key in ["prodigal_genetic_code", "ambiguous_cd_range_upper", "ambiguous_cd_range_lower"]:
+                    if key in ["prodigal_genetic_code", "ambiguous_cd_range_upper", "ambiguous_cd_range_lower"]:
                         self.set("prodigal", key, value)
                     else:
                         self.set("busco_run", key, value)
@@ -205,18 +195,14 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
 
     CONFIG_STRUCTURE = {"busco_run": ["in", "out", "out_path", "mode", "auto-lineage", "auto-lineage-prok",
                                       "auto-lineage-euk", "cpu", "force", "restart", "download_path",
-                                      "datasets_version", "evalue", "limit", "long", "quiet", "offline",
-                                      "download_base_url", "lineage_dataset", "update-data", "augustus_parameters",
-                                      "augustus_species", "main_out"],
+                                      "datasets_version", "quiet", "offline",
+                                      "download_base_url", "lineage_dataset", "update-data", "metaeuk_parameters",
+                                      "main_out", "evalue", "limit"],
                         "tblastn": ["path", "command"],
                         "makeblastdb": ["path", "command"],
                         "prodigal": ["path", "command"],
                         "sepp": ["path", "command"],
-                        "augustus": ["path", "command"],
-                        "etraining": ["path", "command"],
-                        "gff2gbSmallDNA.pl": ["path", "command"],
-                        "new_species.pl": ["path", "command"],
-                        "optimize_augustus.pl": ["path", "command"],
+                        "metaeuk": ["path", "command"],
                         "hmmsearch": ["path", "command"]}
 
     def __init__(self, conf_file, params, clargs, **kwargs):
@@ -233,8 +219,6 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
         # Update the config with args provided by the user, else keep config
         self._update_config_with_args(params)
         self._fill_default_values()
-
-
 
     def validate(self):
         self._check_mandatory_keys_exist()
@@ -423,8 +407,9 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
                 if item[0].endswith("_path") or item[0] == "path" or item[0] == "in":
                     if item[1].startswith("~"):
                         self.set(key, item[0], os.path.expanduser(item[1]))
-                    elif item[1].startswith("."):
+                    elif item[1].startswith(".") or "/" not in item:
                         self.set(key, item[0], os.path.abspath(item[1]))
+
         return
 
     def _fill_default_values(self):
