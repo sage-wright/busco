@@ -5,7 +5,7 @@ Report problems on the BUSCO issue board at https://gitlab.com/ezlab/busco/issue
 
 Main changes in v5:
 
-- Replace Augustus gene predictor with Metaeuk (https://github.com/soedinglab/metaeuk)
+- Replace Augustus gene predictor with Metaeuk (https://github.com/soedinglab/metaeuk), which also removes the time consuming `tblastn` step
 
 **BUSCOv4 - Benchmarking sets of Universal Single-Copy Orthologs.**
 
