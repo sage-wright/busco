@@ -1,19 +1,18 @@
-**BUSCOv5.beta - Benchmarking sets of Universal Single-Copy Orthologs.**
-
-BUSCO v5.beta is available for testing. We welcome feedback from users.
-Report problems on the BUSCO issue board at https://gitlab.com/ezlab/busco/issues.
-
-Main changes in v5:
-
-- Replace Augustus gene predictor with Metaeuk (https://github.com/soedinglab/metaeuk), which also removes the time consuming `tblastn` step
-
 **BUSCOv4 - Benchmarking sets of Universal Single-Copy Orthologs.**
 
-Last stable version: https://gitlab.com/ezlab/busco/-/tags/4.1.2
+######Note: v4.1.3 is the latest stable release. To access v5.beta clone this repository and checkout the v5 branch with `git checkout v5.beta`
 
 For full documentation please consult the user guide: https://busco.ezlab.org/busco_userguide.html
 
+Main changes in v4:
 
+- Automated selection of lineages issued from https://www.orthodb.org/ release 10
+
+- Automated download of all necessary files and datasets to conduct a run
+
+- Use prodigal for non-eukaryotic genomes
+
+- **BUSCO is now Python 3.3+ only !**
 
 To install, clone the repository and enter ``sudo python3 setup.py install`` or ``python3 setup.py install --user``
 
@@ -29,6 +28,8 @@ Alternatively you can pass the config file path as a command line argument using
 
 
 If you have trouble installing one of the many third-party tools, try the official Docker container: https://hub.docker.com/r/ezlabgva/busco/tags
+
+Report problems on the BUSCO issue board at https://gitlab.com/ezlab/busco/issues
 
 To get help with BUSCO use: ``busco -h`` and ``python3 scripts/generate_plot.py -h``
 

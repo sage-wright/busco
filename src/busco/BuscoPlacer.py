@@ -12,10 +12,13 @@ Copyright (c) 2016-2020, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 
 """
+import glob
 import json
 import os
+from busco.Toolset import Tool
 from busco.BuscoLogger import BuscoLogger
 from busco.BuscoLogger import LogDecorator as log
+from busco.BuscoDownloadManager import BuscoDownloadManager
 from Bio import SeqIO
 from busco.BuscoTools import SEPPRunner
 
@@ -95,6 +98,12 @@ class BuscoPlacer:
     def _init_tools(self):
         setattr(SEPPRunner, "config", self._config)
         self.sepp_runner = SEPPRunner()
+        # try:
+        #     assert isinstance(self._sepp, Tool)
+        # except AttributeError:
+        #     self._sepp = Tool("sepp", self._config)
+        # except AssertionError:
+        #     raise SystemExit("SEPP should be a tool")
 
     def _pick_dataset(self):
 
@@ -270,8 +279,10 @@ class BuscoPlacer:
 
     @log("Place the markers on the reference tree...", logger)
     def _run_sepp(self):
-        self.sepp_runner.configure_runner(self.tree_nwk_file, self.tree_metadata_file, self.supermatrix_file,
-                                          self.downloader)
+        # self.sepp_runner = SEPPRunner(self._sepp, self.run_folder, self.placement_folder, self.tree_nwk_file,
+        #                               self.tree_metadata_file, self.supermatrix_file, self.downloader,
+        #                               self.datasets_version, self.cpus)
+        self.sepp_runner.configure_runner(self.tree_nwk_file, self.tree_metadata_file, self.supermatrix_file, self.downloader)
         if self.restart and self.sepp_runner.check_previous_completed_run():
             logger.info("Skipping SEPP run as it has already been completed")
         else:

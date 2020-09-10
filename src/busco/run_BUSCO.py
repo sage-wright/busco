@@ -27,10 +27,10 @@ import busco
 from busco.BuscoLogger import BuscoLogger
 from busco.BuscoLogger import LogDecorator as log
 from busco.ConfigManager import BuscoConfigManager
+from busco.BuscoConfig import BuscoConfigMain
 from busco.Toolset import ToolException
 from busco.BuscoRunner import BuscoRunner
 from busco.Actions import ListLineagesAction, CleanHelpAction, CleanVersionAction
-from busco.ConfigManager import BuscoConfigMain
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -100,12 +100,21 @@ def _parse_args():
                        % str(BuscoConfigMain.DEFAULT_ARGS_VALUES['limit']))
 
     optional.add_argument(
+        '--long', action='store_true', required=False, dest='long',
+        help='Optimization mode Augustus '
+             'self-training (Default: Off) adds considerably to the run time, '
+             'but can improve results for some non-model organisms')
+
+    optional.add_argument(
         '-q', '--quiet', dest='quiet', required=False, help='Disable the info logs, displays only errors',
         action="store_true")
 
-    optional.add_argument('--metaeuk_parameters', dest='metaeuk_parameters', required=False,
-                          help="Pass additional arguments to Metaeuk. All arguments should be contained within a "
+    optional.add_argument('--augustus_parameters', dest='augustus_parameters', required=False,
+                          help="Pass additional arguments to Augustus. All arguments should be contained within a "
                                "single pair of quotation marks, separated by commas. E.g. \'--param1=1,--param2=2\'")
+
+    optional.add_argument('--augustus_species', dest='augustus_species', required=False,
+                          help="Specify a species for Augustus training.")
 
     # optional.add_argument(
     #     '-z', '--tarzip', dest='tarzip', required=False, help='Tarzip the output folders likely to '
@@ -202,7 +211,7 @@ def run_BUSCO(params):
 
     except ToolException as e:
         logger.error(e)
-        raise SystemExit
+        raise SystemExit(1)
 
     except SystemExit as se:
         logger.error(se)
@@ -220,17 +229,17 @@ def run_BUSCO(params):
                 pass
         except:
             pass
-        raise SystemExit
+        raise SystemExit(1)
 
     except KeyboardInterrupt:
         logger.exception('A signal was sent to kill the process. \nBUSCO analysis failed !')
-        raise SystemExit
+        raise SystemExit(1)
 
     except BaseException:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         logger.critical("Unhandled exception occurred:\n{}\n".format(
             "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))))
-        raise SystemExit
+        raise SystemExit(1)
 
 
 # Entry point

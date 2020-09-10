@@ -3,6 +3,7 @@ from busco.BuscoConfig import BuscoConfigMain
 from busco.BuscoLogger import BuscoLogger
 from busco.BuscoLogger import LogDecorator as log
 import os
+import sys
 
 logger = BuscoLogger.get_logger(__name__)
 

@@ -7,6 +7,8 @@ from busco.BuscoLogger import LogDecorator as log
 from busco.Toolset import Tool
 from busco.BuscoConfig import BuscoConfig, BuscoConfigMain
 from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
 import shutil
 import csv
 import numpy as np
@@ -62,7 +64,7 @@ class BaseRunner(Tool, metaclass=ABCMeta):
 
         self.logfile_path_out = os.path.join(self.config.get("busco_run", "main_out"), "logs",
                                              "{}_out.log".format(self.name))
-        self.logfile_path_err = self.logfile_path_out.replace('_out.log', '_err.log')
+        self.logfile_path_err = self.logfile_path_out.rpartition("_out.log")[0] + "_err.log"
 
     def init_checkpoint_file(self):
         self.checkpoint_file = os.path.join(self.output_folder, ".checkpoint")
@@ -113,10 +115,6 @@ class BaseRunner(Tool, metaclass=ABCMeta):
 
     @abstractmethod
     def configure_job(self, *args):
-        pass
-
-    @abstractmethod
-    def generate_job_args(self):
         pass
 
     @property
@@ -309,7 +307,7 @@ class ProdigalRunner(BaseRunner):
         return
 
     def configure_job(self, *args):
-        tmp_name_nt = self._tmp_name.replace("faa", "fna")
+        tmp_name_nt = self._tmp_name.rpartition(".faa")[0] + ".fna"
 
         prodigal_job = self.create_job()
         prodigal_job.add_parameter("-p")
@@ -383,12 +381,13 @@ class ProdigalRunner(BaseRunner):
     def _organize_prodigal_files(self, tmp_file, tmp_logfile):
 
         shutil.copy(tmp_file, self.output_faa)
-        shutil.copy(tmp_file.replace(".faa", ".fna"), self._output_fna)
+        shutil.copy(tmp_file.rpartition(".faa")[0] + ".fna", self._output_fna)
 
         # copy selected log files from tmp/ to logs/
         new_logname = os.path.join(self.log_folder, "prodigal_out.log")
         shutil.copy(tmp_logfile, new_logname)
-        shutil.copy(tmp_logfile.replace("_out.log", "_err.log"), new_logname.replace("_out.log", "_err.log"))
+        shutil.copy(tmp_logfile.rpartition("_out.log")[0] + "_err.log",
+                    new_logname.rpartition("_out.log")[0] + "_err.log")
         return
 
     def _select_best_gc(self):
@@ -513,7 +512,7 @@ class HMMERRunner(BaseRunner):
                 elif isinstance(self.input_sequences, list):
                     input_files = [f for f in self.input_sequences if os.path.basename(f).startswith(busco_id)]
                     for seq_filename in input_files:
-                        output_filename = os.path.basename(seq_filename).replace("faa", "out")
+                        output_filename = os.path.basename(seq_filename).rpartition(".faa")[0] + ".out"
                         yield busco_id, seq_filename, output_filename
 
     @property
@@ -709,9 +708,9 @@ class HMMERRunner(BaseRunner):
             hmmer_results_files = sorted([os.path.join(self.results_dir, f) for f in os.listdir(self.results_dir)])
         elif self.run_number == 2:
             hmmer_initial_run_files = [os.path.join(self.initial_results_dir, f)
-                                       for f in os.listdir(self.initial_results_dir)]
+                                            for f in os.listdir(self.initial_results_dir)]
             hmmer_rerun_files = [os.path.join(self.rerun_results_dir, f)
-                                 for f in os.listdir(self.rerun_results_dir)]
+                                            for f in os.listdir(self.rerun_results_dir)]
             hmmer_results_files = sorted(hmmer_initial_run_files + hmmer_rerun_files)
         else:
             raise ValueError("HMMER should not be run more than twice in the same Run instance.")
@@ -1670,113 +1669,180 @@ class TBLASTNRunner(BaseRunner):
         return
 
 
-class MetaeukParsingError(Exception):
+class AugustusParsingError(Exception):
 
     def __init__(self):
         pass
 
 
-class MetaeukRunner(BaseRunner):
+class AugustusRunner(BaseRunner):
 
-    name = "metaeuk"
+    ACCEPTED_PARAMETERS = ["strand", "genemodel", "singlestrand", "hintsfile", "extrinsicCfgFile", "maxDNAPieceSize",
+                           "protein", "introns", "start", "stop", "cds", "AUGUSTUS_CONFIG_PATH",
+                           "alternatives-from-evidence", "alternatives-from-sampling", "sample", "minexonintronprob",
+                           "minmeanexonintronprob", "maxtracks", "gff3", "UTR", "outfile", "noInFrameStop",
+                           "noprediction", "contentmodels", "translation_table", "temperature", "proteinprofile",
+                           "progress", "predictionStart", "predictionEnd", "uniqueGeneId"]
 
-    ACCEPTED_PARAMETERS = ["comp-bias-corr", "add-self-matches", "seed-sub-mat", "s", "k", "k-score", "alph-size",
-                           "max-seqs", "split", "split-mode", "split-memory-limit", "diag-score", "exact-kmer-matching",
-                           "mask", "mask-lower-case", "min-ungapped-score", "spaced-kmer-mode", "spaced-kmer-pattern",
-                           "local-tmp", "disk-space-limit", "a", "alignment-mode", "wrapped-scoring", "e", "min-seq-id",
-                           "min_aln_len", "seq_id_mode", "alt-ali", "c", "cov-mode", "realign", "max-rejected",
-                           "max-accept", "score-bias", "gap-open", "gap-extend", "zdrop", "pca", "pcb", "mask-profile",
-                           "e-profile", "wg", "filter-msa", "max-seq-id", "qid", "qsc", "cov", "diff", "num-iterations",
-                           "slice-search", "rescore-mode", "allow-deletion", "min-length", "max-length", "max-gaps",
-                           "contig-start-mode", "contig-end-mode", "orf-start-mode", "forward-frames", "reverse-frames",
-                           "translation-table", "translate", "use-all-table-starts", "id-offset", "add-orf-stop",
-                           "search-type", "start-sens", "sens-steps", "metaeuk-eval", "metaeuk-tcov", "min_intron",
-                           "max_overlap", "set-gap-open", "set-gap-extend", "overlap", "protein", "target-key",
-                           "reverse-fragments", "sub-mat", "db-load-mode", "force-reuse", "remove-tmp-files",
-                           "filter-hits", "sort-results", "omit-consensus", "create-lookup", "chain-alignments",
-                           "merge-query", "strand", "compressed", "v"]
+    name = "augustus"
 
     def __init__(self):
+        self.gene_details = None
+        self._augustus_config_path = os.environ.get("AUGUSTUS_CONFIG_PATH")
+        self.config.set("busco_run", "augustus_config_path", self._augustus_config_path)
+        self._target_species = self.config.get("busco_run", "augustus_species")
         super().__init__()
-        self._output_folder = os.path.join(self.run_folder, "metaeuk_output")
-        self._tmp_folder = os.path.join(self._output_folder, "tmp")
-        self._output_basename = os.path.join(self._output_folder, os.path.basename(self.input_file))
-        self.ancestral_file = os.path.join(self.lineage_dataset, "ancestral")
-        self.ancestral_variants_file = os.path.join(self.lineage_dataset, "ancestral_variants")
-        self.refseq_db = os.path.join(self.lineage_dataset, "refseq_db.faa.gz")
-        self.max_intron = self.config.get("busco_run", "max_intron")
-        self.max_seq_len = self.config.get("busco_run", "max_seq_len")
-        self.min_exon_aa = 10
+        self._output_folder = os.path.join(self.run_folder, "augustus_output")
+        self.tmp_dir = os.path.join(self._output_folder, "tmp")
+        self.extracted_prot_dir = os.path.join(self._output_folder, "extracted_proteins")
+        self.err_logfile = os.path.join(self.log_folder, "augustus_err.log")
+
         try:
-            self.extra_params = self.config.get("busco_run", "metaeuk_parameters").replace(',', ' ')
+            self.extra_params = self.config.get("busco_run", "augustus_parameters").replace(',', ' ')
         except NoOptionError:
             self.extra_params = ""
+        self.chunksize = 10
+
+        self.gff_dir = os.path.join(self._output_folder, "gff")
+        self.err_logfiles = []
+        self.any_gene_found = False
         self.param_keys = []
         self.param_values = []
-        self.create_dirs(self._output_folder)
-        self.gene_details = None
 
-        self.headers_file = "{}.headersMap.tsv".format(self._output_basename)
-        self.codon_file = "{}.codon.fas".format(self._output_basename)
-        self.pred_protein_seqs = "{}.fas".format(self._output_basename)
-        self.pred_protein_seqs_modified = self.pred_protein_seqs.replace(".fas", ".modified.fas")
-
-        self.sequences_aa = {}
+        self.create_dirs([self.extracted_prot_dir, self.gff_dir])
 
         self.init_checkpoint_file()
+
+    def configure_runner(self, seqs_path, coords, sequences_aa, sequences_nt, rerun):
         self.run_number += 1
 
-    def check_tool_dependencies(self):
-        pass
+        # Placed here to allow reconfiguration for rerun
+        self._target_species = self.config.get("busco_run", "augustus_species")
 
-    def configure_job(self, *args):
+        self.check_tool_dependencies()
+        self.gene_details = defaultdict(list)
+        self.output_sequences = []
 
-        metaeuk_job = self.create_job()
-        metaeuk_job.add_parameter("easy-predict")
-        metaeuk_job.add_parameter("--threads")
-        metaeuk_job.add_parameter(str(self.cpus))
-        metaeuk_job.add_parameter(self.input_file)
-        metaeuk_job.add_parameter(self.refseq_db)
-        metaeuk_job.add_parameter(self._output_basename)
-        metaeuk_job.add_parameter(self._tmp_folder)
-        metaeuk_job.add_parameter("--max-intron")
-        metaeuk_job.add_parameter(str(self.max_intron))
-        metaeuk_job.add_parameter("--max-seq-len")
-        metaeuk_job.add_parameter(str(self.max_seq_len))
-        metaeuk_job.add_parameter("--min-exon-aa")
-        metaeuk_job.add_parameter(str(self.min_exon_aa))
-        for k, key in enumerate(self.param_keys):
-            metaeuk_job.add_parameter("--{}".format(key))
-            metaeuk_job.add_parameter("{}".format(str(self.param_values[k])))
+        self.seqs_path = seqs_path
+        self.coords = coords
+        self.run_num = 2 if rerun else 1
 
-        return metaeuk_job
+        self.sequences_aa = sequences_aa
+        self.sequences_nt = sequences_nt
 
-    def generate_job_args(self):
-        yield
+        self.pred_genes_dir = os.path.join(self._output_folder, "predicted_genes_rerun") if rerun \
+            else os.path.join(self._output_folder, "predicted_genes")
+
+        # self.tmp_dir placed here to allow it to be recreated during reconfiguration for rerun
+        self.create_dirs([self.pred_genes_dir, self.tmp_dir])
 
     @property
     def output_folder(self):
         return self._output_folder
 
+    def check_tool_dependencies(self):
+        """
+        check dependencies on files and folders
+        properly configured.
+        :raises SystemExit: if Augustus config path is not writable or
+        not set at all
+        :raises SystemExit: if Augustus config path does not contain
+        the needed species
+        present
+        """
+        try:
+            augustus_species_dir = os.path.join(self._augustus_config_path, "species")
+            if not os.access(augustus_species_dir, os.W_OK):
+                raise SystemExit("Cannot write to Augustus species folder, please make sure you have write "
+                                 "permissions to {}".format(augustus_species_dir))
+
+        except TypeError:
+            raise SystemExit(
+                "The environment variable AUGUSTUS_CONFIG_PATH is not set")
+
+        if not os.path.exists(os.path.join(augustus_species_dir, self._target_species)):
+            # Exclude the case where this is a restarted run and the retraining parameters have already been moved.
+            if self.config.getboolean("busco_run", "restart") and self.run_number == 2 and \
+                    os.path.exists(os.path.join(self._output_folder, "retraining_parameters", self._target_species)):
+                pass
+            else:
+                raise SystemExit(
+                    "Impossible to locate the species \"{0}\" in Augustus species folder"
+                    " ({1}), check that AUGUSTUS_CONFIG_PATH is properly set"
+                    " and contains this species. \n\t\tSee the help if you want "
+                    "to provide an alternative species".format(self._target_species, augustus_species_dir))
+
+    @log("Running Augustus prediction using {} as species:", logger, attr_name="_target_species")
     def run(self):
         super().run()
         if self.extra_params:
-            logger.info("Additional parameters for Metaeuk are {}: ".format(self.extra_params))
+            logger.info("Additional parameters for Augustus are {}: ".format(self.extra_params))
             self.param_keys, self.param_values = self.parse_parameters()
 
-        # self.cwd = self._output_folder
-        self.total = 1
+        self.total = self._count_jobs()
         self.run_jobs()
 
-    def get_version(self):
-        help_output = subprocess.check_output([self.cmd, "-h"], stderr=subprocess.STDOUT, shell=False)
-        lines = help_output.decode("utf-8").split("\n")
-        version = None
-        for line in lines:
-            if line.startswith("metaeuk Version:"):
-                version = line.strip().split(" ")[-1]
-        return version
+    def process_output(self):
+        logger.info("Extracting predicted proteins...")
+        files = [f for f in sorted(os.listdir(self.pred_genes_dir)) if any(busco_id in f for busco_id in self.coords)]
+        for filename in files:
+            self._extract_genes_from_augustus_output(filename)
 
+        if not self.any_gene_found and self.run_num == 1:
+            raise NoGenesError("Augustus")
+
+        self.gene_details = dict(self.gene_details)
+
+        self._merge_stderr_logs()
+        self._remove_individual_err_logs()
+
+        return
+
+    def _count_jobs(self):
+        n = 0
+        for busco_group, contigs in self.coords.items():
+            for _ in contigs:
+                n += 1
+        return n
+
+    def sort_jobs(self):
+        jobs_size_info = []
+        for busco_group, contigs in self.coords.items():
+
+            for contig_name, contig_info in contigs.items():
+                contig_start = contig_info["contig_start"]
+                contig_end = contig_info["contig_end"]
+                pred_size = int(contig_end) - int(contig_start)
+                jobs_size_info.append({"busco_group": busco_group,
+                                       "contig_name": contig_name,
+                                       "contig_start": contig_start,
+                                       "contig_end": contig_end,
+                                       "pred_size": pred_size})
+        job_sizes = [item["pred_size"] for item in jobs_size_info]
+        new_job_order = np.argsort(job_sizes)[::-1]
+        ordered_jobs = [jobs_size_info[i] for i in new_job_order]
+        return ordered_jobs
+
+    def generate_job_args(self):
+        contig_ordinal_inds = defaultdict(int)
+        njobs = 0
+
+        ordered_jobs = self.sort_jobs()
+
+        for job_info in ordered_jobs:
+            contig_name = job_info["contig_name"]
+            busco_group = job_info["busco_group"]
+            contig_start = job_info["contig_start"]
+            contig_end = job_info["contig_end"]
+            contig_tmp_file = "{}.temp".format(contig_name[:100])  # Avoid very long filenames
+            contig_ordinal_inds[busco_group] += 1
+            output_index = contig_ordinal_inds[busco_group]
+            out_filename = os.path.join(self.pred_genes_dir, "{}.out.{}".format(busco_group, output_index))
+            njobs += 1
+
+            yield busco_group, contig_tmp_file, contig_start, contig_end, out_filename
+
+    @log("Additional parameters for Augustus are {}: ", logger, attr_name="_target_species")
     def parse_parameters(self):
         accepted_keys = []
         accepted_values = []
@@ -1793,92 +1859,430 @@ class MetaeukRunner(BaseRunner):
                                 accepted_keys.append(key.strip())
                                 accepted_values.append(val.strip())
                             else:
-                                logger.warning("{} is not an accepted parameter for Metaeuk.".format(key))
+                                logger.warning("{} is not an accepted parameter for Augustus.".format(key))
                         else:
-                            raise MetaeukParsingError
+                            raise AugustusParsingError
                 else:
-                    raise MetaeukParsingError
-            except MetaeukParsingError:
+                    raise AugustusParsingError
+            except AugustusParsingError:
                 logger.warning(
-                    "Metaeuk parameters are not correctly formatted. Please enter them as follows: "
+                    "Augustus parameters are not correctly formatted. Please enter them as follows: "
                     "\"--param1=value1 --param2=value2\" etc. Proceeding without additional parameters.")
                 return [], []
         return accepted_keys, accepted_values
 
-    @staticmethod
-    def parse_header(header):
-        header_parts = header.split("|")
-        T_acc = header_parts[0]
-        C_acc = header_parts[1]
-        strand = header_parts[2]
-        bitscore = header_parts[3]
-        eval = header_parts[4]
-        num_exons = header_parts[5]
-        low_coord = header_parts[6]
-        high_coord = header_parts[7]
-        exon_coords = header_parts[8:]
+    def _merge_stderr_logs(self):
+        with open(self.err_logfile, "a") as f:
+            for err_logfile in self.err_logfiles:
+                with open(err_logfile, "r") as g:
+                    content = g.readlines()
+                    f.writelines(content)
+        return
 
-        all_low_exon_coords = []
-        all_taken_low_exon_coords = []
-        all_high_exon_coords = []
-        all_taken_high_exon_coords = []
-        all_exon_nucl_len = []
-        all_taken_exon_nucl_len = []
-        for exon in exon_coords:
-            low_exon_coords, high_exon_coords, nucl_lens = exon.split(":")
+    def _remove_individual_err_logs(self):
+        shutil.rmtree(self.tmp_dir)
+        return
 
-            low_exon_coord, taken_low_exon_coord = low_exon_coords.split("[")
-            all_low_exon_coords.append(low_exon_coord)
-            all_taken_low_exon_coords.append(taken_low_exon_coord.strip("]"))
+    def get_version(self):  # todo: need to handle all possible exceptions
+        augustus_help_output = subprocess.check_output([self.cmd, "--version"], stderr=subprocess.STDOUT, shell=False)
+        augustus_help_output = augustus_help_output.decode("utf-8")
+        s = augustus_help_output.split("\n")[0]
+        augustus_version = s[s.find("(") + 1:s.find(")")]
+        return augustus_version
 
-            high_exon_coord, taken_high_exon_coord = high_exon_coords.split("[")
-            all_high_exon_coords.append(high_exon_coord)
-            all_taken_high_exon_coords.append(taken_high_exon_coord.strip("]"))
+    def configure_job(self, busco_group, contig_tmp_file, contig_start, contig_end, out_filename):
+        # Augustus does not provide an option to write to an output file, so have to change the pipe target from the
+        # log file to the desired output file
+        self.logfile_path_out = out_filename
+        err_logfile = os.path.join(self.tmp_dir, os.path.basename(out_filename.rpartition(".out")[0] + ".err"))
+        self.logfile_path_err = err_logfile
+        self.err_logfiles.append(err_logfile)
 
-            nucl_len, taken_nucl_len = nucl_lens.split("[")
-            all_exon_nucl_len.append(nucl_len)
-            all_taken_exon_nucl_len.append(taken_nucl_len.strip().rstrip("]"))
+        augustus_job = self.create_job()
+        augustus_job.add_parameter("--codingseq=1")
+        augustus_job.add_parameter("--proteinprofile={}".format(os.path.join(self.lineage_dataset,
+                                                                             "prfl",
+                                                                             "{}.prfl".format(busco_group))))
+        augustus_job.add_parameter("--predictionStart={}".format(contig_start))
+        augustus_job.add_parameter("--predictionEnd={}".format(contig_end))
+        augustus_job.add_parameter("--species={}".format(self._target_species))
+        for k, key in enumerate(self.param_keys):
+            augustus_job.add_parameter("--{}={}".format(key, self.param_values[k]))
+        augustus_job.add_parameter(os.path.join(self.seqs_path, contig_tmp_file))
+        return augustus_job
 
-        gene_id = "{}:{}-{}".format(C_acc, low_coord, high_coord)
+    def _extract_genes_from_augustus_output(self, filename):
+        # todo: consider parallelizing this and other parsing functions
 
-        details = {"T_acc": T_acc, "C_acc": C_acc, "S": strand, "bitscore": bitscore, "e-value": eval,
-                   "num_exons": num_exons, "low_coord": low_coord, "high_coord": high_coord,
-                   "all_low_exon_coords": all_low_exon_coords, "all_taken_low_exon_coords": all_taken_low_exon_coords,
-                   "all_high_exon_coords": all_high_exon_coords, "all_taken_high_exon_coords": all_taken_high_exon_coords,
-                   "all_exon_nucl_len": all_exon_nucl_len, "all_taken_exon_nucl_len": all_taken_exon_nucl_len,
-                   "gene_id": gene_id}
-        return details
+        gene_id = None
+        gene_info = []
+        sequences_aa = []
+        sequences_nt = []
+        gene_found = False
+        completed_record = False
 
-    def edit_file_header(self):
-        all_records = []
-        with open(self.pred_protein_seqs, "rU") as f:
-            for record in SeqIO.parse(f, "fasta"):
-                header_details = self.parse_header(record.id)
-                record.id = header_details["gene_id"]
-                record.name = header_details["gene_id"]
-                record.description = header_details["gene_id"]
-                all_records.append(record)
-                self.sequences_aa[record.id] = record
+        with open(os.path.join(self.pred_genes_dir, filename), "r", encoding="utf-8") as f:
+            # utf-8 encoding needed to handle the umlaut in the third line of the file.
+            gene_info_section = False
+            nt_sequence_section = False
+            aa_sequence_section = False
+            nt_sequence_parts = []
+            aa_sequence_parts = []
 
-        with open(self.pred_protein_seqs_modified, "w") as f_mod:
-            SeqIO.write(all_records, f_mod, "fasta")
+            for line in f:
 
-    def get_gene_details(self):
-        self.gene_details = defaultdict(list)
-        with open(self.headers_file, "r") as f:
-            lines = f.readlines()
+                if aa_sequence_section and (line.startswith("# end gene") or "]" in line):
+                    aa_sequence_section = False
+                    completed_record = True
+                    if gene_id is not None:
+                        aa_sequence = "".join(aa_sequence_parts)
+                        nt_sequence = "".join(nt_sequence_parts)
+                        seq_record_aa = SeqRecord(Seq(aa_sequence.upper()), id=gene_id)
+                        seq_record_nt = SeqRecord(Seq(nt_sequence.upper()), id=gene_id)
+                        sequences_aa.append(seq_record_aa)
+                        sequences_nt.append(seq_record_nt)
+                        aa_sequence_parts = []
+                        nt_sequence_parts = []
+                        gene_id = None
+                    continue
 
-        try:
-            for line in lines:
-                header = line.split("\t")[-1]
-                header_details = self.parse_header(header)
+                if aa_sequence_section and line.startswith("# sequence of block"):
+                    aa_sequence_section = False
+                    continue
 
-                self.gene_details[header_details["gene_id"]].append({"gene_start": header_details["low_coord"],
-                                                                     "gene_end": header_details["high_coord"]})
+                if aa_sequence_section:
+                    line = line.strip().lstrip("# ").rstrip("]")
+                    aa_sequence_parts.append(line)
+                    continue
+
+                if line.startswith("# protein"):
+                    nt_sequence_section = False
+                    aa_sequence_section = True
+                    if "]" in line:
+                        aa_sequence_section = False
+                        completed_record = True
+                    line = line.strip().rstrip("]").split("[")
+                    aa_sequence_parts.append(line[1])
+                    continue
+
+                if nt_sequence_section:
+                    line = line.strip().lstrip("# ").rstrip("]")
+                    nt_sequence_parts.append(line)
+                    continue
+
+                if line.startswith("# coding sequence"):
+                    gene_info = []
+                    gene_info_section = False
+                    nt_sequence_section = True
+                    line = line.strip().rstrip("]").split("[")  # Extract sequence part of line
+                    nt_sequence_parts.append(line[1])
+                    continue
+
+                if gene_info_section:
+                    line = line.strip().split()
+                    seq_name = line[0]
+                    gene_start = line[3]
+                    gene_end = line[4]
+                    if not gene_id:
+                        gene_id = "{}:{}-{}".format(seq_name, gene_start, gene_end)
+                        self.gene_details[gene_id].append({"gene_start": gene_start, "gene_end": gene_end})
+                    gene_info.append("\t".join(line))
+                    continue
+
+                if line.startswith("# start gene"):
+                    gene_found = True
+                    self.any_gene_found = True
+                    gene_info_section = True
+                    completed_record = False
+                    continue
+
+            if gene_found and not completed_record:
+                logger.warning("Augustus output file {} truncated".format(filename))
+
+        self.sequences_aa.update({record.id: record for record in sequences_aa})
+        self.sequences_nt.update({record.id: record for record in sequences_nt})
+        if gene_found:
+            self._write_sequences_to_file(filename, sequences_nt, sequences_aa)
+
+        return
+
+    def make_gff_files(self, single_copy_buscos):
+
+        for b in single_copy_buscos:
+            gene_info = []
+            busco_files = [f for f in os.listdir(self.pred_genes_dir) if f.startswith(b)]
+            gff_filename = os.path.join(self.gff_dir, "{}.gff".format(b))
+            single_copy_busco_gene = list(single_copy_buscos[b].keys())[0]
+            gene_id_parts = single_copy_busco_gene.split(":")
+            if len(gene_id_parts) > 2:  # if a ":" is present in the gene id, we don't want to break it up
+                gene_id_parts = [":".join(gene_id_parts[:-1]), gene_id_parts[-1]]
+            single_copy_busco_gene_id = gene_id_parts[0]
+            single_copy_busco_gene_start_coord, single_copy_busco_gene_end_coord = gene_id_parts[1].split("-")
+            gene_found = False
+            for filename in busco_files:
+                match_number = filename.split(".")[-1]
+                with open(os.path.join(self.pred_genes_dir, filename), "r", encoding="utf-8") as f:
+                    gene_info_section = False
+                    for line in f:
+                        if gene_info_section and line.startswith("# coding sequence"):
+                            with open(gff_filename, "a") as g:
+                                g.write("\n".join(gene_info) + "\n")
+                            gene_info = []
+                            break
+
+                        if line.startswith("# start gene"):
+                            gene_info_section = True
+                            continue
+
+                        if gene_info_section:
+                            line = line.strip().split()
+                            seq_name = line[0]
+                            gene_start = line[3]
+                            gene_end = line[4]
+                            if gene_found or (seq_name == single_copy_busco_gene_id
+                                              and gene_start == single_copy_busco_gene_start_coord
+                                              and gene_end == single_copy_busco_gene_end_coord):
+                                gene_found = True
+                                gene_id_info = line[-1]
+                                line[-1] = self.edit_gene_identifier(gene_id_info, match_number)
+                                if len(line) == 12:
+                                    gene_id_info_2 = line[-3]
+                                    line[-3] = self.edit_gene_identifier(gene_id_info_2, match_number)
+                                gene_info.append("\t".join(line))
+                            else:
+                                gene_info_section = False
+                            continue
+                if gene_found:
+                    break
+            if not gene_found:
+                raise SystemExit("Unable to find single copy BUSCO gene in Augustus output.")
+
+        return
+
+    def edit_gene_identifier(self, orig_str, match_num):
+        modified_str = re.sub(r"g([0-9])", r"r{}.m{}.g\1".format(self.run_num, match_num), orig_str)
+        return modified_str
+
+    def _write_sequences_to_file(self, filename, sequences_nt, sequences_aa):
+
+        filename_parts = filename.rpartition(".out")
+        output_fna = os.path.join(self.extracted_prot_dir, filename_parts[0] + ".fna" + filename_parts[-1])
+        output_faa = os.path.join(self.extracted_prot_dir, filename_parts[0] + ".faa" + filename_parts[-1])
+        self.output_sequences.append(output_faa)
+
+        with open(output_fna, "w") as out_fna:
+            SeqIO.write(sequences_nt, out_fna, "fasta")
+        with open(output_faa, "w") as out_faa:
+            SeqIO.write(sequences_aa, out_faa, "fasta")
+
+        return
+
+    def move_retraining_parameters(self):
+        """
+        This function moves retraining parameters from augustus species folder
+        to the run folder
+        """
+        augustus_species_path = os.path.join(self._augustus_config_path, "species", self._target_species)
+        if os.path.exists(augustus_species_path):
+            new_path = os.path.join(self._output_folder, "retraining_parameters", self._target_species)
+            shutil.move(augustus_species_path, new_path)
+        elif self.config.getboolean("busco_run", "restart") and \
+                os.path.exists(os.path.join(self._output_folder, "retraining_parameters", self._target_species)):
+            pass
+        else:
+            logger.warning("Augustus did not produce a retrained species folder.")
+        return
 
 
-        except KeyError:
-            raise SystemExit("*headersMap.tsv file could not be parsed.")
+class GFF2GBRunner(BaseRunner):
+
+    name = "gff2gbSmallDNA.pl"
+
+    def __init__(self):
+        super().__init__()
+        self._output_folder = os.path.join(self.run_folder, "augustus_output")
+        self.gff_folder = os.path.join(self._output_folder, "gff")
+        self.gb_folder = os.path.join(self._output_folder, "gb")
+        self.create_dirs([self.gff_folder, self.gb_folder])
+
+        self.init_checkpoint_file()
+
+    def configure_runner(self, single_copy_buscos):
+        self.run_number += 1
+        self.single_copy_buscos = single_copy_buscos
+
+    def run(self):
+        super().run()
+        self.total = self._count_jobs()
+        self.run_jobs()
+
+    def _count_jobs(self):
+        n = len(self.single_copy_buscos)
+        return n
+
+    def generate_job_args(self):
+        for busco_id in self.single_copy_buscos:
+            yield busco_id
+
+    def configure_job(self, busco_id):
+        gff2_gb_small_dna_pl_job = self.create_job()
+        gff2_gb_small_dna_pl_job.add_parameter(os.path.join(self.gff_folder, "{}.gff".format(busco_id)))
+        gff2_gb_small_dna_pl_job.add_parameter(self.input_file)
+        gff2_gb_small_dna_pl_job.add_parameter("1000")
+        gff2_gb_small_dna_pl_job.add_parameter(os.path.join(self.gb_folder, "{}.raw.gb".format(busco_id)))
+        return gff2_gb_small_dna_pl_job
+
+    def check_tool_dependencies(self):
+        pass
+
+    def get_version(self):
+        return
+
+    @property
+    def output_folder(self):
+        return self._output_folder
+
+
+class NewSpeciesRunner(BaseRunner):
+
+    name = "new_species.pl"
+
+    def __init__(self):
+        super().__init__()
+        self._output_folder = os.path.join(self.run_folder, "augustus_output")
+        self.new_species_name = "BUSCO_{}".format(os.path.basename(self.main_out))
+        self.init_checkpoint_file()
+        self.run_number += 1
+
+    def run(self):
+        super().run()
+        self.total = 1
+        self.run_jobs()
+
+    def configure_job(self, *args):
+
+        new_species_pl_job = self.create_job()
+        # bacteria clade needs to be flagged as "prokaryotic"
+        if self.domain == "prokaryota":
+            new_species_pl_job.add_parameter("--prokaryotic")
+        new_species_pl_job.add_parameter("--species={}".format(os.path.basename(self.new_species_name)))
+        return new_species_pl_job
+
+    def check_tool_dependencies(self):
+        pass
+
+    def generate_job_args(self):
+        yield
+
+    def get_version(self):
+        return
+
+    @property
+    def output_folder(self):
+        return self._output_folder
+
+
+class ETrainingRunner(BaseRunner):
+
+    name = "etraining"
+
+    def __init__(self):
+        super().__init__()
+        self._output_folder = os.path.join(self.run_folder, "augustus_output")
+        self._gb_folder = os.path.join(self._output_folder, "gb")
+        self.augustus_config_path = self.config.get("busco_run", "augustus_config_path")
+        self._training_file = os.path.join(self._output_folder, "training_set.db")
+
+        self.init_checkpoint_file()
+
+    def configure_runner(self, new_species_name):
+        self.run_number += 1
+        self.new_species_name = new_species_name
+        self._merge_gb_files()
+
+    def run(self):
+        super().run()
+        self.total = 1
+        self.run_jobs()
+        self._validate_run()
+
+    def check_tool_dependencies(self):
+        pass
+
+    def generate_job_args(self):
+        yield
+
+    def _merge_gb_files(self):
+        """Concatenate all GB files into one large file"""
+        with open(self._training_file, "w") as outfile:
+            for fname in os.listdir(self._gb_folder):
+                with open(os.path.join(self._gb_folder, fname), "r") as infile:
+                    outfile.writelines(infile.readlines())
+        return
+
+    def _validate_run(self):
+        species_filepath = os.path.join(self.augustus_config_path, "species", self.new_species_name)
+        if os.path.exists(species_filepath) and any("exon_probs" in f for f in os.listdir(species_filepath)):
+            return
+        else:
+            SystemExit("Retraining did not complete correctly. Check your Augustus config path environment variable.")
+
+    def configure_job(self, *args):
+        etraining_job = self.create_job()
+        etraining_job.add_parameter("--species={}".format(self.new_species_name))
+        etraining_job.add_parameter(os.path.join(self.run_folder, "augustus_output", "training_set.db"))
+        return etraining_job
+
+    def get_version(self):
+        return
+
+    @property
+    def output_folder(self):
+        return self._output_folder
+
+
+class OptimizeAugustusRunner(BaseRunner):
+
+    name = "optimize_augustus.pl"
+
+    def __init__(self):
+        super().__init__()
+        self._output_folder = None
+        self.training_set_db = None
+        self.new_species_name = None
+
+    def configure_runner(self, output_folder, new_species_name):
+        self.run_number += 1
+        self._output_folder = output_folder
+        self.training_set_db = os.path.join(self._output_folder, "training_set.db")
+        self.new_species_name = new_species_name
+
+        self.init_checkpoint_file()
+
+    def configure_job(self, *args):
+        optimize_augustus_pl_job = self.create_job()
+        optimize_augustus_pl_job.add_parameter("--cpus={}".format(self.cpus))
+        optimize_augustus_pl_job.add_parameter("--species={}".format(self.new_species_name))
+        optimize_augustus_pl_job.add_parameter(self.training_set_db)
+        return optimize_augustus_pl_job
+
+    def run(self):
+        super().run()
+        self.total = 1
+        self.run_jobs()
+
+    def generate_job_args(self):
+        yield
+
+    def check_tool_dependencies(self):
+        pass
+
+    def get_version(self):
+        return
+
+    @property
+    def output_folder(self):
+        return self._output_folder
 
 
 class SEPPRunner(BaseRunner):
