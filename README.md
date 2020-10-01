@@ -1,6 +1,8 @@
 **BUSCOv4 - Benchmarking sets of Universal Single-Copy Orthologs.**
 
-######Note: v4.1.3 is the latest stable release. To access v5.beta clone this repository and checkout the v5 branch with `git checkout v5.beta`
+######Note: v4.1.4 is the latest stable release. To access v5.beta clone this repository and checkout the v5 branch with `git checkout v5.beta`
+
+######Note: A critical bug was discovered to have been introduced in v4.1.3. Any analysis on eukaryote genomes done with this version should be repeated with v4.1.4.
 
 For full documentation please consult the user guide: https://busco.ezlab.org/busco_userguide.html
 

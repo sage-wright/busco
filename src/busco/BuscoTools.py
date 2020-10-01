@@ -512,7 +512,8 @@ class HMMERRunner(BaseRunner):
                 elif isinstance(self.input_sequences, list):
                     input_files = [f for f in self.input_sequences if os.path.basename(f).startswith(busco_id)]
                     for seq_filename in input_files:
-                        output_filename = os.path.basename(seq_filename).rpartition(".faa")[0] + ".out"
+                        filename_parts = os.path.basename(seq_filename).rpartition(".faa")
+                        output_filename = filename_parts[0] + ".out" + filename_parts[-1]
                         yield busco_id, seq_filename, output_filename
 
     @property
@@ -1931,38 +1932,50 @@ class AugustusRunner(BaseRunner):
 
             for line in f:
 
-                if aa_sequence_section and (line.startswith("# end gene") or "]" in line):
-                    aa_sequence_section = False
-                    completed_record = True
-                    if gene_id is not None:
-                        aa_sequence = "".join(aa_sequence_parts)
-                        nt_sequence = "".join(nt_sequence_parts)
-                        seq_record_aa = SeqRecord(Seq(aa_sequence.upper()), id=gene_id)
-                        seq_record_nt = SeqRecord(Seq(nt_sequence.upper()), id=gene_id)
-                        sequences_aa.append(seq_record_aa)
-                        sequences_nt.append(seq_record_nt)
-                        aa_sequence_parts = []
-                        nt_sequence_parts = []
-                        gene_id = None
-                    continue
-
-                if aa_sequence_section and line.startswith("# sequence of block"):
-                    aa_sequence_section = False
-                    continue
-
                 if aa_sequence_section:
-                    line = line.strip().lstrip("# ").rstrip("]")
-                    aa_sequence_parts.append(line)
-                    continue
+                    if "]" in line:
+                        line = line.strip().lstrip("# ").rstrip("]")
+                        aa_sequence_parts.append(line)
+                        aa_sequence_section = False
+                        completed_record = True
+                        if gene_id is not None:
+                            aa_sequence = "".join(aa_sequence_parts)
+                            nt_sequence = "".join(nt_sequence_parts)
+                            seq_record_aa = SeqRecord(Seq(aa_sequence.upper()), id=gene_id)
+                            seq_record_nt = SeqRecord(Seq(nt_sequence.upper()), id=gene_id)
+                            sequences_aa.append(seq_record_aa)
+                            sequences_nt.append(seq_record_nt)
+                            aa_sequence_parts = []
+                            nt_sequence_parts = []
+                            gene_id = None
+                        continue
+
+                    else:
+                        line = line.strip().lstrip("# ").rstrip("]")
+                        aa_sequence_parts.append(line)
+                        continue
 
                 if line.startswith("# protein"):
                     nt_sequence_section = False
                     aa_sequence_section = True
                     if "]" in line:
+                        line = line.strip().rstrip("]").split("[")
+                        aa_sequence_parts.append(line[1])
                         aa_sequence_section = False
                         completed_record = True
-                    line = line.strip().rstrip("]").split("[")
-                    aa_sequence_parts.append(line[1])
+                        if gene_id is not None:
+                            aa_sequence = "".join(aa_sequence_parts)
+                            nt_sequence = "".join(nt_sequence_parts)
+                            seq_record_aa = SeqRecord(Seq(aa_sequence.upper()), id=gene_id)
+                            seq_record_nt = SeqRecord(Seq(nt_sequence.upper()), id=gene_id)
+                            sequences_aa.append(seq_record_aa)
+                            sequences_nt.append(seq_record_nt)
+                            aa_sequence_parts = []
+                            nt_sequence_parts = []
+                            gene_id = None
+                    else:
+                        line = line.strip().rstrip("]").split("[")
+                        aa_sequence_parts.append(line[1])
                     continue
 
                 if nt_sequence_section:
