@@ -40,8 +40,9 @@ class BuscoConfigManager:
         return self.config_file
 
     @log("Configuring BUSCO with {}", logger, attr_name="config_file")
-    def load_busco_config(self, clargs):
-        self.config = BuscoConfigMain(self.config_file, self.params, clargs)
+    def load_busco_config(self, *args):
+        self.config = BuscoConfigMain(self.config_file, self.params)
+        self.config.configure()
         self.config.validate()
         if not self.config.check_lineage_present():
             if not self.config.getboolean("busco_run", "auto-lineage") and not self.config.getboolean("busco_run", "auto-lineage-prok"):# and not self.config.getboolean("busco_run", "auto-lineage-euk"):
@@ -65,7 +66,6 @@ class BuscoConfigManager:
 
         self.config.set_results_dirname(lineage_dataset)  # function always only uses basename
         self.config.download_lineage_file(lineage_dataset)  # full path will return, base name will attempt download
-        # Todo: clean up error messages
         self.config.load_dataset_config()
         return
 

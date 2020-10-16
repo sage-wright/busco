@@ -1,5 +1,5 @@
 from busco.BuscoAnalysis import BuscoAnalysis
-from busco.GenomeAnalysis import GenomeAnalysisEukaryotes
+from busco.GenomeAnalysis import GenomeAnalysisEukaryotesAugustus, GenomeAnalysisEukaryotesMetaeuk
 from busco.TranscriptomeAnalysis import TranscriptomeAnalysis
 from busco.GeneSetAnalysis import GeneSetAnalysis
 from busco.GenomeAnalysis import GenomeAnalysisProkaryotes
@@ -15,9 +15,9 @@ logger = BuscoLogger.get_logger(__name__)
 
 class BuscoRunner:
 
-    mode_dict = {"euk_genome": GenomeAnalysisEukaryotes, "prok_genome": GenomeAnalysisProkaryotes,
-                 "transcriptome": TranscriptomeAnalysis, "tran": TranscriptomeAnalysis,
-                 "proteins": GeneSetAnalysis, "prot": GeneSetAnalysis}
+    mode_dict = {"euk_genome_met": GenomeAnalysisEukaryotesMetaeuk, "euk_genome_aug": GenomeAnalysisEukaryotesAugustus,
+                 "prok_genome": GenomeAnalysisProkaryotes, "transcriptome": TranscriptomeAnalysis,
+                 "tran": TranscriptomeAnalysis, "proteins": GeneSetAnalysis, "prot": GeneSetAnalysis}
 
     final_results = []
     results_datasets = []
@@ -35,7 +35,10 @@ class BuscoRunner:
             if self.domain == "prokaryota":
                 self.mode = "prok_genome"
             elif self.domain == "eukaryota":
-                self.mode = "euk_genome"
+                if self.config.getboolean("busco_run", "use_augustus"):
+                    self.mode = "euk_genome_aug"
+                else:
+                    self.mode = "euk_genome_met"
         analysis_type = type(self).mode_dict[self.mode]
         self.analysis = analysis_type()
         self.prok_fail_count = 0  # Needed to check if both bacteria and archaea return no genes.
@@ -168,7 +171,7 @@ class BuscoRunner:
             log_folder = os.path.join(config.get("busco_run", "main_out"), "logs")
             if not os.path.exists(log_folder):
                 os.makedirs(log_folder)
-            os.rename("busco_{}.log".format(BuscoLogger.random_id), os.path.join(log_folder, "busco.log"))
+            shutil.move("busco_{}.log".format(BuscoLogger.random_id), os.path.join(log_folder, "busco.log"))
         except OSError:
             logger.warning("Unable to move 'busco_{}.log' to the 'logs' folder.".format(BuscoLogger.random_id))
         return

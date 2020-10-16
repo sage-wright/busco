@@ -54,7 +54,7 @@ class BuscoAnalysis(metaclass=ABCMeta):
         self._dataset_creation_date = self.config.get("busco_run", "creation_date")
         self.restart = self.config.getboolean("busco_run", "restart")
 
-        self.gene_details = None  # Dictionary containing coordinate information for predicted genes.
+        self.gene_details = {}  # Dictionary containing coordinate information for predicted genes.
 
         self._lineages_download_path = os.path.join(self.config.get("busco_run", "download_path"), "lineages")
 
@@ -87,15 +87,19 @@ class BuscoAnalysis(metaclass=ABCMeta):
         self._check_data_integrity()
 
     @log("***** Run HMMER on gene sequences *****", logger)
-    def run_hmmer(self, input_sequences):
+    def run_hmmer(self, input_sequences, busco_ids=None):
         """
         This function runs hmmsearch.
         """
-        files = sorted(os.listdir(os.path.join(self._lineage_dataset, "hmms")))
-        busco_ids = [os.path.splitext(f)[0] for f in files]  # Each Busco ID has a HMM file of the form "<busco_id>.hmm"
+        if not busco_ids:
+            files = sorted(os.listdir(os.path.join(self._lineage_dataset, "hmms")))
+            busco_ids = [os.path.splitext(f)[0] for f in files]  # Each Busco ID has a HMM file of the form "<busco_id>.hmm"
         self.hmmer_runner.configure_runner(input_sequences, busco_ids, self._mode, self.gene_details)
         if self.restart and self.hmmer_runner.check_previous_completed_run():
             logger.info("Skipping HMMER run as output already processed")
+        elif len(os.listdir(self.hmmer_runner.results_dir)) > 0:
+            raise SystemExit("HMMER results directory not empty. If you are running in restart mode, make sure you are "
+                             "using the same eukaryotic gene predictor (metaeuk/augustus) as before.")
         else:
             self.restart = False
             self.config.set("busco_run", "restart", str(self.restart))

@@ -96,6 +96,7 @@ class AutoSelectLineage:
         If still a tie, use the first match.
         :return
         """
+
         total_complete = np.array(self.s_buscos) + np.array(self.d_buscos)
         inds = np.arange(len(total_complete))
 
@@ -124,6 +125,10 @@ class AutoSelectLineage:
 
     @log("{} selected\n", logger, attr_name="best_match_lineage_dataset", apply="basename", on_func_exit=True)
     def get_best_match_lineage(self, runners):
+        self.s_buscos = [runner.analysis.hmmer_runner.single_copy for runner in runners]
+        self.d_buscos = [runner.analysis.hmmer_runner.multi_copy for runner in runners]
+        self.f_buscos = [runner.analysis.hmmer_runner.only_fragments for runner in runners]
+        self.s_percents = [runner.analysis.hmmer_runner.s_percent for runner in runners]
         max_ind = self.evaluate()
         self.selected_runner = runners[int(max_ind)]
         self.best_match_lineage_dataset = self.selected_runner.config.get("busco_run", "lineage_dataset")
@@ -172,20 +177,8 @@ class AutoSelectLineage:
         return
 
     def check_mollicutes(self):
-        self.s_buscos = []
-        self.d_buscos = []
-        self.f_buscos = []
-        self.s_percents = []
-        self.d_percents = []
-        self.f_percents = []
         runners = self.run_lineages_list(["mollicutes"])
         runners.append(self.selected_runner)
-        self.s_buscos.append(self.selected_runner.analysis.hmmer_runner.single_copy)
-        self.d_buscos.append(self.selected_runner.analysis.hmmer_runner.multi_copy)
-        self.f_buscos.append(self.selected_runner.analysis.hmmer_runner.only_fragments)
-        self.s_percents.append(self.selected_runner.analysis.hmmer_runner.s_percent)
-        self.d_percents.append(self.selected_runner.analysis.hmmer_runner.d_percent)
-        self.f_percents.append(self.selected_runner.analysis.hmmer_runner.f_percent)
         self.get_best_match_lineage(runners)
         return
 
@@ -194,7 +187,12 @@ class AutoSelectLineage:
             if self.selected_runner.domain == "prokaryota":
                 protein_seqs = self.selected_runner.analysis.prodigal_runner.output_faa
             elif self.selected_runner.domain == "eukaryota":
-                protein_seqs = self.selected_runner.analysis.metaeuk_runner.pred_protein_seqs_modified
+                if self.config.getboolean("busco_run", "use_augustus"):
+                    protein_seqs_dir = self.selected_runner.analysis.augustus_runner.extracted_prot_dir
+                    protein_seqs = [os.path.join(protein_seqs_dir, f) for f in os.listdir(protein_seqs_dir)
+                                    if f.split(".")[-2] == "faa"]
+                else:
+                    protein_seqs = self.selected_runner.analysis.metaeuk_runner.combined_pred_protein_seqs
         else:
             protein_seqs = self.selected_runner.config.get("busco_run", "in")
         out_path = self.config.get("busco_run", "main_out")
@@ -212,21 +210,9 @@ class AutoSelectLineage:
     def _run_3_datasets(self, mollicutes_runner=None):
         if mollicutes_runner:
             datasets = ["mycoplasmatales", "entomoplasmatales"]
-            self.s_buscos = [mollicutes_runner.analysis.hmmer_runner.single_copy]
-            self.d_buscos = [mollicutes_runner.analysis.hmmer_runner.multi_copy]
-            self.f_buscos = [mollicutes_runner.analysis.hmmer_runner.only_fragments]
-            self.s_percents = [mollicutes_runner.analysis.hmmer_runner.s_percent]
-            self.d_percents = [mollicutes_runner.analysis.hmmer_runner.d_percent]
-            self.f_percents = [mollicutes_runner.analysis.hmmer_runner.f_percent]
             dataset_runners = [mollicutes_runner]
         else:
             datasets = ["mollicutes", "mycoplasmatales", "entomoplasmatales"]
-            self.s_buscos = []
-            self.d_buscos = []
-            self.f_buscos = []
-            self.s_percents = []
-            self.d_percents = []
-            self.f_percents = []
             dataset_runners = []
         dataset_runners += self.run_lineages_list(datasets)
         self.get_best_match_lineage(dataset_runners)
