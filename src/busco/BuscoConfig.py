@@ -19,7 +19,7 @@ class BaseConfig(ConfigParser):
                            "download_path": os.path.join(os.getcwd(), "busco_downloads"), "datasets_version": "odb10",
                            "offline": False, "download_base_url": "https://busco-data.ezlab.org/v4/data/",
                            "auto-lineage": False, "auto-lineage-prok": False, "auto-lineage-euk": False,
-                           "update-data": False, "evalue": 1e-3, "limit": 3}
+                           "update-data": False, "evalue": 1e-3, "limit": 3, "use_augustus": False, "long": False}
 
     def __init__(self):
         super().__init__()
@@ -131,6 +131,15 @@ class BuscoConfig(ConfigParser, metaclass=ABCMeta):
             with open(os.path.join(self.get("busco_run", "lineage_dataset"), "dataset.cfg"), "r") as target_species_file:
                 dataset_kwargs = dict(line.strip().split("=") for line in target_species_file)
                 for key, value in dataset_kwargs.items():
+                    if key == "species":
+                        try:
+                            config_species = self.get("busco_run", "augustus_species")
+                            if config_species != value:
+                                logger.warning("An augustus species was mentioned in the config file or on the command "
+                                               "line, dataset default species ({}) will be ignored".format(value))
+                        except NoOptionError:
+                            self.set("busco_run", "augustus_species", value)
+
                     if key in ["prodigal_genetic_code", "ambiguous_cd_range_upper", "ambiguous_cd_range_lower"]:
                         self.set("prodigal", key, value)
                     else:
@@ -195,37 +204,45 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
 
     CONFIG_STRUCTURE = {"busco_run": ["in", "out", "out_path", "mode", "auto-lineage", "auto-lineage-prok",
                                       "auto-lineage-euk", "cpu", "force", "restart", "download_path",
-                                      "datasets_version", "quiet", "offline",
-                                      "download_base_url", "lineage_dataset", "update-data", "metaeuk_parameters",
-                                      "main_out", "evalue", "limit"],
+                                      "datasets_version", "quiet", "offline", "long", "augustus_parameters",
+                                      "augustus_species", "download_base_url", "lineage_dataset", "update-data",
+                                      "metaeuk_parameters", "metaeuk_rerun_parameters", "evalue", "limit",
+                                      "use_augustus"],
                         "tblastn": ["path", "command"],
                         "makeblastdb": ["path", "command"],
                         "prodigal": ["path", "command"],
                         "sepp": ["path", "command"],
                         "metaeuk": ["path", "command"],
+                        "augustus": ["path", "command"],
+                        "etraining": ["path", "command"],
+                        "gff2gbSmallDNA.pl": ["path", "command"],
+                        "new_species.pl": ["path", "command"],
+                        "optimize_augustus.pl": ["path", "command"],
                         "hmmsearch": ["path", "command"]}
 
-    def __init__(self, conf_file, params, clargs, **kwargs):
+    def __init__(self, conf_file, params, **kwargs):
         """
         :param conf_file: a path to a config.ini file
         :type conf_file: str
-        :param args: key and values matching BUSCO parameters to override config.ini values
-        :type args: dict
+        :param params: key and values matching BUSCO parameters to override config.ini values
+        :type params: dict
         """
         super().__init__(**kwargs)
         self.conf_file = conf_file
+        self.params = params
+        self.main_out = None
+
+    def configure(self):
         self._load_config_file()
-        self.clargs = clargs
         # Update the config with args provided by the user, else keep config
-        self._update_config_with_args(params)
+        self._update_config_with_args(self.params)
         self._fill_default_values()
 
     def validate(self):
         self._check_mandatory_keys_exist()
         self._check_no_previous_run()
-        self._create_required_paths()
-
         self._check_allowed_keys()
+        self._create_required_paths()
         self._cleanup_config()
         self._check_required_input_exists()
 
@@ -265,7 +282,7 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
                                  "You can also run BUSCO using auto-lineage, to allow BUSCO to automatically select "
                                  "the best dataset for your input data.")
             return True
-        except NoOptionError:
+        except NoOptionError:  # todo: need a helpful error message if datasets_version is not set but lineage_dataset is.
             return False
 
     def _check_evalue(self):
@@ -273,7 +290,7 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
         Warn the user if the config contains a non-standard e-value cutoff.
         :return:
         """
-        if self.getfloat("busco_run", "evalue") != type(self).DEFAULT_ARGS_VALUES["evalue"]:
+        if self.getfloat("busco_run", "evalue") != type(self).DEFAULT_ARGS_VALUES["evalue"]: # todo: introduce systemexit if not float
             logger.warning("You are using a custom e-value cutoff")
         return
 
@@ -282,7 +299,7 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
         Check the value of limit. Ensure it is between 1 and 20, otherwise raise SystemExit.
         :return:
         """
-        limit_val = self.getint("busco_run", "limit")
+        limit_val = self.getint("busco_run", "limit")  # todo: introduce systemexit if not int.
         if limit_val <= 0 or limit_val > 20:
             raise SystemExit("Limit must be an integer between 1 and 20 (you have used: {}). Note that this parameter "
                              "is not needed by the protein mode.".format(limit_val))
@@ -437,7 +454,7 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
     def _update_config_with_args(self, args):
         """
         Include command line arguments in config. Overwrite any values given in the config file.
-        :param args: Dictionary of parsed command line arguments. To see full list, inspect run_BUSCO.py or
+        :param args: Dictionary of parsed command line arguments. To see full list, inspect run_BUSCO_unittests.py or
         type busco -h
         :type args: dict
         :return:

@@ -43,7 +43,7 @@ class BuscoPlacer:
         self.datasets_version = self._config.get("busco_run", "datasets_version")
         self.protein_seqs = protein_seqs
         self.single_copy_buscos = single_copy_buscos  # dict
-        self._init_tools()
+        self.init_tools()
 
     def _download_placement_files(self):
         self.ref_markers_file = self.downloader.get("list_of_reference_markers.{0}_{1}.txt".format(
@@ -92,7 +92,7 @@ class BuscoPlacer:
 
         return dataset, placement_file_versions
 
-    def _init_tools(self):
+    def init_tools(self):
         setattr(SEPPRunner, "config", self._config)
         self.sepp_runner = SEPPRunner()
 

@@ -1,4 +1,4 @@
-INFO:	***** Start a BUSCO v5.beta analysis, current time: 08/05/2020 14:35:16 *****
+INFO:	***** Start a BUSCO v5.beta.1 analysis, current time: 10/16/2020 13:23:53 *****
 INFO:	Configuring BUSCO with /busco/config/config.ini
 INFO:	Mode is genome
 INFO:	Input file is /busco_wd/genome.fna
@@ -15,12 +15,11 @@ INFO:	Decompressing file '/busco_wd/busco_downloads/lineages/archaea_odb10.tar.g
 INFO:	Running BUSCO using lineage dataset archaea_odb10 (prokaryota, 2020-03-06)
 INFO:	***** Run Prodigal on input to predict and extract genes *****
 INFO:	Running Prodigal with genetic code 11 in single mode
-INFO:	Running 1 job(s) on prodigal, starting at 08/05/2020 14:35:17
+INFO:	Running 1 job(s) on prodigal, starting at 10/16/2020 13:23:54
 INFO:	[prodigal]	1 of 1 task(s) completed
 INFO:	Genetic code 11 selected as optimal
 INFO:	***** Run HMMER on gene sequences *****
-INFO:	Running 194 job(s) on hmmsearch, starting at 08/05/2020 14:35:18
-INFO:	[hmmsearch]	20 of 194 task(s) completed
+INFO:	Running 194 job(s) on hmmsearch, starting at 10/16/2020 13:23:55
 INFO:	[hmmsearch]	39 of 194 task(s) completed
 INFO:	[hmmsearch]	59 of 194 task(s) completed
 INFO:	[hmmsearch]	78 of 194 task(s) completed
@@ -28,6 +27,7 @@ INFO:	[hmmsearch]	97 of 194 task(s) completed
 INFO:	[hmmsearch]	117 of 194 task(s) completed
 INFO:	[hmmsearch]	136 of 194 task(s) completed
 INFO:	[hmmsearch]	156 of 194 task(s) completed
+INFO:	[hmmsearch]	175 of 194 task(s) completed
 INFO:	[hmmsearch]	175 of 194 task(s) completed
 INFO:	[hmmsearch]	194 of 194 task(s) completed
 INFO:	Results:	C:5.2%[S:5.2%,D:0.0%],F:1.5%,M:93.3%,n:194	   
@@ -38,7 +38,7 @@ INFO:	Running BUSCO using lineage dataset bacteria_odb10 (prokaryota, 2020-03-06
 INFO:	***** Run Prodigal on input to predict and extract genes *****
 INFO:	Genetic code 11 selected as optimal
 INFO:	***** Run HMMER on gene sequences *****
-INFO:	Running 124 job(s) on hmmsearch, starting at 08/05/2020 14:35:21
+INFO:	Running 124 job(s) on hmmsearch, starting at 10/16/2020 13:23:58
 INFO:	[hmmsearch]	13 of 124 task(s) completed
 INFO:	[hmmsearch]	25 of 124 task(s) completed
 INFO:	[hmmsearch]	38 of 124 task(s) completed
@@ -51,24 +51,39 @@ INFO:	[hmmsearch]	112 of 124 task(s) completed
 INFO:	[hmmsearch]	124 of 124 task(s) completed
 INFO:	Results:	C:21.0%[S:21.0%,D:0.0%],F:0.8%,M:78.2%,n:124	   
 
-INFO:	Downloading file 'https://busco-archive.ezlab.org/data/lineages/eukaryota_odb10.2020-08-05.tar.gz'
+INFO:	Downloading file 'https://busco-archive.ezlab.org/data/lineages/eukaryota_odb10.2020-09-10.tar.gz'
 INFO:	Decompressing file '/busco_wd/busco_downloads/lineages/eukaryota_odb10.tar.gz'
-INFO:	Running BUSCO using lineage dataset eukaryota_odb10 (eukaryota, 2020-08-05)
-INFO:	Running 1 job(s) on metaeuk, starting at 08/05/2020 14:35:26
+INFO:	Running BUSCO using lineage dataset eukaryota_odb10 (eukaryota, 2020-09-10)
+INFO:	Running 1 job(s) on metaeuk, starting at 10/16/2020 13:24:07
 INFO:	[metaeuk]	1 of 1 task(s) completed
 INFO:	***** Run HMMER on gene sequences *****
-INFO:	Running 255 job(s) on hmmsearch, starting at 08/05/2020 14:35:49
-INFO:	[hmmsearch]	26 of 255 task(s) completed
+INFO:	Running 255 job(s) on hmmsearch, starting at 10/16/2020 13:24:25
 INFO:	[hmmsearch]	26 of 255 task(s) completed
 INFO:	[hmmsearch]	51 of 255 task(s) completed
 INFO:	[hmmsearch]	77 of 255 task(s) completed
 INFO:	[hmmsearch]	102 of 255 task(s) completed
 INFO:	[hmmsearch]	128 of 255 task(s) completed
-INFO:	[hmmsearch]	153 of 255 task(s) completed
+INFO:	[hmmsearch]	128 of 255 task(s) completed
 INFO:	[hmmsearch]	179 of 255 task(s) completed
 INFO:	[hmmsearch]	204 of 255 task(s) completed
 INFO:	[hmmsearch]	230 of 255 task(s) completed
 INFO:	[hmmsearch]	255 of 255 task(s) completed
+INFO:	Results:	C:1.2%[S:1.2%,D:0.0%],F:0.0%,M:98.8%,n:255	   
+
+INFO:	Extracting missing and fragmented buscos from the file refseq_db.faa...
+INFO:	Running 1 job(s) on metaeuk, starting at 10/16/2020 13:25:00
+INFO:	[metaeuk]	1 of 1 task(s) completed
+INFO:	***** Run HMMER on gene sequences *****
+INFO:	Running 252 job(s) on hmmsearch, starting at 10/16/2020 13:25:27
+INFO:	[hmmsearch]	26 of 252 task(s) completed
+INFO:	[hmmsearch]	51 of 252 task(s) completed
+INFO:	[hmmsearch]	76 of 252 task(s) completed
+INFO:	[hmmsearch]	101 of 252 task(s) completed
+INFO:	[hmmsearch]	126 of 252 task(s) completed
+INFO:	[hmmsearch]	177 of 252 task(s) completed
+INFO:	[hmmsearch]	202 of 252 task(s) completed
+INFO:	[hmmsearch]	227 of 252 task(s) completed
+INFO:	[hmmsearch]	252 of 252 task(s) completed
 INFO:	Results:	C:1.2%[S:1.2%,D:0.0%],F:0.0%,M:98.8%,n:255	   
 
 INFO:	bacteria_odb10 selected
@@ -89,7 +104,7 @@ INFO:	Decompressing file '/busco_wd/busco_downloads/placement_files/mapping_taxi
 INFO:	Downloading file 'https://busco-archive.ezlab.org/data/placement_files/mapping_taxid-lineage.bacteria_odb10.2019-12-16.txt.tar.gz'
 INFO:	Decompressing file '/busco_wd/busco_downloads/placement_files/mapping_taxid-lineage.bacteria_odb10.2019-12-16.txt.tar.gz'
 INFO:	Place the markers on the reference tree...
-INFO:	Running 1 job(s) on sepp, starting at 08/05/2020 14:35:52
+INFO:	Running 1 job(s) on sepp, starting at 10/16/2020 13:25:31
 INFO:	[sepp]	1 of 1 task(s) completed
 INFO:	Not enough markers were placed on the tree (11). Root lineage bacteria is kept
 INFO:	
@@ -105,7 +120,7 @@ INFO:
 	|97	Missing BUSCOs (M)                        |
 	|124	Total BUSCO groups searched               |
 	--------------------------------------------------
-INFO:	BUSCO analysis done with WARNING(s). Total running time: 84 seconds
+INFO:	BUSCO analysis done with WARNING(s). Total running time: 145 seconds
 
 ***** Summary of warnings: *****
 WARNING:busco.ConfigManager	Running Auto Lineage Selector as no lineage dataset was specified. This will take a little longer than normal. If you know what lineage dataset you want to use, please specify this in the config file or using the -l (--lineage-dataset) flag in the command line.

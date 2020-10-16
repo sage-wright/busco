@@ -1,40 +1,34 @@
-**BUSCOv5.beta - Benchmarking sets of Universal Single-Copy Orthologs.**
-
-BUSCO v5.beta is available for testing. We welcome feedback from users.
-Report problems on the BUSCO issue board at https://gitlab.com/ezlab/busco/issues.
-
-Main changes in v5:
-
-- Replace Augustus gene predictor with Metaeuk (https://github.com/soedinglab/metaeuk), which also removes the time consuming `tblastn` step
-
-**BUSCOv4 - Benchmarking sets of Universal Single-Copy Orthologs.**
-
-Last stable version: https://gitlab.com/ezlab/busco/-/tags/4.1.2
+## BUSCOv5.beta - Benchmarking sets of Universal Single-Copy Orthologs.
 
 For full documentation please consult the user guide: https://busco.ezlab.org/busco_userguide.html
 
+Main changes in v5:
 
+- Metaeuk is used as default gene predictor for eukaryote pipeline. Augustus is maintained and can be used optionally instead of Metaeuk.
 
-To install, clone the repository and enter ``sudo python3 setup.py install`` or ``python3 setup.py install --user``
+***
+### Installation
 
+#### Conda
+Conda installation instructions are in the userguide here:
+https://busco.ezlab.org/busco_userguide.html#conda-package
+
+#### Docker
+BUSCO is available through DockerHub - instructions here:
+https://busco.ezlab.org/busco_userguide.html#docker-image
+
+#### Manual installation
+Manual installation is possible, though it is important to validate each of the dependencies before running BUSCO. 
 More details in the user guide: https://busco.ezlab.org/busco_userguide.html#manual-installation
 
-Do not forget to edit the ``config/config.ini`` file to match your environment. The script `scripts/busco_configurator.py` can help with this. 
-You can set the ``BUSCO_CONFIG_FILE`` environment variable to define the path (including the filename) to that ``config.ini`` file. 
-
-```
-export BUSCO_CONFIG_FILE="/path/to/myconfig.ini"
-```
-Alternatively you can pass the config file path as a command line argument using ``--config /path/to/config.ini``.
-
-
-If you have trouble installing one of the many third-party tools, try the official Docker container: https://hub.docker.com/r/ezlabgva/busco/tags
-
+***
+### Troubleshooting
 To get help with BUSCO use: ``busco -h`` and ``python3 scripts/generate_plot.py -h``
 
-**!!!** Do not use "odb9" datasets with BUSCOv4. If you need to reproduce previous analyses, use BUSCOv3 (https://gitlab.com/ezlab/busco/-/tags/3.0.2)
+Report problems on the BUSCO issue board at https://gitlab.com/ezlab/busco/issues
 
-**How to cite BUSCO**
+***
+### How to cite BUSCO
 
 *BUSCO: Assessing Genome Assembly and Annotation Completeness.*
 Mathieu Seppey, Mosè Manni, Evgeny M. Zdobnov
