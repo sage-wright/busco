@@ -5,9 +5,10 @@ from busco.BuscoLogger import BuscoLogger
 import os
 import sys
 
-logger = BuscoLogger.get_logger(__name__)
 
 class ListLineagesAction(argparse.Action):
+
+    logger = BuscoLogger.get_logger(__name__)
 
     def __init__(self, option_strings, dest, nargs=0, default="==SUPPRESS==", **kwargs):
         super().__init__(option_strings, dest, nargs=nargs, default=default, **kwargs)
@@ -16,16 +17,15 @@ class ListLineagesAction(argparse.Action):
         try:
             self.config_manager = BuscoConfigManager({})
         except SystemExit as se:
-            logger.error("The config file is necessary here as it contains remote and local path locations for "
-                         "downloading dataset information")
-            logger.error(se)
-            raise SystemExit
+            type(self).logger.error(se)
+            raise SystemExit()
+
         self.config = PseudoConfig(self.config_manager.config_file)
         try:
             self.config.load()
             self.print_lineages()
         except SystemExit as se:
-            logger.error(se)
+            type(self).logger.error(se)
         finally:
             os.remove("busco_{}.log".format(BuscoLogger.random_id))
             parser.exit()
@@ -39,12 +39,13 @@ class ListLineagesAction(argparse.Action):
             print("".join(f.readlines()))
 
     def download_lineages_list(self):
-        lineages_list_file = self.config.downloader.get("lineages_list.txt", "information")
+        lineages_list_file = self.config.downloader.get(
+            "lineages_list.txt", "information"
+        )
         return lineages_list_file
 
 
 class CleanHelpAction(argparse.Action):
-
     def __init__(self, option_strings, dest, nargs=0, default="==SUPPRESS==", **kwargs):
         super().__init__(option_strings, dest, nargs=nargs, default=default, **kwargs)
 
@@ -58,8 +59,15 @@ class CleanHelpAction(argparse.Action):
 
 
 class CleanVersionAction(argparse.Action):
-
-    def __init__(self, option_strings, version=None, dest="==SUPPRESS==", nargs=0, default="==SUPPRESS==", **kwargs):
+    def __init__(
+        self,
+        option_strings,
+        version=None,
+        dest="==SUPPRESS==",
+        nargs=0,
+        default="==SUPPRESS==",
+        **kwargs
+    ):
         super().__init__(option_strings, dest, nargs=nargs, default=default, **kwargs)
         self.version = version
 

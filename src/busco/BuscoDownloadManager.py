@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # coding: utf-8
 """
 .. module:: BuscoDownloadManager
@@ -6,7 +6,7 @@
 .. versionadded:: 4.0.0
 .. versionchanged:: 4.0.0
 
-Copyright (c) 2016-2020, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2021, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 
 """
@@ -33,6 +33,7 @@ class BuscoDownloadManager:
     When the config parameter `auto_update_files` is set, new versions replace old versions.s
     Else, a warning is produced.
     """
+
     version_files = {}
 
     def __init__(self, config):
@@ -62,12 +63,16 @@ class BuscoDownloadManager:
                     dataset_name = line[0]
                     dataset_date = line[1]
                     dataset_hash = line[2]
-                    type(self).version_files.update({dataset_name: (dataset_date, dataset_hash)})
+                    type(self).version_files.update(
+                        {dataset_name: (dataset_date, dataset_hash)}
+                    )
         except URLError as e:
             if self.offline:
-                logger.warning("Unable to verify BUSCO datasets because of offline mode")
+                logger.warning(
+                    "Unable to verify BUSCO datasets because of offline mode"
+                )
             else:
-                SystemExit(e)
+                raise SystemExit(e)
         return
 
     @log("Downloading information on latest versions of BUSCO data...", logger)
@@ -98,20 +103,26 @@ class BuscoDownloadManager:
                     dataset_date = line[1]
                     break
         if not dataset_date:
-            raise SystemExit("Creation date could not be extracted from dataset.cfg file.")
+            raise SystemExit(
+                "Creation date could not be extracted from dataset.cfg file."
+            )
         return dataset_date
 
     def _check_existing_version(self, local_filepath, category, data_basename):
         try:
             latest_update = type(self).version_files[data_basename][0]
         except KeyError:
-            raise SystemExit("{} is not a valid option for '{}'".format(data_basename, category))
+            raise SystemExit(
+                "{} is not a valid option for '{}'".format(data_basename, category)
+            )
         path_basename, extension = os.path.splitext(data_basename)
 
         if category == "lineages":
             latest_version = ".".join([path_basename, latest_update])
             try:
-                dataset_date = self._extract_creation_date(os.path.join(local_filepath, "dataset.cfg"))
+                dataset_date = self._extract_creation_date(
+                    os.path.join(local_filepath, "dataset.cfg")
+                )
                 up_to_date = dataset_date == latest_update
                 present = True
             except FileNotFoundError:
@@ -119,11 +130,20 @@ class BuscoDownloadManager:
                 present = False
 
         else:
-            latest_version = ".".join([path_basename, latest_update, extension.lstrip(".")])
+            latest_version = ".".join(
+                [path_basename, latest_update, extension.lstrip(".")]
+            )
             local_filepath = local_filepath.replace(data_basename, latest_version)
             up_to_date = os.path.exists(local_filepath)
             path_to_check, extension_to_check = os.path.splitext(local_filepath)
-            present = len(glob.glob("{}.*.{}".format(path_to_check[0:-11], extension_to_check[1:]))) > 0
+            present = (
+                len(
+                    glob.glob(
+                        "{}.*.{}".format(path_to_check[0:-11], extension_to_check[1:])
+                    )
+                )
+                > 0
+            )
 
         hash = type(self).version_files[data_basename][1]
 
@@ -136,44 +156,74 @@ class BuscoDownloadManager:
         elif "/" in data_name:
             raise SystemExit("{} does not exist".format(data_name))
         if self.offline:
-            if category == 'lineages':
-                local_dataset = os.path.join(self.local_download_path, category, data_name)
+            if category == "lineages":
+                local_dataset = os.path.join(
+                    self.local_download_path, category, data_name
+                )
                 if os.path.exists(local_dataset):
                     return local_dataset
                 else:
-                    raise SystemExit("Unable to run BUSCO in offline mode. Dataset {} does not "
-                                     "exist.".format(local_dataset))
+                    raise SystemExit(
+                        "Unable to run BUSCO in offline mode. Dataset {} does not "
+                        "exist.".format(local_dataset)
+                    )
             else:
                 basename, extension = os.path.splitext(data_name)
-                placement_files = sorted(glob.glob(os.path.join(
-                    self.local_download_path, category, "{}.*{}".format(basename, extension))))
+                placement_files = sorted(
+                    glob.glob(
+                        os.path.join(
+                            self.local_download_path,
+                            category,
+                            "{}.*{}".format(basename, extension),
+                        )
+                    )
+                )
                 if len(placement_files) > 0:
                     return placement_files[-1]
                     # todo: for offline mode, log which files are being used (in case of more than one glob match)
                 else:
-                    raise SystemExit("Unable to run BUSCO placer in offline mode. Cannot find necessary placement "
-                                     "files in {}".format(self.local_download_path))
+                    raise SystemExit(
+                        "Unable to run BUSCO placer in offline mode. Cannot find necessary placement "
+                        "files in {}".format(self.local_download_path)
+                    )
         data_basename = os.path.basename(data_name)
         local_filepath = os.path.join(self.local_download_path, category, data_basename)
-        present, up_to_date, latest_version, local_filepath, hash = self._check_existing_version(
-            local_filepath, category, data_basename)
+        (
+            present,
+            up_to_date,
+            latest_version,
+            local_filepath,
+            hash,
+        ) = self._check_existing_version(local_filepath, category, data_basename)
 
         if (not up_to_date and self.update_data) or not present:
             # download
             self._create_category_dir(category)
             compression_extension = ".tar.gz"
-            remote_filepath = os.path.join(self.download_base_url, category, latest_version+compression_extension)
-            if present and category == 'lineages':
+            remote_filepath = os.path.join(
+                self.download_base_url, category, latest_version + compression_extension
+            )
+            if present and category == "lineages":
                 self._rename_old_version(local_filepath)
-            download_success = self._download_file(remote_filepath, local_filepath+compression_extension, hash)
+            download_success = self._download_file(
+                remote_filepath, local_filepath + compression_extension, hash
+            )
             if download_success:
-                local_filepath = self._decompress_file(local_filepath+compression_extension)
+                local_filepath = self._decompress_file(
+                    local_filepath + compression_extension
+                )
                 if present:
-                    logger.warning("The file or folder {} was updated automatically.".format(data_basename))
+                    logger.warning(
+                        "The file or folder {} was updated automatically.".format(
+                            data_basename
+                        )
+                    )
         elif not up_to_date:
-            logger.warning("The file or folder {} is not the last available version. "
-                           "To update all data files to the last version, add the parameter "
-                           "--update-data in your next run.".format(local_filepath))
+            logger.warning(
+                "The file or folder {} is not the last available version. "
+                "To update all data files to the last version, add the parameter "
+                "--update-data in your next run.".format(local_filepath)
+            )
 
         return local_filepath
 
@@ -182,12 +232,20 @@ class BuscoDownloadManager:
         if os.path.exists(local_filepath):
             try:
                 os.rename(local_filepath, "{}.old".format(local_filepath))
-                logger.info("Renaming {} into {}.old".format(local_filepath, local_filepath))
+                logger.info(
+                    "Renaming {} into {}.old".format(local_filepath, local_filepath)
+                )
             except OSError:
                 try:
                     timestamp = time.time()
-                    os.rename(local_filepath, "{}.old.{}".format(local_filepath, timestamp))
-                    logger.info("Renaming {} into {}.old.{}".format(local_filepath, local_filepath, timestamp))
+                    os.rename(
+                        local_filepath, "{}.old.{}".format(local_filepath, timestamp)
+                    )
+                    logger.info(
+                        "Renaming {} into {}.old.{}".format(
+                            local_filepath, local_filepath, timestamp
+                        )
+                    )
                 except OSError:
                     pass
         return
@@ -198,13 +256,18 @@ class BuscoDownloadManager:
             urllib.request.urlretrieve(remote_filepath, local_filepath)
             observed_hash = type(self)._md5(local_filepath)
             if observed_hash != expected_hash:
-                logger.error("md5 hash is incorrect: {} while {} expected".format(str(observed_hash),
-                                                                                  str(expected_hash)))
+                logger.error(
+                    "md5 hash is incorrect: {} while {} expected".format(
+                        str(observed_hash), str(expected_hash)
+                    )
+                )
                 logger.info("deleting corrupted file {}".format(local_filepath))
                 os.remove(local_filepath)
-                raise SystemExit("BUSCO was unable to download or update all necessary files")
+                raise SystemExit(
+                    "BUSCO was unable to download or update all necessary files"
+                )
             else:
-                logger.debug('md5 hash is {}'.format(observed_hash))
+                logger.debug("md5 hash is {}".format(observed_hash))
         except URLError:
             logger.error("Cannot reach {}".format(remote_filepath))
             return False

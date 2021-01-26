@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # coding: utf-8
 
 """
@@ -8,19 +8,16 @@
 .. versionadded:: 4.0.0
 .. versionchanged:: 4.0.0
 
-Copyright (c) 2016-2020, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2021, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 
 """
-import glob
 import json
 import os
-from busco.Toolset import Tool
 from busco.BuscoLogger import BuscoLogger
 from busco.BuscoLogger import LogDecorator as log
-from busco.BuscoDownloadManager import BuscoDownloadManager
 from Bio import SeqIO
-from busco.BuscoTools import SEPPRunner
+from busco.busco_tools.sepp import SEPPRunner
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -29,7 +26,10 @@ class BuscoPlacer:
 
     _logger = BuscoLogger.get_logger(__name__)
 
-    @log("***** Searching tree for chosen lineage to find best taxonomic match *****\n", logger)
+    @log(
+        "***** Searching tree for chosen lineage to find best taxonomic match *****\n",
+        logger,
+    )
     def __init__(self, config, run_folder, protein_seqs, single_copy_buscos):
         self._config = config
         self._params = config
@@ -46,42 +46,60 @@ class BuscoPlacer:
         self.datasets_version = self._config.get("busco_run", "datasets_version")
         self.protein_seqs = protein_seqs
         self.single_copy_buscos = single_copy_buscos  # dict
-        self._init_tools()
+        self.init_tools()
 
     def _download_placement_files(self):
-        self.ref_markers_file = self.downloader.get("list_of_reference_markers.{0}_{1}.txt".format(
-            os.path.basename(self.run_folder).split("_")[-2],
-            self.datasets_version),
-            "placement_files")
-        self.tree_nwk_file = self.downloader.get("tree.{0}_{1}.nwk".format(
-            os.path.basename(self.run_folder).split("_")[-2],
-            self.datasets_version),
-            "placement_files")
-        self.tree_metadata_file = self.downloader.get("tree_metadata.{0}_{1}.txt".format(
-            os.path.basename(self.run_folder).split("_")[-2],
-            self.datasets_version),
-            "placement_files")
-        self.supermatrix_file = self.downloader.get("supermatrix.aln.{0}_{1}.faa".format(
-            os.path.basename(self.run_folder).split("_")[-2],
-            self.datasets_version),
-            "placement_files")
-        self.taxid_busco_file = self.downloader.get("mapping_taxids-busco_dataset_name.{0}_{1}.txt".format(
-            os.path.basename(self.run_folder).split("_")[-2],
-            self.datasets_version),
-            "placement_files")
-        self.taxid_lineage_file = self.downloader.get("mapping_taxid-lineage.{0}_{1}.txt".format(
-            os.path.basename(self.run_folder).split("_")[-2],
-            self.datasets_version),
-            "placement_files")
+        self.ref_markers_file = self.downloader.get(
+            "list_of_reference_markers.{0}_{1}.txt".format(
+                os.path.basename(self.run_folder).split("_")[-2], self.datasets_version
+            ),
+            "placement_files",
+        )
+        self.tree_nwk_file = self.downloader.get(
+            "tree.{0}_{1}.nwk".format(
+                os.path.basename(self.run_folder).split("_")[-2], self.datasets_version
+            ),
+            "placement_files",
+        )
+        self.tree_metadata_file = self.downloader.get(
+            "tree_metadata.{0}_{1}.txt".format(
+                os.path.basename(self.run_folder).split("_")[-2], self.datasets_version
+            ),
+            "placement_files",
+        )
+        self.supermatrix_file = self.downloader.get(
+            "supermatrix.aln.{0}_{1}.faa".format(
+                os.path.basename(self.run_folder).split("_")[-2], self.datasets_version
+            ),
+            "placement_files",
+        )
+        self.taxid_busco_file = self.downloader.get(
+            "mapping_taxids-busco_dataset_name.{0}_{1}.txt".format(
+                os.path.basename(self.run_folder).split("_")[-2], self.datasets_version
+            ),
+            "placement_files",
+        )
+        self.taxid_lineage_file = self.downloader.get(
+            "mapping_taxid-lineage.{0}_{1}.txt".format(
+                os.path.basename(self.run_folder).split("_")[-2], self.datasets_version
+            ),
+            "placement_files",
+        )
         return
 
     def _get_placement_file_versions(self):
         placement_file_versions = [
             os.path.basename(filepath)
-            for filepath in [self.ref_markers_file, self.tree_nwk_file, self.tree_metadata_file,
-                             self.supermatrix_file, self.taxid_busco_file, self.taxid_lineage_file]]
+            for filepath in [
+                self.ref_markers_file,
+                self.tree_nwk_file,
+                self.tree_metadata_file,
+                self.supermatrix_file,
+                self.taxid_busco_file,
+                self.taxid_lineage_file,
+            ]
+        ]
         return placement_file_versions
-
 
     @log("Extract markers...", logger)
     def define_dataset(self):
@@ -95,15 +113,9 @@ class BuscoPlacer:
 
         return dataset, placement_file_versions
 
-    def _init_tools(self):
+    def init_tools(self):
         setattr(SEPPRunner, "config", self._config)
         self.sepp_runner = SEPPRunner()
-        # try:
-        #     assert isinstance(self._sepp, Tool)
-        # except AttributeError:
-        #     self._sepp = Tool("sepp", self._config)
-        # except AssertionError:
-        #     raise SystemExit("SEPP should be a tool")
 
     def _pick_dataset(self):
 
@@ -115,7 +127,12 @@ class BuscoPlacer:
         with open(self.taxid_busco_file) as f:
             for line in f:
                 datasets_mapping.update(
-                    {line.strip().split("\t")[0]: line.strip().split("\t")[1].split(",")[0]}
+                    {
+                        line.strip()
+                        .split("\t")[0]: line.strip()
+                        .split("\t")[1]
+                        .split(",")[0]
+                    }
                 )
 
         # load the lineage for each taxid in a dict {taxid:reversed_lineage}
@@ -139,7 +156,9 @@ class BuscoPlacer:
                     parents.update({t: line.strip().split("\t")[4].split(",")[0:i]})
 
         for t in parents:
-            for p in parents[t][::-1]: # reverse the order to get the deepest parent, not the root one
+            for p in parents[t][
+                ::-1
+            ]:  # reverse the order to get the deepest parent, not the root one
                 if p in datasets_mapping:
                     taxid_dataset.update({t: p})
                     break
@@ -150,12 +169,16 @@ class BuscoPlacer:
         # figure out which taxid to use by using the highest number of markers and some extra rules
 
         try:
-            with open(os.path.join(self.placement_folder, "output_placement.json")) as json_file:
+            with open(
+                os.path.join(self.placement_folder, "output_placement.json")
+            ) as json_file:
                 data = json.load(json_file)
             tree = data["tree"]
             placements = data["placements"]
         except FileNotFoundError:
-            raise SystemExit("Placements failed. Try to rerun increasing the memory or select a lineage manually.")
+            raise SystemExit(
+                "Placements failed. Try to rerun increasing the memory or select a lineage manually."
+            )
 
         node_weight = {}
         n_p = 0
@@ -192,7 +215,9 @@ class BuscoPlacer:
         choice = []
 
         for key in node_weight:
-            type(self)._logger.debug('%s markers assigned to the taxid %s' % (node_weight[key],key))
+            type(self)._logger.debug(
+                "%s markers assigned to the taxid %s" % (node_weight[key], key)
+            )
 
         # taxid for which no threshold or minimal amount of placement should be considered.
         # If it is the best, go for it.
@@ -218,8 +243,8 @@ class BuscoPlacer:
         if len(choice) > 1:
             # more than one taxid should be considered, pick the common ancestor
             choice = self._get_common_ancestor(choice, parents)
-            #print('last common')
-            #print(choice)
+            # print('last common')
+            # print(choice)
         elif len(choice) == 0:
             if run_folder.split("/")[-1].split("_")[-2] == "bacteria":
                 choice.append("2")
@@ -237,7 +262,8 @@ class BuscoPlacer:
             else:
                 key_taxid = None  # unexpected. Should throw an exception or use assert.
             type(self)._logger.info(
-                "Not enough markers were placed on the tree (%s). Root lineage %s is kept" % (max_markers, datasets_mapping[taxid_dataset[key_taxid]])
+                "Not enough markers were placed on the tree (%s). Root lineage %s is kept"
+                % (max_markers, datasets_mapping[taxid_dataset[key_taxid]])
             )
             return [
                 datasets_mapping[taxid_dataset[key_taxid]],
@@ -245,7 +271,14 @@ class BuscoPlacer:
                 sum(node_weight.values()),
             ]
 
-        type(self)._logger.info('Lineage %s is selected, supported by %s markers out of %s' % (datasets_mapping[taxid_dataset[choice[0]]],max_markers,sum(node_weight.values())))
+        type(self)._logger.info(
+            "Lineage %s is selected, supported by %s markers out of %s"
+            % (
+                datasets_mapping[taxid_dataset[choice[0]]],
+                max_markers,
+                sum(node_weight.values()),
+            )
+        )
 
         return [
             datasets_mapping[taxid_dataset[choice[0]]],
@@ -260,12 +293,10 @@ class BuscoPlacer:
         # order will be lost with sets, so keep in a list the lineage of one entry to later pick the deepest ancestor
         ordered_lineage = []
         for c in choice:
-            #print('c is %s' % c)
-            if len(parents[c]) > len(
-                ordered_lineage
-            ):
-            #    print('len parent c is %s' % len(parents[c]))
-            #    print('len ordered lineage is %s' % ordered_lineage)
+            # print('c is %s' % c)
+            if len(parents[c]) > len(ordered_lineage):
+                #    print('len parent c is %s' % len(parents[c]))
+                #    print('len ordered lineage is %s' % ordered_lineage)
                 # probably useless. Init with parents[choice[0] should work
                 ordered_lineage = parents[c]
             #    print('ordered_lineage us %s' % ordered_lineage)
@@ -279,16 +310,19 @@ class BuscoPlacer:
 
     @log("Place the markers on the reference tree...", logger)
     def _run_sepp(self):
-        # self.sepp_runner = SEPPRunner(self._sepp, self.run_folder, self.placement_folder, self.tree_nwk_file,
-        #                               self.tree_metadata_file, self.supermatrix_file, self.downloader,
-        #                               self.datasets_version, self.cpus)
-        self.sepp_runner.configure_runner(self.tree_nwk_file, self.tree_metadata_file, self.supermatrix_file, self.downloader)
+        self.sepp_runner.configure_runner(
+            self.tree_nwk_file,
+            self.tree_metadata_file,
+            self.supermatrix_file,
+            self.downloader,
+        )
         if self.restart and self.sepp_runner.check_previous_completed_run():
             logger.info("Skipping SEPP run as it has already been completed")
         else:
             self.restart = False
             self._config.set("busco_run", "restart", str(self.restart))
             self.sepp_runner.run()
+            self.sepp_runner.cleanup()
 
     def _extract_marker_sequences(self):
         """
@@ -299,16 +333,15 @@ class BuscoPlacer:
         :type: str
         """
 
-
-
         with open(self.ref_markers_file, "r") as f:
             marker_list = [line.strip() for line in f]
-
 
         marker_genes_names = []
         for busco, gene_matches in self.single_copy_buscos.items():
             if busco in marker_list:
-                marker_genes_names.append(list(gene_matches.keys())[0])  # The list should only have one entry because they are single copy buscos
+                marker_genes_names.append(
+                    list(gene_matches.keys())[0]
+                )  # The list should only have one entry because they are single copy buscos
 
         marker_genes_records = []
         if isinstance(self.protein_seqs, (str,)):
@@ -327,4 +360,3 @@ class BuscoPlacer:
         marker_genes_file = os.path.join(self.placement_folder, "marker_genes.fasta")
         with open(marker_genes_file, "w") as output:
             SeqIO.write(marker_genes_records, output, "fasta")
-

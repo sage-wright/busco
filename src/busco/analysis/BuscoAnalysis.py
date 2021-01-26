@@ -1,18 +1,18 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # coding: utf-8
 """
 .. module:: BuscoAnalysis
    :synopsis: BuscoAnalysis implements general BUSCO analysis specifics
 .. versionadded:: 3.0.0
-.. versionchanged:: 4.0.7
+.. versionchanged:: 5.0.0
 
-Copyright (c) 2016-2020, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2021, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 """
 
 from abc import ABCMeta, abstractmethod
 from busco.BuscoConfig import BuscoConfig, BuscoConfigAuto
-from busco.BuscoTools import HMMERRunner
+from busco.busco_tools.hmmer import HMMERRunner
 import os
 from busco.BuscoLogger import BuscoLogger
 from busco.BuscoLogger import LogDecorator as log
@@ -25,6 +25,7 @@ class BuscoAnalysis(metaclass=ABCMeta):
     This abstract base class (ABC) defines methods required for most of BUSCO analyses and has to be extended
     by each specific analysis class
     """
+
     config = None
 
     def __init__(self):
@@ -39,24 +40,33 @@ class BuscoAnalysis(metaclass=ABCMeta):
         # Get paths
         self._lineage_results_dir = self.config.get("busco_run", "lineage_results_dir")
         self.main_out = self.config.get("busco_run", "main_out")
-        self._working_dir = (os.path.join(self.main_out, "auto_lineage")
-                             if isinstance(self.config, BuscoConfigAuto)
-                             else self.main_out)
-        self._run_folder = os.path.join(self._working_dir, self._lineage_results_dir)
+        self._working_dir = (
+            os.path.join(self.main_out, "auto_lineage")
+            if isinstance(self.config, BuscoConfigAuto)
+            else self.main_out
+        )
+        self.run_folder = os.path.join(self._working_dir, self._lineage_results_dir)
         self._log_folder = os.path.join(self.main_out, "logs")
 
         # Get other useful variables
-        self._input_file = self.config.get("busco_run", "in")
+        self.input_file = self.config.get("busco_run", "in")
         self._lineage_dataset = self.config.get("busco_run", "lineage_dataset")
         self._lineage_name = os.path.basename(self._lineage_dataset)
         self._domain = self.config.get("busco_run", "domain")
-        self._has_variants_file = os.path.exists(os.path.join(self._lineage_dataset, "ancestral_variants"))
+        self._has_variants_file = os.path.exists(
+            os.path.join(self._lineage_dataset, "ancestral_variants")
+        )
         self._dataset_creation_date = self.config.get("busco_run", "creation_date")
         self.restart = self.config.getboolean("busco_run", "restart")
 
-        self.gene_details = None  # Dictionary containing coordinate information for predicted genes.
+        self.gene_details = (
+            {}
+        )  # Dictionary containing coordinate information for predicted genes.
+        self.headers = set()
 
-        self._lineages_download_path = os.path.join(self.config.get("busco_run", "download_path"), "lineages")
+        self._lineages_download_path = os.path.join(
+            self.config.get("busco_run", "download_path"), "lineages"
+        )
 
         self.hmmer_runner = None
 
@@ -76,8 +86,12 @@ class BuscoAnalysis(metaclass=ABCMeta):
             pass
 
     @abstractmethod
-    @log("Running BUSCO using lineage dataset {0} ({1}, {2})", logger,
-         attr_name=["_lineage_name", "_domain", "_dataset_creation_date"], on_func_exit=True)
+    @log(
+        "Running BUSCO using lineage dataset {0} ({1}, {2})",
+        logger,
+        attr_name=["_lineage_name", "_domain", "_dataset_creation_date"],
+        on_func_exit=True,
+    )
     def run_analysis(self):
         """
         Abstract method, override to call all needed steps for running the child analysis.
@@ -87,22 +101,41 @@ class BuscoAnalysis(metaclass=ABCMeta):
         self._check_data_integrity()
 
     @log("***** Run HMMER on gene sequences *****", logger)
-    def run_hmmer(self, input_sequences):
+    def run_hmmer(self, input_sequences, busco_ids=None):
         """
         This function runs hmmsearch.
         """
-        files = sorted(os.listdir(os.path.join(self._lineage_dataset, "hmms")))
-        busco_ids = [os.path.splitext(f)[0] for f in files]  # Each Busco ID has a HMM file of the form "<busco_id>.hmm"
-        self.hmmer_runner.configure_runner(input_sequences, busco_ids, self._mode, self.gene_details)
+        if not busco_ids:
+            files = sorted(os.listdir(os.path.join(self._lineage_dataset, "hmms")))
+            busco_ids = [
+                os.path.splitext(f)[0] for f in files
+            ]  # Each Busco ID has a HMM file of the form "<busco_id>.hmm"
+        self.hmmer_runner.configure_runner(
+            input_sequences, busco_ids, self._mode, self.gene_details
+        )
         if self.restart and self.hmmer_runner.check_previous_completed_run():
             logger.info("Skipping HMMER run as output already processed")
+        elif len(os.listdir(self.hmmer_runner.results_dir)) > 0:
+            raise SystemExit(
+                "HMMER results directory not empty. If you are running in restart mode, make sure you are "
+                "using the same eukaryotic gene predictor (metaeuk/augustus) as before."
+            )
         else:
             self.restart = False
             self.config.set("busco_run", "restart", str(self.restart))
             self.hmmer_runner.run()
         self.hmmer_runner.process_output()
-        self.hmmer_runner.write_hmmer_results()
+        self.validate_output()
+        self.hmmer_runner.filter()
+        self.hmmer_runner.consolidate_busco_lists()
+        output = self.hmmer_runner.create_output_content()
+        self.hmmer_runner.write_hmmer_results(output)
         self.hmmer_runner.produce_hmmer_summary()
+        return
+
+    def validate_output(
+        self,
+    ):  # Transparent method that can be overwritten by child classes
         return
 
     @log("Checking dataset for HMM profiles", logger, debug=True)
@@ -119,30 +152,48 @@ class BuscoAnalysis(metaclass=ABCMeta):
         # Check hmm files exist
         files = os.listdir(os.path.join(self._lineage_dataset, "hmms"))
         if not files:
-            raise SystemExit("The dataset you provided lacks hmm profiles in {}".format(
-                os.path.join(self._lineage_dataset, "hmms")))
+            raise SystemExit(
+                "The dataset you provided lacks hmm profiles in {}".format(
+                    os.path.join(self._lineage_dataset, "hmms")
+                )
+            )
 
         if self._domain == "eukaryota":
             # Check prfl folder exists and contains profiles
-            for dirpath, dirnames, files in os.walk(os.path.join(self._lineage_dataset, "prfl")):
+            for dirpath, dirnames, files in os.walk(
+                os.path.join(self._lineage_dataset, "prfl")
+            ):
                 if not files:
-                    raise SystemExit("The dataset you provided lacks elements in {}".format(
-                        os.path.join(self._lineage_dataset, "prfl")))
+                    raise SystemExit(
+                        "The dataset you provided lacks elements in {}".format(
+                            os.path.join(self._lineage_dataset, "prfl")
+                        )
+                    )
 
         if not self._has_variants_file:
-            logger.warning("The dataset you provided does not contain the file ancestral_variants, likely because it "
-                           "is an old version. All blast steps will use the file \"ancestral\" instead")
+            logger.warning(
+                "The dataset you provided does not contain the file ancestral_variants, likely because it "
+                'is an old version. All blast steps will use the file "ancestral" instead'
+            )
 
         return
 
     def _check_data_integrity(self):
         self._check_dataset_integrity()
-        if not os.stat(self._input_file).st_size > 0:
+        if not os.stat(self.input_file).st_size > 0:
             raise SystemExit("Input file is empty.")
-        with open(self._input_file) as f:
+        with open(self.input_file) as f:
             for line in f:
                 if line.startswith(">"):
                     self._check_fasta_header(line)
+                    self._check_seq_uniqueness(line)
+        return
+
+    def _check_seq_uniqueness(self, line):
+        seq_id = line.split(" ")[0]
+        if seq_id in self.headers:
+            raise SystemExit("Duplicate of sequence {} in input file".format(seq_id))
+        self.headers.add(seq_id)
         return
 
     @staticmethod
@@ -157,22 +208,25 @@ class BuscoAnalysis(metaclass=ABCMeta):
         for char in BuscoConfig.FORBIDDEN_HEADER_CHARS:
             if char in header:
                 raise SystemExit(
-                    "The character \"%s\" is present in the fasta header %s, "
+                    'The character "%s" is present in the fasta header %s, '
                     "which will crash BUSCO. Please clean the header of your "
-                    "input file." % (char, header.strip()))
+                    "input file." % (char, header.strip())
+                )
 
         for char in BuscoConfig.FORBIDDEN_HEADER_CHARS_BEFORE_SPLIT:
             if char in header.split()[0]:
                 raise SystemExit(
-                    "The character \"%s\" is present in the fasta header %s, "
+                    'The character "%s" is present in the fasta header %s, '
                     "which will crash Reader. Please clean the header of your"
-                    " input file." % (char, header.split()[0].strip()))
+                    " input file." % (char, header.split()[0].strip())
+                )
 
         if header.split()[0] == ">":
             raise SystemExit(
                 "A space is present in the fasta header %s, directly after "
-                "\">\" which will crash Reader. Please clean the header of "
-                "your input file." % (header.strip()))
+                '">" which will crash Reader. Please clean the header of '
+                "your input file." % (header.strip())
+            )
 
     def _create_dirs(self):
         """
@@ -198,15 +252,18 @@ class BuscoAnalysis(metaclass=ABCMeta):
         :raises SystemExit: if write permissions are not available to the specified location
         """
         try:
-            os.makedirs(self._run_folder)
+            os.makedirs(self.run_folder)
         except FileExistsError:
             if not self.restart:
-                raise SystemExit("Something went wrong. BUSCO stopped before overwriting run folder "
-                                 "{}".format(self._run_folder))
+                raise SystemExit(
+                    "Something went wrong. BUSCO stopped before overwriting run folder "
+                    "{}".format(self.run_folder)
+                )
         except PermissionError:
             raise SystemExit(
                 "Cannot write to the output directory, please make sure "
-                "you have write permissions to {}".format(self._run_folder))
+                "you have write permissions to {}".format(self.run_folder)
+            )
         return
 
     @log("Check all required tools are accessible...", logger, debug=True)

@@ -1,7 +1,7 @@
-INFO:	***** Start a BUSCO v4.1.3 analysis, current time: 07/01/2020 18:43:08 *****
-INFO:	Configuring BUSCO with /busco/config/config.ini
+INFO:	***** Start a BUSCO v5.0.0 analysis, current time: 01/25/2021 20:10:29 *****
+INFO:	Configuring BUSCO with local environment
 INFO:	Mode is genome
-INFO:	Input file is genome.fna
+INFO:	Input file is /busco_wd/genome.fna
 INFO:	Downloading information on latest versions of BUSCO data...
 WARNING:	Running Auto Lineage Selector as no lineage dataset was specified. This will take a little longer than normal. If you know what lineage dataset you want to use, please specify this in the config file or using the -l (--lineage-dataset) flag in the command line.
 INFO:	No lineage specified. Running lineage auto selector.
@@ -10,16 +10,16 @@ INFO:	***** Starting Auto Select Lineage *****
 	This process runs BUSCO on the generic lineage datasets for the domains archaea, bacteria and eukaryota. Once the optimal domain is selected, BUSCO automatically attempts to find the most appropriate BUSCO dataset to use based on phylogenetic placement.
 	--auto-lineage-euk and --auto-lineage-prok are also available if you know your input assembly is, or is not, an eukaryote. See the user guide for more information.
 	A reminder: Busco evaluations are valid when an appropriate dataset is used, i.e., the dataset belongs to the lineage of the species to test. Because of overlapping markers/spurious matches among domains, busco matches in another domain do not necessarily mean that your genome/proteome contains sequences from this domain. However, a high busco score in multiple domains might help you identify possible contaminations.
-INFO:	Downloading file 'https://busco-data.ezlab.org/v4/data/lineages/archaea_odb10.2019-01-04.tar.gz'
+INFO:	Downloading file 'https://busco-data.ezlab.org/v5/data/lineages/archaea_odb10.2020-03-06.tar.gz'
 INFO:	Decompressing file '/busco_wd/busco_downloads/lineages/archaea_odb10.tar.gz'
-INFO:	Running BUSCO using lineage dataset archaea_odb10 (prokaryota, 2019-01-04)
+INFO:	Running BUSCO using lineage dataset archaea_odb10 (prokaryota, 2020-03-06)
 INFO:	***** Run Prodigal on input to predict and extract genes *****
 INFO:	Running Prodigal with genetic code 11 in single mode
-INFO:	Running 1 job(s) on prodigal, starting at 07/01/2020 18:43:09
+INFO:	Running 1 job(s) on prodigal, starting at 01/25/2021 20:10:30
 INFO:	[prodigal]	1 of 1 task(s) completed
 INFO:	Genetic code 11 selected as optimal
 INFO:	***** Run HMMER on gene sequences *****
-INFO:	Running 194 job(s) on hmmsearch, starting at 07/01/2020 18:43:10
+INFO:	Running 194 job(s) on hmmsearch, starting at 01/25/2021 20:10:32
 INFO:	[hmmsearch]	20 of 194 task(s) completed
 INFO:	[hmmsearch]	39 of 194 task(s) completed
 INFO:	[hmmsearch]	59 of 194 task(s) completed
@@ -32,13 +32,13 @@ INFO:	[hmmsearch]	175 of 194 task(s) completed
 INFO:	[hmmsearch]	194 of 194 task(s) completed
 INFO:	Results:	C:5.2%[S:5.2%,D:0.0%],F:1.5%,M:93.3%,n:194	   
 
-INFO:	Downloading file 'https://busco-data.ezlab.org/v4/data/lineages/bacteria_odb10.2019-06-26.tar.gz'
+INFO:	Downloading file 'https://busco-data.ezlab.org/v5/data/lineages/bacteria_odb10.2020-03-06.tar.gz'
 INFO:	Decompressing file '/busco_wd/busco_downloads/lineages/bacteria_odb10.tar.gz'
-INFO:	Running BUSCO using lineage dataset bacteria_odb10 (prokaryota, 2019-06-26)
+INFO:	Running BUSCO using lineage dataset bacteria_odb10 (prokaryota, 2020-03-06)
 INFO:	***** Run Prodigal on input to predict and extract genes *****
 INFO:	Genetic code 11 selected as optimal
 INFO:	***** Run HMMER on gene sequences *****
-INFO:	Running 124 job(s) on hmmsearch, starting at 07/01/2020 18:43:13
+INFO:	Running 124 job(s) on hmmsearch, starting at 01/25/2021 20:10:34
 INFO:	[hmmsearch]	13 of 124 task(s) completed
 INFO:	[hmmsearch]	25 of 124 task(s) completed
 INFO:	[hmmsearch]	38 of 124 task(s) completed
@@ -51,90 +51,63 @@ INFO:	[hmmsearch]	112 of 124 task(s) completed
 INFO:	[hmmsearch]	124 of 124 task(s) completed
 INFO:	Results:	C:21.0%[S:21.0%,D:0.0%],F:0.8%,M:78.2%,n:124	   
 
-INFO:	Downloading file 'https://busco-data.ezlab.org/v4/data/lineages/eukaryota_odb10.2019-11-20.tar.gz'
+INFO:	Downloading file 'https://busco-data.ezlab.org/v5/data/lineages/eukaryota_odb10.2020-09-10.tar.gz'
 INFO:	Decompressing file '/busco_wd/busco_downloads/lineages/eukaryota_odb10.tar.gz'
-INFO:	Running BUSCO using lineage dataset eukaryota_odb10 (eukaryota, 2019-11-20)
-INFO:	Running 1 job(s) on makeblastdb, starting at 07/01/2020 18:43:16
-INFO:	Creating BLAST database with input file
-INFO:	[makeblastdb]	1 of 1 task(s) completed
-INFO:	Running a BLAST search for BUSCOs against created database
-INFO:	Running 1 job(s) on tblastn, starting at 07/01/2020 18:43:16
-INFO:	[tblastn]	1 of 1 task(s) completed
-INFO:	Running Augustus gene predictor on BLAST search results.
-INFO:	Running Augustus prediction using fly as species:
-INFO:	Running 10 job(s) on augustus, starting at 07/01/2020 18:43:18
-INFO:	[augustus]	1 of 10 task(s) completed
-INFO:	[augustus]	2 of 10 task(s) completed
-INFO:	[augustus]	3 of 10 task(s) completed
-INFO:	[augustus]	4 of 10 task(s) completed
-INFO:	[augustus]	5 of 10 task(s) completed
-INFO:	[augustus]	6 of 10 task(s) completed
-INFO:	[augustus]	7 of 10 task(s) completed
-INFO:	[augustus]	8 of 10 task(s) completed
-INFO:	[augustus]	9 of 10 task(s) completed
-INFO:	[augustus]	10 of 10 task(s) completed
-INFO:	Extracting predicted proteins...
+INFO:	Running BUSCO using lineage dataset eukaryota_odb10 (eukaryota, 2020-09-10)
+INFO:	Running 1 job(s) on metaeuk, starting at 01/25/2021 20:10:43
+INFO:	[metaeuk]	1 of 1 task(s) completed
 INFO:	***** Run HMMER on gene sequences *****
-INFO:	Running 4 job(s) on hmmsearch, starting at 07/01/2020 18:43:51
-INFO:	[hmmsearch]	1 of 4 task(s) completed
-INFO:	[hmmsearch]	2 of 4 task(s) completed
-INFO:	[hmmsearch]	3 of 4 task(s) completed
-INFO:	[hmmsearch]	4 of 4 task(s) completed
-WARNING:	BUSCO did not find any match. Make sure to check the log files if this is unexpected.
-INFO:	Results:	C:0.0%[S:0.0%,D:0.0%],F:0.0%,M:100.0%,n:255	   
+INFO:	Running 255 job(s) on hmmsearch, starting at 01/25/2021 20:11:02
+INFO:	[hmmsearch]	26 of 255 task(s) completed
+INFO:	[hmmsearch]	51 of 255 task(s) completed
+INFO:	[hmmsearch]	51 of 255 task(s) completed
+INFO:	[hmmsearch]	77 of 255 task(s) completed
+INFO:	[hmmsearch]	102 of 255 task(s) completed
+INFO:	[hmmsearch]	128 of 255 task(s) completed
+INFO:	[hmmsearch]	153 of 255 task(s) completed
+INFO:	[hmmsearch]	179 of 255 task(s) completed
+INFO:	[hmmsearch]	204 of 255 task(s) completed
+INFO:	[hmmsearch]	230 of 255 task(s) completed
+INFO:	[hmmsearch]	255 of 255 task(s) completed
+INFO:	Results:	C:1.2%[S:1.2%,D:0.0%],F:0.0%,M:98.8%,n:255	   
 
-INFO:	Starting second step of analysis. The gene predictor Augustus is retrained using the results from the initial run to yield more accurate results.
-INFO:	Extracting missing and fragmented buscos from the file ancestral_variants...
-INFO:	Running a BLAST search for BUSCOs against created database
-INFO:	Running 1 job(s) on tblastn, starting at 07/01/2020 18:43:52
-INFO:	[tblastn]	1 of 1 task(s) completed
-INFO:	Converting predicted genes to short genbank files
-WARNING:	No jobs to run on gff2gbSmallDNA.pl
-INFO:	All files converted to short genbank files, now training Augustus using Single-Copy Complete BUSCOs
-INFO:	Running 1 job(s) on new_species.pl, starting at 07/01/2020 18:44:07
-INFO:	[new_species.pl]	1 of 1 task(s) completed
-INFO:	Running 1 job(s) on etraining, starting at 07/01/2020 18:44:08
-INFO:	[etraining]	1 of 1 task(s) completed
-INFO:	Re-running Augustus with the new metaparameters, number of target BUSCOs: 255
-INFO:	Running Augustus gene predictor on BLAST search results.
-INFO:	Running Augustus prediction using BUSCO_test_bacteria as species:
-INFO:	Running 14 job(s) on augustus, starting at 07/01/2020 18:44:08
-INFO:	[augustus]	2 of 14 task(s) completed
-INFO:	[augustus]	3 of 14 task(s) completed
-INFO:	[augustus]	5 of 14 task(s) completed
-INFO:	[augustus]	6 of 14 task(s) completed
-INFO:	[augustus]	7 of 14 task(s) completed
-INFO:	[augustus]	9 of 14 task(s) completed
-INFO:	[augustus]	10 of 14 task(s) completed
-INFO:	[augustus]	12 of 14 task(s) completed
-INFO:	[augustus]	13 of 14 task(s) completed
-INFO:	[augustus]	14 of 14 task(s) completed
-INFO:	Extracting predicted proteins...
+INFO:	Extracting missing and fragmented buscos from the file refseq_db.faa...
+INFO:	Running 1 job(s) on metaeuk, starting at 01/25/2021 20:11:21
+INFO:	[metaeuk]	1 of 1 task(s) completed
 INFO:	***** Run HMMER on gene sequences *****
-WARNING:	No jobs to run on hmmsearch
-WARNING:	BUSCO did not find any match. Make sure to check the log files if this is unexpected.
-INFO:	Results:	C:0.0%[S:0.0%,D:0.0%],F:0.0%,M:100.0%,n:255	   
+INFO:	Running 252 job(s) on hmmsearch, starting at 01/25/2021 20:11:48
+INFO:	[hmmsearch]	26 of 252 task(s) completed
+INFO:	[hmmsearch]	51 of 252 task(s) completed
+INFO:	[hmmsearch]	76 of 252 task(s) completed
+INFO:	[hmmsearch]	101 of 252 task(s) completed
+INFO:	[hmmsearch]	126 of 252 task(s) completed
+INFO:	[hmmsearch]	152 of 252 task(s) completed
+INFO:	[hmmsearch]	177 of 252 task(s) completed
+INFO:	[hmmsearch]	202 of 252 task(s) completed
+INFO:	[hmmsearch]	227 of 252 task(s) completed
+INFO:	[hmmsearch]	252 of 252 task(s) completed
+INFO:	Validating exons and removing overlapping matches
+INFO:	Results:	C:1.2%[S:1.2%,D:0.0%],F:0.0%,M:98.8%,n:255	   
 
-WARNING:	Augustus did not produce a retrained species folder.
 INFO:	bacteria_odb10 selected
 
 INFO:	***** Searching tree for chosen lineage to find best taxonomic match *****
 
 INFO:	Extract markers...
-INFO:	Downloading file 'https://busco-data.ezlab.org/v4/data/placement_files/list_of_reference_markers.bacteria_odb10.2019-12-16.txt.tar.gz'
+INFO:	Downloading file 'https://busco-data.ezlab.org/v5/data/placement_files/list_of_reference_markers.bacteria_odb10.2019-12-16.txt.tar.gz'
 INFO:	Decompressing file '/busco_wd/busco_downloads/placement_files/list_of_reference_markers.bacteria_odb10.2019-12-16.txt.tar.gz'
-INFO:	Downloading file 'https://busco-data.ezlab.org/v4/data/placement_files/tree.bacteria_odb10.2019-12-16.nwk.tar.gz'
+INFO:	Downloading file 'https://busco-data.ezlab.org/v5/data/placement_files/tree.bacteria_odb10.2019-12-16.nwk.tar.gz'
 INFO:	Decompressing file '/busco_wd/busco_downloads/placement_files/tree.bacteria_odb10.2019-12-16.nwk.tar.gz'
-INFO:	Downloading file 'https://busco-data.ezlab.org/v4/data/placement_files/tree_metadata.bacteria_odb10.2019-12-16.txt.tar.gz'
+INFO:	Downloading file 'https://busco-data.ezlab.org/v5/data/placement_files/tree_metadata.bacteria_odb10.2019-12-16.txt.tar.gz'
 INFO:	Decompressing file '/busco_wd/busco_downloads/placement_files/tree_metadata.bacteria_odb10.2019-12-16.txt.tar.gz'
-INFO:	Downloading file 'https://busco-data.ezlab.org/v4/data/placement_files/supermatrix.aln.bacteria_odb10.2019-12-16.faa.tar.gz'
+INFO:	Downloading file 'https://busco-data.ezlab.org/v5/data/placement_files/supermatrix.aln.bacteria_odb10.2019-12-16.faa.tar.gz'
 INFO:	Decompressing file '/busco_wd/busco_downloads/placement_files/supermatrix.aln.bacteria_odb10.2019-12-16.faa.tar.gz'
-INFO:	Downloading file 'https://busco-data.ezlab.org/v4/data/placement_files/mapping_taxids-busco_dataset_name.bacteria_odb10.2019-12-16.txt.tar.gz'
+INFO:	Downloading file 'https://busco-data.ezlab.org/v5/data/placement_files/mapping_taxids-busco_dataset_name.bacteria_odb10.2019-12-16.txt.tar.gz'
 INFO:	Decompressing file '/busco_wd/busco_downloads/placement_files/mapping_taxids-busco_dataset_name.bacteria_odb10.2019-12-16.txt.tar.gz'
-INFO:	Downloading file 'https://busco-data.ezlab.org/v4/data/placement_files/mapping_taxid-lineage.bacteria_odb10.2019-12-16.txt.tar.gz'
+INFO:	Downloading file 'https://busco-data.ezlab.org/v5/data/placement_files/mapping_taxid-lineage.bacteria_odb10.2019-12-16.txt.tar.gz'
 INFO:	Decompressing file '/busco_wd/busco_downloads/placement_files/mapping_taxid-lineage.bacteria_odb10.2019-12-16.txt.tar.gz'
 INFO:	Place the markers on the reference tree...
-INFO:	Running 1 job(s) on sepp, starting at 07/01/2020 18:44:10
+INFO:	Running 1 job(s) on sepp, starting at 01/25/2021 20:11:51
 INFO:	[sepp]	1 of 1 task(s) completed
 INFO:	Not enough markers were placed on the tree (11). Root lineage bacteria is kept
 INFO:	
@@ -150,15 +123,11 @@ INFO:
 	|97	Missing BUSCOs (M)                        |
 	|124	Total BUSCO groups searched               |
 	--------------------------------------------------
-INFO:	BUSCO analysis done with WARNING(s). Total running time: 127 seconds
+INFO:	BUSCO analysis done with WARNING(s). Total running time: 129 seconds
 
 ***** Summary of warnings: *****
 WARNING:busco.ConfigManager	Running Auto Lineage Selector as no lineage dataset was specified. This will take a little longer than normal. If you know what lineage dataset you want to use, please specify this in the config file or using the -l (--lineage-dataset) flag in the command line.
-WARNING:busco.BuscoTools	BUSCO did not find any match. Make sure to check the log files if this is unexpected.
-WARNING:busco.Toolset	No jobs to run on gff2gbSmallDNA.pl
-WARNING:busco.Toolset	No jobs to run on hmmsearch
-WARNING:busco.BuscoTools	BUSCO did not find any match. Make sure to check the log files if this is unexpected.
-WARNING:busco.BuscoTools	Augustus did not produce a retrained species folder.
 
 INFO:	Results written in /busco_wd/test_bacteria
+INFO:	For assistance with interpreting the results, please consult the userguide: https://busco.ezlab.org/busco_userguide.html
 

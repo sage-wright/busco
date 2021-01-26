@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # coding: utf-8
 """
 .. module:: BuscoLogger
@@ -8,7 +8,7 @@
 
 This is a logger for the pipeline that extends the default Python logger class
 
-Copyright (c) 2016-2020, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2021, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 
 """
@@ -31,8 +31,18 @@ class LogDecorator:
 
     _log_once_keywords = {}
 
-    def __init__(self, msg, logger,
-                 on_func_exit=False, func_arg=None, attr_name=None, iswarn=False, debug=False, apply=None, log_once=False):
+    def __init__(
+        self,
+        msg,
+        logger,
+        on_func_exit=False,
+        func_arg=None,
+        attr_name=None,
+        iswarn=False,
+        debug=False,
+        apply=None,
+        log_once=False,
+    ):
         self.msg = msg
         self.logger = logger
         self.on_func_exit = on_func_exit
@@ -47,7 +57,7 @@ class LogDecorator:
     def __call__(self, func):
         def wrapped_func(*args, **kwargs):
             try:
-                if '{' in self.msg and self.on_func_exit:
+                if "{" in self.msg and self.on_func_exit:
                     self.retval = func(*args, **kwargs)
                     self.format_string(*args)
                 else:
@@ -56,6 +66,7 @@ class LogDecorator:
                 return self.retval
             except SystemExit:
                 raise
+
         return wrapped_func
 
     def format_string(self, *args):
@@ -67,8 +78,8 @@ class LogDecorator:
 
         if self.attr_name == "retvalue":
             string_arg = self.retval
-            if self.apply == 'join' and isinstance(string_arg, tuple):
-                string_arg = ' '.join(list(string_arg))
+            if self.apply == "join" and isinstance(string_arg, tuple):
+                string_arg = " ".join(list(string_arg))
             elif self.apply == "basename" and isinstance(string_arg, str):
                 string_arg = os.path.basename(string_arg)
             log_msg = self.msg.format(string_arg)
@@ -83,9 +94,11 @@ class LogDecorator:
 
                 try:
                     string_arg = getattr(obj_inst, self.attr_name)
-                    if self.apply == 'join' and isinstance(string_arg, list):
-                        string_arg = [str(arg) for arg in string_arg]  # Ensure all parameters are joinable strings
-                        string_arg = ' '.join(string_arg)
+                    if self.apply == "join" and isinstance(string_arg, list):
+                        string_arg = [
+                            str(arg) for arg in string_arg
+                        ]  # Ensure all parameters are joinable strings
+                        string_arg = " ".join(string_arg)
                     elif self.apply == "basename" and isinstance(string_arg, str):
                         string_arg = os.path.basename(string_arg)
 
@@ -98,7 +111,9 @@ class LogDecorator:
                 self.logger.error("No such attribute {}".format(self.attr_name))
 
             except IndexError:
-                self.logger.error("Index out of range for attribute {}".format(self.attr_name))
+                self.logger.error(
+                    "Index out of range for attribute {}".format(self.attr_name)
+                )
 
         elif self.func_arg is not None:
             try:
@@ -106,7 +121,9 @@ class LogDecorator:
                 log_msg = self.msg.format(string_arg)
 
             except IndexError:
-                self.logger.error("Index out of range for function argument {}".format(self.func_arg))
+                self.logger.error(
+                    "Index out of range for function argument {}".format(self.func_arg)
+                )
 
         else:
             log_msg = self.msg
@@ -127,10 +144,11 @@ class ToolLogger(logging.getLoggerClass()):
     def __init__(self, filename):
         super().__init__(filename)
         self.setLevel(type(self)._level)
-        self._external_formatter = logging.Formatter('%(message)s')
-        self._file_hdlr = logging.FileHandler(filename, mode='a', encoding="UTF-8")
+        self._external_formatter = logging.Formatter("%(message)s")
+        self._file_hdlr = logging.FileHandler(filename, mode="a", encoding="UTF-8")
         self._file_hdlr.setFormatter(self._external_formatter)
         self.addHandler(self._file_hdlr)
+
 
 # The following code was created by combining code based on a SO answer here:
 # https://stackoverflow.com/questions/4713932/decorate-delegate-a-file-object-to-add-functionality/4838875#4838875
@@ -157,7 +175,7 @@ class StreamLogger(io.IOBase):
 
     def _flusher_augustus_out(self):
         self._run = True
-        buf = b''
+        buf = b""
         timeout = 10
         read_only = select.POLLIN | select.POLLPRI | select.POLLHUP | select.POLLERR
         # Switched from select.select() to select.poll() using examples at https://pymotw.com/2/select/
@@ -175,14 +193,14 @@ class StreamLogger(io.IOBase):
                             self.gene_found = True
                         if b"command line" in buf:
                             self.output_complete = True
-                        data, buf = buf.split(b'\n', 1)
+                        data, buf = buf.split(b"\n", 1)
                         self.write(data.decode())
 
         self._run = None
 
     def _flusher(self):
         self._run = True
-        buf = b''
+        buf = b""
         timeout = 10
         read_only = select.POLLIN | select.POLLPRI | select.POLLHUP | select.POLLERR
         # Switched from select.select() to select.poll() using examples at https://pymotw.com/2/select/
@@ -196,7 +214,7 @@ class StreamLogger(io.IOBase):
                 if flag & (select.POLLIN | select.POLLPRI):
                     buf += os.read(fd, 4096)
                     while b"\n" in buf:
-                        data, buf = buf.split(b'\n', 1)
+                        data, buf = buf.split(b"\n", 1)
                         self.write(data.decode())
 
         self._run = None
@@ -233,9 +251,11 @@ class BuscoLogger(logging.getLoggerClass()):
         """
         super(BuscoLogger, self).__init__(name)
         self.setLevel(BuscoLogger._level)
-        self._normal_formatter = logging.Formatter('%(levelname)s:\t%(message)s')
-        self._verbose_formatter = logging.Formatter('%(levelname)s:%(name)s\t%(message)s')
-        self._external_formatter = logging.Formatter('%(message)s')
+        self._normal_formatter = logging.Formatter("%(levelname)s:\t%(message)s")
+        self._verbose_formatter = logging.Formatter(
+            "%(levelname)s:%(name)s\t%(message)s"
+        )
+        self._external_formatter = logging.Formatter("%(message)s")
 
         self._out_hdlr = logging.StreamHandler(sys.stdout)
         self._out_hdlr.addFilter(LessThanFilter(logging.ERROR))
@@ -250,10 +270,17 @@ class BuscoLogger(logging.getLoggerClass()):
 
         try:
             # Random id used in filename to avoid complications for parallel BUSCO runs.
-            self._file_hdlr = logging.FileHandler("busco_{}.log".format(type(self).random_id), mode="a")
+            self._file_hdlr = logging.FileHandler(
+                "busco_{}.log".format(type(self).random_id), mode="a"
+            )
         except IOError as e:
-            errStr = "No permission to write in the current directory: {}".format(os.getcwd()) if e.errno == 13 \
+            errStr = (
+                "No permission to write in the current directory: {}".format(
+                    os.getcwd()
+                )
+                if e.errno == 13
                 else "IO error({0}): {1}".format(e.errno, e.strerror)
+            )
             raise SystemExit(errStr)
 
         self._file_hdlr.setLevel(logging.DEBUG)
@@ -316,11 +343,12 @@ class BuscoLogger(logging.getLoggerClass()):
 
 # Code from https://stackoverflow.com/a/31459386/4844311
 
+
 class LessThanFilter(logging.Filter):
     def __init__(self, exclusive_maximum, name=""):
         super(LessThanFilter, self).__init__(name)
         self.max_level = exclusive_maximum
 
     def filter(self, record):
-        #non-zero return means we log this message
+        # non-zero return means we log this message
         return 1 if record.levelno < self.max_level else 0
