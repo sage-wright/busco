@@ -1,13 +1,8 @@
 import unittest
 from busco import BuscoConfig
-from configparser import ConfigParser
-import os
 import shutil
-import io
-import sys
 import os
 from unittest.mock import Mock
-from unittest.mock import create_autospec
 from unittest.mock import patch
 from pathlib import Path
 
@@ -19,74 +14,84 @@ class TestBuscoConfig(unittest.TestCase):
         self.maxDiff = None
         self.base_config = "config/config.ini"
 
-        self.params = {"auto-lineage": False,
-                       "auto-lineage-euk": False,
-                       "auto-lineage-prok": False,
-                       "config_file": None,
-                       "cpu": None,
-                       "evalue": None,
-                       "force": False,
-                       "help": "==SUPPRESS==",
-                       "in": None,
-                       "limit": None,
-                       "lineage_dataset": None,
-                       "list_datasets": "==SUPPRESS==",
-                       "mode": None,
-                       "offline": False,
-                       "out": None,
-                       "out_path": None,
-                       "quiet": False,
-                       "restart": False,
-                       "metaeuk_parameters": None,
-                       "metaeuk_rerun_parameters": None,
-                       "use_augustus": False,
-                       "augustus_parameters": None,
-                       "augustus_species": None,
-                       "long": False,
-                       "datasets_version": None,
-                       "download_base_url": None,
-                       "download_path": None,
-                       "update-data": False,
-                       "version": "==SUPPRESS=="}
+        self.params = {
+            "auto-lineage": False,
+            "auto-lineage-euk": False,
+            "auto-lineage-prok": False,
+            "config_file": None,
+            "cpu": None,
+            "evalue": None,
+            "force": False,
+            "help": "==SUPPRESS==",
+            "in": None,
+            "limit": None,
+            "lineage_dataset": None,
+            "list_datasets": "==SUPPRESS==",
+            "mode": None,
+            "offline": False,
+            "out": None,
+            "out_path": None,
+            "quiet": False,
+            "restart": False,
+            "metaeuk_parameters": None,
+            "metaeuk_rerun_parameters": None,
+            "use_augustus": False,
+            "augustus_parameters": None,
+            "augustus_species": None,
+            "long": False,
+            "datasets_version": None,
+            "download_base_url": None,
+            "download_path": None,
+            "update-data": False,
+            "version": "==SUPPRESS==",
+        }
 
-        self.test_params = {"in": "input_test", "out": "output_test", "mode": "mode_test"}
+        self.test_params = {
+            "in": "input_test",
+            "out": "output_test",
+            "mode": "mode_test",
+        }
 
-        self.config_structure = {'augustus': ['path', 'command'],
-                                 'busco_run': ['in',
-                                               'out',
-                                               'out_path',
-                                               'mode',
-                                               'auto-lineage',
-                                               'auto-lineage-prok',
-                                               'auto-lineage-euk',
-                                               'cpu',
-                                               'force',
-                                               'restart',
-                                               'download_path',
-                                               'datasets_version',
-                                               'quiet',
-                                               'offline',
-                                               'long',
-                                               'augustus_parameters',
-                                               'augustus_species',
-                                               'download_base_url',
-                                               'lineage_dataset',
-                                               'update-data',
-                                               'metaeuk_parameters',
-                                               'metaeuk_rerun_parameters',
-                                               'evalue',
-                                               'limit',
-                                               'use_augustus'],
-                                 'etraining': ['path', 'command'],
-                                 'gff2gbSmallDNA.pl': ['path', 'command'],
-                                 'hmmsearch': ['path', 'command'],
-                                 'makeblastdb': ['path', 'command'],
-                                 'metaeuk': ['path', 'command'],
-                                 'new_species.pl': ['path', 'command'],
-                                 'optimize_augustus.pl': ['path', 'command'],
-                                 'prodigal': ['path', 'command'],
-                                 'sepp': ['path', 'command'],
-                                 'tblastn': ['path', 'command']}
+        self.config_structure = {
+            "augustus": ["path", "command"],
+            "busco_run": [
+                "in",
+                "out",
+                "out_path",
+                "mode",
+                "auto-lineage",
+                "auto-lineage-prok",
+                "auto-lineage-euk",
+                "cpu",
+                "force",
+                "restart",
+                "download_path",
+                "datasets_version",
+                "quiet",
+                "offline",
+                "long",
+                "augustus_parameters",
+                "augustus_species",
+                "download_base_url",
+                "lineage_dataset",
+                "update-data",
+                "metaeuk_parameters",
+                "metaeuk_rerun_parameters",
+                "evalue",
+                "limit",
+                "use_augustus",
+            ],
+            "etraining": ["path", "command"],
+            "gff2gbSmallDNA.pl": ["path", "command"],
+            "hmmsearch": ["path", "command"],
+            "makeblastdb": ["path", "command"],
+            "metaeuk": ["path", "command"],
+            "new_species.pl": ["path", "command"],
+            "optimize_augustus.pl": ["path", "command"],
+            "prodigal": ["path", "command"],
+            "sepp": ["path", "command"],
+            "tblastn": ["path", "command"],
+        }
 
     def test_read_config_file(self):
         config = BuscoConfig.BaseConfig()
@@ -114,9 +119,7 @@ class TestBuscoConfig(unittest.TestCase):
 
     def test_read_config_file_duplicateerror(self):
         config_path = "tests/config_duplicate_test.ini"
-        test_config_contents = "[busco_run]\n" \
-                               "in=input_file\n" \
-                               "in=input_file\n"
+        test_config_contents = "[busco_run]\n" "in=input_file\n" "in=input_file\n"
         with open(config_path, "w") as f:
             f.write(test_config_contents)
 
@@ -127,68 +130,85 @@ class TestBuscoConfig(unittest.TestCase):
         os.remove(config_path)
 
     def test_config_update_args_bool(self):
-        update_params = {"force": True,
-                         "offline": True,
-                         "quiet": True,
-                         "restart": True,
-                         }
+        update_params = {
+            "force": True,
+            "offline": True,
+            "quiet": True,
+            "restart": True,
+        }
         config = BuscoConfig.BuscoConfigMain(self.base_config, update_params)
         config.configure()
-        self.assertEqual(update_params, {key: config.getboolean("busco_run", key) for key in update_params.keys()})
+        self.assertEqual(
+            update_params,
+            {key: config.getboolean("busco_run", key) for key in update_params.keys()},
+        )
 
     def test_config_update_args_nonbool(self):
-        update_params = {"cpu": "10",
-                         "evalue": "0.01",
-                         "in": "input_file",
-                         "limit": "1",
-                         "lineage_dataset": "test",
-                         "mode": "test",
-                         "out": "test",
-                         "out_path": "test"
-                         }
+        update_params = {
+            "cpu": "10",
+            "evalue": "0.01",
+            "in": "input_file",
+            "limit": "1",
+            "lineage_dataset": "test",
+            "mode": "test",
+            "out": "test",
+            "out_path": "test",
+        }
         config = BuscoConfig.BuscoConfigMain(self.base_config, update_params)
         config.configure()
-        self.assertEqual(update_params, {key: config.get("busco_run", key) for key in update_params.keys()})
+        self.assertEqual(
+            update_params,
+            {key: config.get("busco_run", key) for key in update_params.keys()},
+        )
 
     def test_config_default_params(self):
-        correct_default_params = {'auto-lineage': False,
-                                  'auto-lineage-euk': False,
-                                  'auto-lineage-prok': False,
-                                  'cpu': '1',
-                                  'datasets_version': 'odb10',
-                                  'download_base_url': 'https://busco-data.ezlab.org/v4/data/',
-                                  'download_path': os.path.join(os.getcwd(), "busco_downloads"),
-                                  'evalue': '0.001',
-                                  'force': False,
-                                  'limit': '3',
-                                  'long': False,
-                                  'offline': False,
-                                  'out_path': os.getcwd(),
-                                  'quiet': False,
-                                  'restart': False,
-                                  'update-data': False,
-                                  'use_augustus': False}
+        correct_default_params = {
+            "auto-lineage": False,
+            "auto-lineage-euk": False,
+            "auto-lineage-prok": False,
+            "cpu": "1",
+            "datasets_version": "odb10",
+            "download_base_url": "https://busco-data.ezlab.org/v5/data/",
+            "download_path": os.path.join(os.getcwd(), "busco_downloads"),
+            "evalue": "0.001",
+            "force": False,
+            "limit": "3",
+            "long": False,
+            "offline": False,
+            "out_path": os.getcwd(),
+            "quiet": False,
+            "restart": False,
+            "update-data": False,
+            "use_augustus": False,
+        }
         config = BuscoConfig.BuscoConfigMain(self.base_config, {})
         config.configure()
-        config_default_filled = {key: config.get("busco_run", key) for key in correct_default_params}
+        config_default_filled = {
+            key: config.get("busco_run", key) for key in correct_default_params
+        }
 
-        self.assertEqual({key: str(val) for key, val in correct_default_params.items()}, config_default_filled)
+        self.assertEqual(
+            {key: str(val) for key, val in correct_default_params.items()},
+            config_default_filled,
+        )
 
-    @patch("busco.BuscoConfig.BuscoConfigMain.getboolean", side_effect=[True, False,
-                                                                        False, True, False])
+    @patch(
+        "busco.BuscoConfig.BuscoConfigMain.getboolean",
+        side_effect=[True, False, False, True, False],
+    )
     def test_config_auto_lineage_settings(self, *args):
         for _ in range(2):
             config = BuscoConfig.BuscoConfigMain(self.base_config, {})
             config.configure()
-            self.assertEqual(config.get("busco_run", "auto-lineage"), 'True')
+            self.assertEqual(config.get("busco_run", "auto-lineage"), "True")
 
     @patch("busco.BuscoConfig.BuscoConfigMain.getboolean", return_value=True)
     def test_config_auto_lineage_both_selected_warning(self, *args):
         with self.assertLogs(BuscoConfig.logger, "WARNING"):
             config = BuscoConfig.BuscoConfigMain(self.base_config, {})
             config.configure()
-        self.assertEqual(config.get("busco_run", "auto-lineage-euk"), 'False')
-        self.assertEqual(config.get("busco_run", "auto-lineage-prok"), 'False')
+        self.assertEqual(config.get("busco_run", "auto-lineage-euk"), "False")
+        self.assertEqual(config.get("busco_run", "auto-lineage-prok"), "False")
 
     def test_mandatory_keys_check_log(self):
         with self.assertLogs(BuscoConfig.logger, 20):
@@ -248,7 +268,7 @@ class TestBuscoConfig(unittest.TestCase):
             config._check_no_previous_run()
             self.assertFalse(os.path.exists(previous_run_name))
 
-        try: # In case of test failure, remove tmp folder anyway
+        try:  # In case of test failure, remove tmp folder anyway
             shutil.rmtree(previous_run_name)
         except FileNotFoundError:
             pass
@@ -275,7 +295,9 @@ class TestBuscoConfig(unittest.TestCase):
     def test_create_required_paths(self):
         config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
         config.configure()
-        config.main_out = os.path.join(config.get("busco_run", "out_path"), config.get("busco_run", "out"))
+        config.main_out = os.path.join(
+            config.get("busco_run", "out_path"), config.get("busco_run", "out")
+        )
         config._create_required_paths()
         output_dir = os.path.join(os.getcwd(), self.test_params["out"])
         self.assertTrue(os.path.exists(output_dir))
@@ -284,7 +306,9 @@ class TestBuscoConfig(unittest.TestCase):
     def test_config_structure(self):
         config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
         config.configure()
-        self.assertEqual(config.CONFIG_STRUCTURE, self.config_structure)
+        self.assertEqual(
+            set(config.PERMITTED_OPTIONS), set(self.config_structure["busco_run"])
+        )
 
     def test_catch_disallowed_keys(self):
         for section_name in self.config_structure:
@@ -329,7 +353,7 @@ class TestBuscoConfig(unittest.TestCase):
             config.configure()
             config._check_evalue()
 
-    @patch('__main__.BuscoConfig_unittests.BuscoConfig.logger.warning')
+    @patch("__main__.BuscoConfig_unittests.BuscoConfig.logger.warning")
     def test_evalue_default(self, mock_logger):
         self.test_params["evalue"] = 0.001
         config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
@@ -342,28 +366,37 @@ class TestBuscoConfig(unittest.TestCase):
         config.configure()
         config.set("busco_run", "download_path", "~/test_download_path")
         config._expand_all_paths()
-        self.assertEqual(config.get("busco_run", "download_path"), os.path.expanduser("~/test_download_path"))
+        self.assertEqual(
+            config.get("busco_run", "download_path"),
+            os.path.expanduser("~/test_download_path"),
+        )
 
     def test_expand_all_paths_relative_path_current_dir(self):
         config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
         config.configure()
         config.set("busco_run", "out_path", "./test_out_path")
         config._expand_all_paths()
-        self.assertEqual(config.get("busco_run", "out_path"), os.path.abspath("./test_out_path"))
+        self.assertEqual(
+            config.get("busco_run", "out_path"), os.path.abspath("./test_out_path")
+        )
 
     def test_expand_all_paths_relative_path_parent_dir(self):
         config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
         config.configure()
         config.set("busco_run", "in", "../test_input_file")
         config._expand_all_paths()
-        self.assertEqual(config.get("busco_run", "in"), os.path.abspath("../test_input_file"))
+        self.assertEqual(
+            config.get("busco_run", "in"), os.path.abspath("../test_input_file")
+        )
 
     def test_expand_all_paths_hmmsearch(self):
         config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
         config.configure()
         config.set("hmmsearch", "path", "~/test_hmmsearch_path")
         config._expand_all_paths()
-        self.assertEqual(config.get("hmmsearch", "path"), os.path.expanduser("~/test_hmmsearch_path"))
+        self.assertEqual(
+            config.get("hmmsearch", "path"), os.path.expanduser("~/test_hmmsearch_path")
+        )
 
     def test_required_input_exists_true(self):
         input_filename = "test_input_file"
@@ -385,14 +418,14 @@ class TestBuscoConfig(unittest.TestCase):
         with self.assertRaises(SystemExit):
             config._check_required_input_exists()
 
-    @patch('__main__.BuscoConfig_unittests.BuscoConfig.BuscoDownloadManager')
+    @patch("__main__.BuscoConfig_unittests.BuscoConfig.BuscoDownloadManager")
     def test_downloader_initialized(self, mock_downloader):
         config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
         config.configure()
         config._init_downloader()
         mock_downloader.assert_called()
 
-    @patch('__main__.BuscoConfig_unittests.BuscoConfig.PrettyLog')
+    @patch("__main__.BuscoConfig_unittests.BuscoConfig.PrettyLog")
     def test_log_config(self, mock_pretty_log):
         config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
         config.configure()
@@ -400,20 +433,31 @@ class TestBuscoConfig(unittest.TestCase):
             config.log_config()
         mock_pretty_log.assert_called()
 
-    @patch.object(BuscoConfig.BuscoConfigMain, 'log_config')
-    @patch.object(BuscoConfig.BuscoConfigMain, '_init_downloader')
-    @patch.object(BuscoConfig.BuscoConfigMain, '_check_required_input_exists')
-    @patch.object(BuscoConfig.BuscoConfigMain, '_expand_all_paths')
-    @patch.object(BuscoConfig.BuscoConfigMain, '_check_evalue')
-    @patch.object(BuscoConfig.BuscoConfigMain, '_check_limit_value')
-    @patch.object(BuscoConfig.BuscoConfigMain, '_check_out_value')
-    @patch.object(BuscoConfig.BuscoConfigMain, '_check_allowed_keys')
-    @patch.object(BuscoConfig.BuscoConfigMain, '_create_required_paths')
-    @patch.object(BuscoConfig.BuscoConfigMain, '_check_no_previous_run')
-    @patch.object(BuscoConfig.BuscoConfigMain, '_check_mandatory_keys_exist')
-    def test_validation(self, mock_check_mandatory_keys, mock_check_no_previous_run, mock_create_required_paths,
-                        mock_check_allowed_keys, mock_check_out_value, mock_check_limit_value, mock_check_evalue,
-                        mock_expand_all_paths, mock_check_input, mock_init_downloader, mock_log_config):
+    @patch.object(BuscoConfig.BuscoConfigMain, "log_config")
+    @patch.object(BuscoConfig.BuscoConfigMain, "_init_downloader")
+    @patch.object(BuscoConfig.BuscoConfigMain, "_check_required_input_exists")
+    @patch.object(BuscoConfig.BuscoConfigMain, "_expand_all_paths")
+    @patch.object(BuscoConfig.BuscoConfigMain, "_check_evalue")
+    @patch.object(BuscoConfig.BuscoConfigMain, "_check_limit_value")
+    @patch.object(BuscoConfig.BuscoConfigMain, "_check_out_value")
+    @patch.object(BuscoConfig.BuscoConfigMain, "_check_allowed_keys")
+    @patch.object(BuscoConfig.BuscoConfigMain, "_create_required_paths")
+    @patch.object(BuscoConfig.BuscoConfigMain, "_check_no_previous_run")
+    @patch.object(BuscoConfig.BuscoConfigMain, "_check_mandatory_keys_exist")
+    def test_validation(
+        self,
+        mock_check_mandatory_keys,
+        mock_check_no_previous_run,
+        mock_create_required_paths,
+        mock_check_allowed_keys,
+        mock_check_out_value,
+        mock_check_limit_value,
+        mock_check_evalue,
+        mock_expand_all_paths,
+        mock_check_input,
+        mock_init_downloader,
+        mock_log_config,
+    ):
         config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
         config.configure()
         config.validate()
@@ -444,7 +488,10 @@ class TestBuscoConfig(unittest.TestCase):
         config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
         config.configure()
         config.check_lineage_present()
-        self.assertEqual(config.get("busco_run", "datasets_version"), self.test_params["datasets_version"])
+        self.assertEqual(
+            config.get("busco_run", "datasets_version"),
+            self.test_params["datasets_version"],
+        )
 
     def test_check_lineage_present_true_with_dataset_version_mismatch(self):
         self.test_params["lineage_dataset"] = "test_dataset_odb10"
@@ -453,7 +500,10 @@ class TestBuscoConfig(unittest.TestCase):
         config.configure()
         with self.assertLogs(BuscoConfig.logger, level="WARNING"):
             config.check_lineage_present()
-        self.assertEqual(config.get("busco_run", "datasets_version"), self.test_params["lineage_dataset"].split("_")[-1])
+        self.assertEqual(
+            config.get("busco_run", "datasets_version"),
+            self.test_params["lineage_dataset"].split("_")[-1],
+        )
 
     def test_check_lineage_present_true_with_odb_missing(self):
         self.test_params["lineage_dataset"] = "test_dataset"
@@ -461,8 +511,13 @@ class TestBuscoConfig(unittest.TestCase):
         config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
         config.configure()
         config.check_lineage_present()
-        self.assertEqual(config.get("busco_run", "lineage_dataset"), "{}_{}".format(self.test_params["lineage_dataset"],
-                                                                                    self.test_params["datasets_version"]))
+        self.assertEqual(
+            config.get("busco_run", "lineage_dataset"),
+            "{}_{}".format(
+                self.test_params["lineage_dataset"],
+                self.test_params["datasets_version"],
+            ),
+        )
 
     def test_check_lineage_present_true_with_invalid_dataset_version(self):
         self.test_params["lineage_dataset"] = "test_dataset"
@@ -478,7 +533,9 @@ class TestBuscoConfig(unittest.TestCase):
         test_dataset_path = "/path/to/lineage_dataset"
         with patch("busco.BuscoConfig.BuscoConfig.set"):
             config.set_results_dirname(test_dataset_path)
-            config.set.assert_called_with("busco_run", "lineage_results_dir", "run_lineage_dataset")
+            config.set.assert_called_with(
+                "busco_run", "lineage_results_dir", "run_lineage_dataset"
+            )
 
     @patch("busco.BuscoConfig.BuscoConfigAuto.load_dataset_config")
     @patch("busco.BuscoConfig.BuscoConfigAuto.download_lineage_file")
@@ -559,7 +616,9 @@ class TestBuscoConfig(unittest.TestCase):
     @patch("busco.BuscoConfig.BuscoConfigAuto.set_results_dirname")
     @patch("busco.BuscoConfig.BuscoConfigAuto.get", return_value="test")
     @patch("busco.BuscoConfig.BuscoConfig._create_required_paths")
-    def test_autolineage_create_path_method_calls_parent(self, mock_create_paths, *args):
+    def test_autolineage_create_path_method_calls_parent(
+        self, mock_create_paths, *args
+    ):
         config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
         config.configure()
         BuscoConfig.BuscoConfigAuto(config, None)

@@ -1,10 +1,11 @@
-## BUSCOv5.beta - Benchmarking sets of Universal Single-Copy Orthologs.
+## BUSCOv5 - Benchmarking sets of Universal Single-Copy Orthologs.
 
 For full documentation please consult the user guide: https://busco.ezlab.org/busco_userguide.html
 
 Main changes in v5:
 
 - Metaeuk is used as default gene predictor for eukaryote pipeline. Augustus is maintained and can be used optionally instead of Metaeuk.
+- The folder structure has changed, so if doing a manual installation, make sure to completely remove any previous versions of BUSCO before installing v5.
 
 ***
 ### Installation
@@ -45,5 +46,5 @@ Felipe A. Simão, Robert M. Waterhouse, Panagiotis Ioannidis, Evgenia V. Krivent
 *Bioinformatics*, published online June 9, 2015 
 doi: 10.1093/bioinformatics/btv351
 
-Copyright (c) 2016-2020, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2021, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.

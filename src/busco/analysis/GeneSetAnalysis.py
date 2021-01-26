@@ -6,13 +6,13 @@
 .. versionadded:: 3.0.0
 .. versionchanged:: 3.0.0
 
-Copyright (c) 2016-2020, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2021, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 
 """
-from busco.BuscoAnalysis import BuscoAnalysis
+from busco.analysis.BuscoAnalysis import BuscoAnalysis
 from busco.BuscoLogger import BuscoLogger
-from busco.Analysis import ProteinAnalysis
+from busco.analysis.Analysis import ProteinAnalysis
 from Bio import SeqIO
 
 logger = BuscoLogger.get_logger(__name__)
@@ -22,7 +22,8 @@ class GeneSetAnalysis(ProteinAnalysis, BuscoAnalysis):
     """
     This class runs a BUSCO analysis on a gene set.
     """
-    _mode = 'proteins'
+
+    _mode = "proteins"
 
     def __init__(self):
         """
@@ -31,7 +32,9 @@ class GeneSetAnalysis(ProteinAnalysis, BuscoAnalysis):
         :type params: PipeConfig
         """
         super().__init__()
-        self.sequences_aa = {record.id: record for record in list(SeqIO.parse(self._input_file, "fasta"))}
+        self.sequences_aa = {
+            record.id: record for record in list(SeqIO.parse(self.input_file, "fasta"))
+        }
 
     def cleanup(self):
         super().cleanup()
@@ -41,7 +44,7 @@ class GeneSetAnalysis(ProteinAnalysis, BuscoAnalysis):
         This function calls all needed steps for running the analysis.
         """
         super().run_analysis()
-        self.run_hmmer(self._input_file)
+        self.run_hmmer(self.input_file)
         self.hmmer_runner.write_buscos_to_file(self.sequences_aa)
         # if self._tarzip:
         #     self._run_tarzip_hmmer_output()

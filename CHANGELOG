@@ -1,3 +1,25 @@
+5.0.0
+- Implement metaeuk exon overlap filter
+- Use metaeuk for eukaryote transcriptomes
+- Issue #198 fixed
+- Issue #248 fixed
+- Issue #256 fixed
+- Issue #260 fixed
+- Issue #267 fixed
+- Issue #277 fixed
+- Issue #306 fixed
+- Issue #313 fixed
+- Issue #318 fixed
+- Issue #326 fixed
+- Issue #340 fixed
+- Issue #344 fixed
+- Issue #351 fixed
+- Issue #357 fixed
+- Issue #373 fixed
+- Issue #385 fixed
+
+
+
 5.beta.1
 - Provide option to run augustus instead of metaeuk
 
