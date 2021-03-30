@@ -5,6 +5,7 @@ For full documentation please consult the user guide: https://busco.ezlab.org/bu
 Main changes in v5:
 
 - Metaeuk is used as default gene predictor for eukaryote pipeline. Augustus is maintained and can be used optionally instead of Metaeuk.
+- Introduction of batch mode: input argument can be a folder containing input files
 - The folder structure has changed, so if doing a manual installation, make sure to completely remove any previous versions of BUSCO before installing v5.
 
 ***

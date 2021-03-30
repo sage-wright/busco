@@ -20,6 +20,7 @@ from abc import ABCMeta, abstractmethod
 from busco.BuscoLogger import BuscoLogger, ToolLogger
 from busco.BuscoLogger import LogDecorator as log
 from busco.BuscoLogger import StreamLogger
+from busco.Exceptions import BatchFatalError
 import logging
 
 logger = BuscoLogger.get_logger(__name__)
@@ -191,10 +192,10 @@ class Tool(metaclass=ABCMeta):
             self.log_no_jobs()
             return
 
-        if (
-            self.cpus is None
-        ):  # todo: need a different way to ensure self.cpus is nonzero number.
-            raise SystemExit("Number of CPUs not specified.")
+        if self.cpus is None:
+            raise BatchFatalError("Number of CPUs not specified.")
+        elif self.cpus == 0:
+            raise BatchFatalError("Number of CPUs must be greater than 0.")
 
         with Pool(
             self.cpus, initializer=type(self).init_globals, initargs=(Value("i", 0),)

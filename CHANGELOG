@@ -1,3 +1,12 @@
+5.1.0
+- Implement batch mode
+- Issue #221 fixed
+- Issue #328 fixed
+- Issue #360 fixed
+- Issue #388 fixed
+- Issue #406 fixed
+- Issue #415 fixed
+
 5.0.0
 - Implement metaeuk exon overlap filter
 - Use metaeuk for eukaryote transcriptomes
@@ -17,8 +26,6 @@
 - Issue #357 fixed
 - Issue #373 fixed
 - Issue #385 fixed
-
-
 
 5.beta.1
 - Provide option to run augustus instead of metaeuk

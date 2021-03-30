@@ -1,15 +1,15 @@
 import os
-from busco.BuscoConfig import BuscoConfigAuto
 from busco.BuscoPlacer import BuscoPlacer
 from busco.BuscoLogger import BuscoLogger
 from busco.BuscoLogger import LogDecorator as log
-from busco.BuscoRunner import BuscoRunner
+from busco.BuscoRunner import AnalysisRunner
+from busco.Exceptions import BuscoError
 import numpy as np
 
 logger = BuscoLogger.get_logger(__name__)
 
 
-class NoGenesError(SystemExit):
+class NoGenesError(BuscoError):
 
     def __init__(self):
         super().__init__("No genes were recognized by BUSCO. Please check the content of your input file.")
@@ -34,8 +34,9 @@ class AutoSelectLineage:
          "Because of overlapping markers/spurious matches among domains, busco matches in another domain do not "
          "necessarily mean that your genome/proteome contains sequences from this domain. "
          "However, a high busco score in multiple domains might help you identify possible contaminations.", logger)
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, config_manager):
+        self.config_manager = config_manager
+        self.config = self.config_manager.config_main
         if self.config.getboolean("busco_run", "auto-lineage-prok"):
             self.all_lineages = ["archaea", "bacteria"]
         elif self.config.getboolean("busco_run", "auto-lineage-euk"):
@@ -71,6 +72,10 @@ class AutoSelectLineage:
         self.f_percents.append(f_percent)
         return
 
+    @classmethod
+    def reset(cls):
+        cls.runners = []
+
     @log("Running auto selector", logger, debug=True)
     def run_auto_selector(self):
         """
@@ -91,8 +96,6 @@ class AutoSelectLineage:
 
         logger.info("{} selected\n".format(os.path.basename(self.best_match_lineage_dataset)))
         self.config.set("busco_run", "domain_run_name", os.path.basename(self.best_match_lineage_dataset))
-        BuscoRunner.final_results.append(self.selected_runner.analysis.hmmer_runner.hmmer_results_lines)
-        BuscoRunner.results_datasets.append(os.path.basename(self.best_match_lineage_dataset))
         return
 
     def virus_check(self):
@@ -114,8 +117,8 @@ class AutoSelectLineage:
         root_runners = []
         for l in lineages_list:
             self.current_lineage = "{}_{}".format(l, self.dataset_version)
-            autoconfig = BuscoConfigAuto(self.config, self.current_lineage)
-            busco_run = BuscoRunner(autoconfig)
+            autoconfig = self.config_manager.load_busco_config_auto(self.current_lineage)
+            busco_run = AnalysisRunner(autoconfig)
             busco_run.run_analysis(callback=self.callback)
             root_runners.append(busco_run)
             type(self).runners.append(busco_run)  # Save all root runs so they can be recalled if chosen
@@ -203,8 +206,7 @@ class AutoSelectLineage:
             else:
                 logger.info("Mollicutes dataset is a better match for your data. Testing subclades...")
                 self._run_3_datasets(self.selected_runner)
-                BuscoRunner.final_results.append(self.selected_runner.analysis.hmmer_runner.hmmer_results_lines)
-                BuscoRunner.results_datasets.append(os.path.basename(self.best_match_lineage_dataset))
+
         elif ("geno" in self.selected_runner.mode
               and self.selected_runner.analysis.prodigal_runner.current_gc == "4"
               and os.path.basename(
@@ -212,13 +214,14 @@ class AutoSelectLineage:
             logger.info("The results from the Prodigal gene predictor indicate that your data belongs to the "
                         "mollicutes clade. Testing subclades...")
             self._run_3_datasets()
-            BuscoRunner.final_results.append(self.selected_runner.analysis.hmmer_runner.hmmer_results_lines)
-            BuscoRunner.results_datasets.append(os.path.basename(self.best_match_lineage_dataset))
         elif self.selected_runner.domain == "viruses":
             pass
         else:
             self.run_busco_placer()
         return
+
+    def set_best_match_lineage(self):
+        AnalysisRunner.selected_dataset = os.path.basename(self.best_match_lineage_dataset)
 
     def check_mollicutes(self):
         runners = self.run_lineages_list(["mollicutes"])
@@ -252,9 +255,7 @@ class AutoSelectLineage:
         self.config.placement_files = placement_file_versions  # Necessary to pass these filenames to the final run to be recorded.
         lineage, supporting_markers, placed_markers = dataset_details
         lineage = "{}_{}".format(lineage, self.config.get("busco_run", "datasets_version"))  # todo: this should probably be done in buscoplacer
-        self.best_match_lineage_dataset = os.path.join(self.config.get("busco_run", "download_path"),
-                                                       "lineages",
-                                                       os.path.basename(lineage))
+        self.best_match_lineage_dataset = lineage  # basename
         return
 
     def _run_3_datasets(self, mollicutes_runner=None):

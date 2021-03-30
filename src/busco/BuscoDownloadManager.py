@@ -22,6 +22,7 @@ import gzip
 
 from busco.BuscoLogger import BuscoLogger
 from busco.BuscoLogger import LogDecorator as log
+from busco.Exceptions import BatchFatalError, BuscoError
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -72,7 +73,14 @@ class BuscoDownloadManager:
                     "Unable to verify BUSCO datasets because of offline mode"
                 )
             else:
-                raise SystemExit(e)
+                raise BatchFatalError(e)
+        except FileNotFoundError:
+            logger.warning(
+                "Unable to find file_versions.tsv. This may be due to an internet access problem. "
+                "Attempting to continue in offline mode."
+            )
+            self.offline = True
+
         return
 
     @log("Downloading information on latest versions of BUSCO data...", logger)
@@ -82,7 +90,7 @@ class BuscoDownloadManager:
         try:
             urllib.request.urlretrieve(remote_filepath, local_filepath)
         except URLError:
-            SystemExit("Cannot reach {}".format(remote_filepath))
+            raise BatchFatalError("Cannot reach {}".format(remote_filepath))
         return local_filepath
 
     def _create_category_dir(self, category):
@@ -103,7 +111,7 @@ class BuscoDownloadManager:
                     dataset_date = line[1]
                     break
         if not dataset_date:
-            raise SystemExit(
+            raise BuscoError(
                 "Creation date could not be extracted from dataset.cfg file."
             )
         return dataset_date
@@ -112,7 +120,7 @@ class BuscoDownloadManager:
         try:
             latest_update = type(self).version_files[data_basename][0]
         except KeyError:
-            raise SystemExit(
+            raise BuscoError(
                 "{} is not a valid option for '{}'".format(data_basename, category)
             )
         path_basename, extension = os.path.splitext(data_basename)
@@ -154,7 +162,7 @@ class BuscoDownloadManager:
             logger.info("Using local {} directory {}".format(category, data_name))
             return data_name
         elif "/" in data_name:
-            raise SystemExit("{} does not exist".format(data_name))
+            raise BuscoError("{} does not exist".format(data_name))
         if self.offline:
             if category == "lineages":
                 local_dataset = os.path.join(
@@ -163,7 +171,7 @@ class BuscoDownloadManager:
                 if os.path.exists(local_dataset):
                     return local_dataset
                 else:
-                    raise SystemExit(
+                    raise BuscoError(
                         "Unable to run BUSCO in offline mode. Dataset {} does not "
                         "exist.".format(local_dataset)
                     )
@@ -180,9 +188,8 @@ class BuscoDownloadManager:
                 )
                 if len(placement_files) > 0:
                     return placement_files[-1]
-                    # todo: for offline mode, log which files are being used (in case of more than one glob match)
                 else:
-                    raise SystemExit(
+                    raise BuscoError(
                         "Unable to run BUSCO placer in offline mode. Cannot find necessary placement "
                         "files in {}".format(self.local_download_path)
                     )
@@ -263,7 +270,7 @@ class BuscoDownloadManager:
                 )
                 logger.info("deleting corrupted file {}".format(local_filepath))
                 os.remove(local_filepath)
-                raise SystemExit(
+                raise BuscoError(
                     "BUSCO was unable to download or update all necessary files"
                 )
             else:
@@ -290,14 +297,24 @@ class BuscoDownloadManager:
                 with open(unzipped_filename, "wb") as decompressed_file:
                     for line in compressed_file:
                         decompressed_file.write(line)
-            os.remove(local_filepath)
+            try:
+                os.remove(local_filepath)
+            except FileNotFoundError:
+                logger.warning(
+                    "Downloaded gzip file was removed before this BUSCO run could remove it."
+                )
             local_filepath = unzipped_filename
 
         if os.path.splitext(local_filepath)[1] == ".tar":
             untarred_filename = local_filepath.replace(".tar", "")
             with tarfile.open(local_filepath) as tar_file:
                 tar_file.extractall(os.path.dirname(local_filepath))
-            os.remove(local_filepath)
+            try:
+                os.remove(local_filepath)
+            except FileNotFoundError:
+                logger.warning(
+                    "Downloaded tarball was removed before this BUSCO run could remove it."
+                )
             local_filepath = untarred_filename
 
         return local_filepath

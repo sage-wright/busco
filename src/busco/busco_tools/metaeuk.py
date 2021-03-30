@@ -10,6 +10,7 @@ import gzip
 import pandas as pd
 import numpy as np
 import re
+from busco.Exceptions import BuscoError
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -143,9 +144,14 @@ class MetaeukRunner(BaseRunner):
         self.ancestral_variants_file = os.path.join(
             self.lineage_dataset, "ancestral_variants"
         )
-
-        self.max_intron = self.config.get("busco_run", "max_intron")
-        self.max_seq_len = self.config.get("busco_run", "max_seq_len")
+        try:
+            self.max_intron = self.config.get("busco_run", "max_intron")
+            self.max_seq_len = self.config.get("busco_run", "max_seq_len")
+        except NoOptionError:
+            raise BuscoError(
+                "{} is an old dataset version and is not compatible with Metaeuk. Please update by using "
+                "the '--update-data' command line option".format(self.lineage_dataset)
+            )
         self.overlap = 1
         self.s_set = False
 
@@ -187,8 +193,6 @@ class MetaeukRunner(BaseRunner):
             self.refseq_db_rerun = os.path.join(
                 self._output_folder, "refseq_db_rerun.faa"
             )
-            self._extract_incomplete_buscos_ancestral()
-            self.refseq_db = self.refseq_db_rerun
             self.min_exon_aa = 5
             self.max_overlap = 5
             self.min_intron = 1
@@ -219,8 +223,8 @@ class MetaeukRunner(BaseRunner):
         self.codon_file = "{}.codon.fas".format(self._output_basename)
         self.pred_protein_seqs = "{}.fas".format(self._output_basename)
         self.pred_protein_files.append(self.pred_protein_seqs)
-        self.pred_protein_seqs_modified = self.pred_protein_seqs.replace(
-            ".fas", ".modified.fas"
+        self.pred_protein_seqs_modified = ".modified.fas".join(
+            self.pred_protein_seqs.rsplit(".fas", 1)
         )
         self.pred_protein_mod_files.append(self.pred_protein_seqs_modified)
 
@@ -376,6 +380,9 @@ class MetaeukRunner(BaseRunner):
 
     def run(self):
         super().run()
+        if self.run_number > 1:
+            self._extract_incomplete_buscos_ancestral()
+            self.refseq_db = self.refseq_db_rerun
         if self.extra_params:
             logger.info(
                 "Additional parameters for Metaeuk are {}: ".format(self.extra_params)
@@ -637,6 +644,6 @@ class MetaeukRunner(BaseRunner):
                     )
 
             except KeyError:
-                raise SystemExit("*headersMap.tsv file could not be parsed.")
+                raise BuscoError("*headersMap.tsv file could not be parsed.")
         except FileNotFoundError:
             raise NoRerunFile

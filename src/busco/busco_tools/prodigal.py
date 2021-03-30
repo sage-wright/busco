@@ -9,6 +9,7 @@ import shutil
 import numpy as np
 from configparser import NoOptionError
 import subprocess
+from busco.Exceptions import BuscoError
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -45,7 +46,7 @@ class ProdigalRunner(BaseRunner):
                 else 0
             )
         except NoOptionError:
-            raise SystemExit(
+            raise BuscoError(
                 "Dataset config file does not contain required information. Please upgrade datasets."
             )
 

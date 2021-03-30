@@ -3,6 +3,7 @@ import os
 from collections import defaultdict
 from busco.BuscoLogger import BuscoLogger
 from busco.BuscoLogger import LogDecorator as log
+from busco.Exceptions import BuscoError
 from Bio import SeqIO
 import subprocess
 
@@ -149,7 +150,7 @@ class TBLASTNRunner(BaseRunner):
             # Ensure value is between 5000 and MAX_FLANK
             flank = min(max(flank, 5000), type(self).MAX_FLANK)
         except IOError:  # Input data is only validated during run_analysis. This will catch any IO issues before that.
-            raise SystemExit(
+            raise BuscoError(
                 "Impossible to read the fasta file {}".format(self.input_file)
             )
 
@@ -192,13 +193,13 @@ class TBLASTNRunner(BaseRunner):
     def _check_output(self):
         # check that blast worked
         if not os.path.exists(self.blast_filename):
-            raise SystemExit("tblastn failed!")
+            raise BuscoError("tblastn failed!")
 
         # check that the file is not truncated
         with open(self.blast_filename, "r") as f:
             try:
                 if "processed" not in f.readlines()[-1]:
-                    raise SystemExit(
+                    raise BuscoError(
                         "tblastn has ended prematurely (the result file lacks the expected final line), "
                         "which will produce incomplete results in the next steps ! This problem likely "
                         "appeared in blast+ 2.4 and seems not fully fixed in 2.6. It happens only when "

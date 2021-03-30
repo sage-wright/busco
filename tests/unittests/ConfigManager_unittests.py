@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch, call, Mock
+from unittest.mock import patch
 from busco import ConfigManager
 import os
 import importlib
@@ -50,220 +50,22 @@ class TestConfigManager(unittest.TestCase):
             )
 
     @patch("__main__.ConfigManager_unittests.ConfigManager.logger", autospec=True)
-    def test_config_validated(self, *args):
-        config_manager = ConfigManager.BuscoConfigManager(self.params)
-        with patch(
-            "__main__.ConfigManager_unittests.ConfigManager.BuscoConfigMain",
-            autospec=True,
-        ):
-            config_manager.load_busco_config()
-            config_manager.config.validate.assert_called()
-
     @patch(
         "__main__.ConfigManager_unittests.ConfigManager.BuscoConfigMain", autospec=True
     )
-    def test_log_warning_if_neither_lineage_nor_autolineage_specified(
-        self, mock_config_main, *args
-    ):
-        mock_config_main.return_value.check_lineage_present = lambda: False
-        mock_config_main.return_value.getboolean.side_effect = [
-            False,
-            False,
-            True,
-            False,
-            True,
-        ]  # These values comprise the three distinct logical paths into this part
-        # of the code: run1: False, False; run2: True, (shortcircuit); run3: False, True.
+    def test_config_main_configured(self, mock_config, *args):
         config_manager = ConfigManager.BuscoConfigManager(self.params)
-        test_dataset_path = "/path/to/lineage_dataset"
-        with patch.object(
-            config_manager, "auto_select_lineage", lambda: test_dataset_path
-        ):
-            with self.assertLogs(ConfigManager.logger, "WARNING"):
-                config_manager.load_busco_config()
-            with patch("busco.ConfigManager.logger.warning") as mock_logger:
-                for _ in range(2):
-                    config_manager.load_busco_config()
-                    self.assertFalse(mock_logger.called)
+        config_manager.load_busco_config_main()
+        mock_config.return_value.configure.assert_called()
 
+    @patch("__main__.ConfigManager_unittests.ConfigManager.logger", autospec=True)
     @patch(
         "__main__.ConfigManager_unittests.ConfigManager.BuscoConfigMain", autospec=True
     )
-    def test_log_warning_if_both_lineage_and_autolineage_specified(
-        self, mock_config_main, *args
-    ):
-        mock_config_main.return_value.check_lineage_present = lambda: True
-        mock_config_main.return_value.getboolean.side_effect = [
-            True,
-            False,
-            True,
-            False,
-            False,
-        ]
+    def test_config_main_validated(self, mock_config, *args):
         config_manager = ConfigManager.BuscoConfigManager(self.params)
-        test_dataset_path = "/path/to/lineage_dataset"
-        with patch.object(
-            config_manager, "auto_select_lineage", lambda: test_dataset_path
-        ):
-            for _ in range(2):
-                with self.assertLogs(ConfigManager.logger, "WARNING"):
-                    config_manager.load_busco_config()
-            with patch("busco.ConfigManager.logger.warning") as mock_logger:
-                config_manager.load_busco_config()
-                self.assertFalse(mock_logger.called)
-
-    patch("busco.ConfigManager.logger.warning")
-
-    @patch(
-        "__main__.ConfigManager_unittests.ConfigManager.BuscoConfigMain", autospec=True
-    )
-    def test_config_updated_if_lineage_missing(self, mock_config_main, *args):
-        mock_config_main.return_value.check_lineage_present = lambda: False
-        config_manager = ConfigManager.BuscoConfigManager(self.params)
-        test_dataset_path = "/path/to/lineage_dataset"
-        with patch.object(
-            config_manager, "auto_select_lineage", lambda: test_dataset_path
-        ):
-            config_manager.load_busco_config()
-        calls = [
-            call("busco_run", "auto-lineage", "True"),
-            call("busco_run", "lineage_dataset", test_dataset_path),
-        ]
-        mock_config_main.return_value.set.assert_has_calls(calls, any_order=True)
-
-    @patch("busco.ConfigManager.logger.warning")
-    @patch(
-        "__main__.ConfigManager_unittests.ConfigManager.BuscoConfigMain", autospec=True
-    )
-    def test_config_updated_if_lineage_present(self, mock_config_main, *args):
-        mock_config_main.return_value.check_lineage_present = lambda: True
-        config_manager = ConfigManager.BuscoConfigManager(self.params)
-        test_dataset_path = "/path/to/lineage_dataset"
-        with patch.object(
-            config_manager, "auto_select_lineage", lambda: test_dataset_path
-        ):
-            config_manager.load_busco_config()
-        calls = [
-            call("busco_run", "auto-lineage", "False"),
-            call("busco_run", "auto-lineage-prok", "False"),
-            call("busco_run", "auto-lineage-euk", "False"),
-        ]
-        mock_config_main.return_value.set.assert_has_calls(calls, any_order=True)
-
-    @patch("busco.ConfigManager.logger.warning")
-    @patch(
-        "__main__.ConfigManager_unittests.ConfigManager.BuscoConfigMain", autospec=True
-    )
-    def test_update_dirname(self, mock_config_main, *args):
-        config_manager = ConfigManager.BuscoConfigManager(self.params)
-        test_dataset_path = "/path/to/lineage_dataset"
-        mock_config_main.return_value.get = lambda *args: test_dataset_path
-        with patch.object(
-            config_manager, "auto_select_lineage", lambda: test_dataset_path
-        ):
-            config_manager.load_busco_config()
-        mock_config_main.return_value.set_results_dirname.assert_called_with(
-            test_dataset_path
-        )
-
-    @patch("busco.ConfigManager.logger.warning")
-    @patch(
-        "__main__.ConfigManager_unittests.ConfigManager.BuscoConfigMain", autospec=True
-    )
-    def test_lineage_downloaded(self, mock_config_main, *args):
-        config_manager = ConfigManager.BuscoConfigManager(self.params)
-        test_dataset_path = "/path/to/lineage_dataset"
-        mock_config_main.return_value.get = lambda *args: test_dataset_path
-        with patch.object(
-            config_manager, "auto_select_lineage", lambda: test_dataset_path
-        ):
-            config_manager.load_busco_config()
-        mock_config_main.return_value.download_lineage_file.assert_called_with(
-            test_dataset_path
-        )
-
-    @patch("busco.ConfigManager.logger.warning")
-    @patch(
-        "__main__.ConfigManager_unittests.ConfigManager.BuscoConfigMain", autospec=True
-    )
-    def test_lineage_dataset_config_loaded(self, mock_config_main, *args):
-        config_manager = ConfigManager.BuscoConfigManager(self.params)
-        test_dataset_path = "/path/to/lineage_dataset"
-        with patch.object(
-            config_manager, "auto_select_lineage", lambda: test_dataset_path
-        ):
-            config_manager.load_busco_config()
-        mock_config_main.return_value.load_dataset_config.assert_called()
-
-    @patch("busco.ConfigManager.logger.warning")
-    @patch(
-        "__main__.ConfigManager_unittests.ConfigManager.BuscoConfigMain", autospec=True
-    )
-    def test_run_auto_select_if_no_lineage(self, mock_config_main, *args):
-        config_manager = ConfigManager.BuscoConfigManager(self.params)
-        mock_config_main.return_value.check_lineage_present = lambda: False
-        test_dataset_path = "/path/to/lineage_dataset"
-        with patch.object(
-            config_manager, "auto_select_lineage", return_value=test_dataset_path
-        ):
-            config_manager.load_busco_config()
-            config_manager.auto_select_lineage.assert_called()
-
-    @patch(
-        "__main__.ConfigManager_unittests.ConfigManager.AutoSelectLineage",
-        autospec=True,
-    )
-    def test_auto_select_lineage_call_function_initializes_asl(self, mock_asl):
-        mock_asl.return_value.best_match_lineage_dataset = Mock()
-        mock_asl.return_value.selected_runner = Mock()
-        config_manager = ConfigManager.BuscoConfigManager(self.params)
-        config_manager.auto_select_lineage()
-        mock_asl.assert_called()
-
-    @patch(
-        "__main__.ConfigManager_unittests.ConfigManager.AutoSelectLineage",
-        autospec=True,
-    )
-    def test_auto_select_lineage_call_function_runs_asl(self, mock_asl):
-        mock_asl.return_value.best_match_lineage_dataset = Mock()
-        mock_asl.return_value.selected_runner = Mock()
-        config_manager = ConfigManager.BuscoConfigManager(self.params)
-        config_manager.auto_select_lineage()
-        mock_asl.return_value.run_auto_selector.assert_called()
-
-    @patch(
-        "__main__.ConfigManager_unittests.ConfigManager.AutoSelectLineage",
-        autospec=True,
-    )
-    def test_auto_select_lineage_call_function_gets_lineage_dataset(self, mock_asl):
-        mock_asl.return_value.best_match_lineage_dataset = Mock()
-        mock_asl.return_value.selected_runner = Mock()
-        config_manager = ConfigManager.BuscoConfigManager(self.params)
-        config_manager.auto_select_lineage()
-        mock_asl.return_value.get_lineage_dataset.assert_called()
-
-    @patch(
-        "__main__.ConfigManager_unittests.ConfigManager.AutoSelectLineage",
-        autospec=True,
-    )
-    def test_auto_select_lineage_call_function_returns_lineage_dataset(self, mock_asl):
-        config_manager = ConfigManager.BuscoConfigManager(self.params)
-        lineage_dataset = "best_match_dataset"
-        mock_asl.return_value.best_match_lineage_dataset = lineage_dataset
-        mock_asl.return_value.selected_runner = Mock()
-        retval = config_manager.auto_select_lineage()
-        self.assertEqual(retval, lineage_dataset)
-
-    @patch(
-        "__main__.ConfigManager_unittests.ConfigManager.AutoSelectLineage",
-        autospec=True,
-    )
-    def test_auto_select_lineage_call_function_selects_runner(self, mock_asl):
-        config_manager = ConfigManager.BuscoConfigManager(self.params)
-        mock_asl.return_value.best_match_lineage_dataset = Mock()
-        mock_asl.return_value.selected_runner = "test"
-        config_manager.auto_select_lineage()
-        self.assertEqual("test", config_manager.runner)
+        config_manager.load_busco_config_main()
+        mock_config.return_value.validate.assert_called()
 
     def tearDown(self):
         pass

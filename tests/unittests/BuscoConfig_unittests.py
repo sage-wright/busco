@@ -3,8 +3,7 @@ from busco import BuscoConfig
 import shutil
 import os
 from unittest.mock import Mock
-from unittest.mock import patch
-from pathlib import Path
+from unittest.mock import patch, call
 
 
 class TestBuscoConfig(unittest.TestCase):
@@ -80,6 +79,7 @@ class TestBuscoConfig(unittest.TestCase):
                 "evalue",
                 "limit",
                 "use_augustus",
+                "batch_mode",
             ],
             "etraining": ["path", "command"],
             "gff2gbSmallDNA.pl": ["path", "command"],
@@ -100,7 +100,7 @@ class TestBuscoConfig(unittest.TestCase):
         self.assertIn("busco_run", config.sections())
 
     def test_read_config_file_ioerror(self):
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(BuscoConfig.BatchFatalError):
             config = BuscoConfig.BaseConfig()
             config.conf_file = "/path/not/found"
             config._load_config_file()
@@ -111,7 +111,7 @@ class TestBuscoConfig(unittest.TestCase):
         with open(config_path, "w") as f:
             f.write(test_config_contents)
 
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(BuscoConfig.BatchFatalError):
             config = BuscoConfig.BaseConfig()
             config.conf_file = config_path
             config._load_config_file()
@@ -123,7 +123,7 @@ class TestBuscoConfig(unittest.TestCase):
         with open(config_path, "w") as f:
             f.write(test_config_contents)
 
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(BuscoConfig.BatchFatalError):
             config = BuscoConfig.BaseConfig()
             config.conf_file = config_path
             config._load_config_file()
@@ -218,21 +218,21 @@ class TestBuscoConfig(unittest.TestCase):
             config._check_mandatory_keys_exist()
 
     def test_mandatory_keys_check_missing_param_in(self):
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(BuscoConfig.BatchFatalError):
             params_test = {"out": "output_name", "mode": "genome"}
             config = BuscoConfig.BuscoConfigMain(self.base_config, params_test)
             config.configure()
             config._check_mandatory_keys_exist()
 
     def test_mandatory_keys_check_missing_param_mode(self):
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(BuscoConfig.BatchFatalError):
             params_test = {"in": "input_file", "out": "output_name"}
             config = BuscoConfig.BuscoConfigMain(self.base_config, params_test)
             config.configure()
             config._check_mandatory_keys_exist()
 
     def test_mandatory_keys_check_missing_param_out(self):
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(BuscoConfig.BatchFatalError):
             params_test = {"in": "input_file", "mode": "genome"}
             config = BuscoConfig.BuscoConfigMain(self.base_config, params_test)
             config.configure()
@@ -251,7 +251,7 @@ class TestBuscoConfig(unittest.TestCase):
         os.makedirs(previous_run_name, exist_ok=True)
         self.test_params["out"] = previous_run_name
         self.test_params["force"] = "False"
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(BuscoConfig.BatchFatalError):
             config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
             config.configure()
             config._check_no_previous_run()
@@ -312,7 +312,7 @@ class TestBuscoConfig(unittest.TestCase):
 
     def test_catch_disallowed_keys(self):
         for section_name in self.config_structure:
-            with self.assertRaises(SystemExit):
+            with self.assertRaises(BuscoConfig.BatchFatalError):
                 config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
                 config.configure()
                 config.set(section_name, "forbidden_option", "forbidden_value")
@@ -321,7 +321,7 @@ class TestBuscoConfig(unittest.TestCase):
     def test_out_value_check_invalid(self):
         for str_format in ["/path/to/output", "output/"]:
             self.test_params["out"] = str_format
-            with self.assertRaises(SystemExit):
+            with self.assertRaises(BuscoConfig.BatchFatalError):
                 config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
                 config.configure()
                 config._check_out_value()
@@ -334,7 +334,7 @@ class TestBuscoConfig(unittest.TestCase):
     def test_limit_value_out_of_range(self):
         for lim_val in [-1, 0, 25]:
             self.test_params["limit"] = lim_val
-            with self.assertRaises(SystemExit):
+            with self.assertRaises(BuscoConfig.BatchFatalError):
                 config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
                 config.configure()
                 config._check_limit_value()
@@ -398,15 +398,38 @@ class TestBuscoConfig(unittest.TestCase):
             config.get("hmmsearch", "path"), os.path.expanduser("~/test_hmmsearch_path")
         )
 
-    def test_required_input_exists_true(self):
-        input_filename = "test_input_file"
-        Path(input_filename).touch()
-        self.test_params["in"] = input_filename
+    @patch(
+        "__main__.BuscoConfig_unittests.BuscoConfig.os.path.isdir", return_value=True
+    )
+    def test_batch_mode_true(self, *args):
         config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
-        config.configure()
-        with self.assertLogs(BuscoConfig.logger, level="INFO"):
-            config._check_required_input_exists()
-        os.remove(input_filename)
+        config.set = Mock()
+        config._check_batch_mode()
+        calls = [call("busco_run", "batch_mode", "True")]
+        config.set.assert_has_calls(calls)
+
+    @patch(
+        "__main__.BuscoConfig_unittests.BuscoConfig.os.path.isdir", return_value=False
+    )
+    @patch(
+        "__main__.BuscoConfig_unittests.BuscoConfig.os.path.isfile", return_value=True
+    )
+    def test_batch_mode_false_with_file(self, *args):
+        config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
+        config.set = Mock()
+        config._check_batch_mode()
+
+    @patch(
+        "__main__.BuscoConfig_unittests.BuscoConfig.os.path.isdir", return_value=False
+    )
+    @patch(
+        "__main__.BuscoConfig_unittests.BuscoConfig.os.path.isfile", return_value=False
+    )
+    def test_batch_mode_false_with_error(self, *args):
+        config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
+        config.set = Mock()
+        with self.assertRaises(BuscoConfig.BatchFatalError):
+            config._check_batch_mode()
 
     def test_required_input_exists_false(self):
         input_filename = "test_input_file"
@@ -415,7 +438,7 @@ class TestBuscoConfig(unittest.TestCase):
         self.test_params["in"] = input_filename
         config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
         config.configure()
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(BuscoConfig.BatchFatalError):
             config._check_required_input_exists()
 
     @patch("__main__.BuscoConfig_unittests.BuscoConfig.BuscoDownloadManager")
@@ -435,6 +458,7 @@ class TestBuscoConfig(unittest.TestCase):
 
     @patch.object(BuscoConfig.BuscoConfigMain, "log_config")
     @patch.object(BuscoConfig.BuscoConfigMain, "_init_downloader")
+    @patch.object(BuscoConfig.BuscoConfigMain, "_check_batch_mode")
     @patch.object(BuscoConfig.BuscoConfigMain, "_check_required_input_exists")
     @patch.object(BuscoConfig.BuscoConfigMain, "_expand_all_paths")
     @patch.object(BuscoConfig.BuscoConfigMain, "_check_evalue")
@@ -455,6 +479,7 @@ class TestBuscoConfig(unittest.TestCase):
         mock_check_evalue,
         mock_expand_all_paths,
         mock_check_input,
+        mock_check_batch,
         mock_init_downloader,
         mock_log_config,
     ):
@@ -470,6 +495,7 @@ class TestBuscoConfig(unittest.TestCase):
         mock_check_evalue.assert_called()
         mock_expand_all_paths.assert_called()
         mock_check_input.assert_called()
+        mock_check_batch.assert_called()
         mock_init_downloader.assert_called()
         mock_log_config.assert_called()
 
@@ -524,7 +550,7 @@ class TestBuscoConfig(unittest.TestCase):
         self.test_params["datasets_version"] = "odb11"
         config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
         config.configure()
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(BuscoConfig.BatchFatalError):
             config.check_lineage_present()
 
     def test_set_results_dirname(self):
@@ -559,11 +585,9 @@ class TestBuscoConfig(unittest.TestCase):
         BuscoConfig.BuscoConfigAuto(None, "lineage")
         mock_set_dirname.assert_called_with("lineage")
 
-    @patch("busco.BuscoConfig.BuscoConfigAuto.load_dataset_config")
-    @patch("busco.BuscoConfig.BuscoConfigAuto.download_lineage_file")
+    @patch("busco.BuscoConfig.BuscoConfigAuto.load_dataset")
     @patch("busco.BuscoConfig.BuscoConfig")
     @patch("busco.BuscoConfig.BuscoConfigAuto._propagate_config")
-    @patch("busco.BuscoConfig.BuscoConfigAuto.set_results_dirname")
     @patch("busco.BuscoConfig.BuscoConfigAuto._create_required_paths")
     def test_autoconfig_init_creates_paths(self, mock_create_paths, *args):
         BuscoConfig.BuscoConfigAuto(None, None)
@@ -590,10 +614,8 @@ class TestBuscoConfig(unittest.TestCase):
         mock_load_dataset.assert_called()
 
     @patch("busco.BuscoConfig.BuscoConfigAuto._propagate_config")
-    @patch("busco.BuscoConfig.BuscoConfigAuto.set_results_dirname")
     @patch("busco.BuscoConfig.BuscoConfigAuto._create_required_paths")
-    @patch("busco.BuscoConfig.BuscoConfigAuto.download_lineage_file")
-    @patch("busco.BuscoConfig.BuscoConfigAuto.load_dataset_config")
+    @patch("busco.BuscoConfig.BuscoConfigAuto.load_dataset")
     @patch("busco.BuscoConfig.BuscoConfig.__init__")
     def test_autoconfig_init_calls_super(self, mock_config_parent, *args):
         BuscoConfig.BuscoConfigAuto(None, None)

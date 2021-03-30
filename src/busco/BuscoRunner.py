@@ -1,3 +1,4 @@
+from busco.Exceptions import BatchFatalError, BuscoError
 from busco.analysis.BuscoAnalysis import BuscoAnalysis
 from busco.analysis.GenomeAnalysis import (
     GenomeAnalysisEukaryotesAugustus,
@@ -12,14 +13,219 @@ from busco.analysis.GenomeAnalysis import GenomeAnalysisProkaryotes
 from busco.BuscoLogger import BuscoLogger
 from busco.BuscoConfig import BuscoConfigMain
 from busco.busco_tools.base import NoGenesError, BaseRunner
+from busco.BuscoLogger import LogDecorator as log
 from configparser import NoOptionError
+from busco.busco_tools.Toolset import ToolException
 import os
+import sys
 import shutil
+import time
+import traceback
+from collections import defaultdict
+
 
 logger = BuscoLogger.get_logger(__name__)
 
 
-class BuscoRunner:
+class SingleRunner:
+    def __init__(self, config_manager):
+        self.start_time = time.time()
+        self.config_manager = config_manager
+        self.config = self.config_manager.config_main
+        self.input_file = self.config.get("busco_run", "in")
+        self.lineage_dataset = None
+        self.runner = None
+
+    def get_lineage(self):
+        if self.config.getboolean("busco_run", "auto-lineage"):
+            lineage_dataset_fullpath, runner = self.auto_select_lineage()  # full path
+            if not runner.config.get("busco_run", "domain") == "viruses":
+                self.config.set(
+                    "busco_run",
+                    "parent_dataset",
+                    runner.config.get("busco_run", "lineage_dataset"),
+                )
+            self.config.set("busco_run", "lineage_dataset", lineage_dataset_fullpath)
+            self.runner = runner
+
+        self.lineage_dataset = self.config.get(
+            "busco_run", "lineage_dataset"
+        )  # full path
+        return
+
+    @log("No lineage specified. Running lineage auto selector.\n", logger)
+    def auto_select_lineage(self):
+        from busco.AutoLineage import (
+            AutoSelectLineage,
+        )  # Import statement inside method to avoid circular imports
+
+        asl = AutoSelectLineage(self.config_manager)
+        asl.run_auto_selector()
+        asl.get_lineage_dataset()
+        asl.set_best_match_lineage()
+        lineage_dataset = asl.best_match_lineage_dataset
+        runner = asl.selected_runner
+        asl.reset()
+        return lineage_dataset, runner
+
+    @staticmethod
+    def log_error(err):
+        logger.error(err)
+        logger.debug(err, exc_info=True)
+        logger.error("BUSCO analysis failed !")
+        logger.error(
+            "Check the logs, read the user guide (https://busco.ezlab.org/busco_userguide.html), "
+            "and check the BUSCO issue board on https://gitlab.com/ezlab/busco/issues\n"
+        )
+
+    @log("Input file is {}", logger, attr_name="input_file")
+    def run(self):
+        try:
+            self.get_lineage()
+            self.config.load_dataset(self.lineage_dataset)
+
+            lineage_basename = os.path.basename(
+                self.config.get("busco_run", "lineage_dataset")
+            )
+            main_out_folder = self.config.get("busco_run", "main_out")
+            lineage_results_folder = os.path.join(
+                main_out_folder,
+                "auto_lineage",
+                self.config.get("busco_run", "lineage_results_dir"),
+            )
+
+            if not (
+                self.config.getboolean("busco_run", "auto-lineage")
+                and (
+                    lineage_basename.startswith(("bacteria", "archaea", "eukaryota"))
+                    or (
+                        lineage_basename.startswith(
+                            ("mollicutes", "mycoplasmatales", "entomoplasmatales")
+                        )
+                        and os.path.exists(lineage_results_folder)
+                    )
+                )
+            ):
+                # It is possible that the  lineages ("mollicutes", "mycoplasmatales", "entomoplasmatales") were arrived at either by the Prodigal genetic code shortcut
+                # or by BuscoPlacer. If the former, the run will have already been completed. If the latter it still needs
+                # to be done.
+
+                self.runner = AnalysisRunner(self.config)
+
+            if os.path.exists(lineage_results_folder):
+                new_dest = os.path.join(
+                    main_out_folder, self.config.get("busco_run", "lineage_results_dir")
+                )
+                if not os.path.exists(new_dest):
+                    os.symlink(lineage_results_folder, new_dest)
+            else:
+                self.runner.run_analysis()
+                AnalysisRunner.selected_dataset = lineage_basename
+            self.runner.finish(time.time() - self.start_time)
+
+        except BuscoError as e:
+            self.log_error(e)
+            raise
+
+        except ToolException as e:
+            logger.error(e)
+            raise BatchFatalError(e)
+
+        except KeyboardInterrupt:
+            logger.exception(
+                "A signal was sent to kill the process. \nBUSCO analysis failed !"
+            )
+            raise BatchFatalError
+
+        except BaseException:
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            logger.critical(
+                "Unhandled exception occurred:\n{}\n".format(
+                    "".join(
+                        traceback.format_exception(exc_type, exc_value, exc_traceback)
+                    )
+                )
+            )
+            raise BatchFatalError
+
+
+class BatchRunner:
+
+    batch_results = []
+
+    @log(
+        "Running in batch mode. {} input files found in {}",
+        logger,
+        attr_name=["num_inputs", "input_dir"],
+        on_func_exit=True,
+    )
+    def __init__(self, config_manager):
+        self.config_manager = config_manager
+        self.config = self.config_manager.config_main
+        self.input_dir = self.config.get("busco_run", "in")
+        self.input_files = [
+            os.path.join(self.input_dir, f) for f in os.listdir(self.input_dir)
+        ]
+        self.num_inputs = len(self.input_files)
+
+    def run(self):
+        for i, input_file in enumerate(self.input_files):
+            try:
+                input_id = os.path.basename(input_file)
+                self.config.set("busco_run", "in", input_file)
+                self.config.set(
+                    "busco_run",
+                    "main_out",
+                    os.path.join(
+                        self.config.get("busco_run", "out_path"),
+                        self.config.get("busco_run", "out"),
+                        input_id,
+                    ),
+                )
+                single_run = SingleRunner(self.config)
+                single_run.run()
+
+                run_summary = single_run.runner.format_run_summary()
+                type(self).batch_results.append(run_summary)
+
+                AnalysisRunner.reset()
+
+            except NoOptionError as noe:
+                raise BatchFatalError(noe)
+
+            except BatchFatalError:
+                raise
+
+            except BuscoError:
+                continue
+
+        try:
+            self.write_batch_summary()
+        except NoOptionError as noe:
+            raise BatchFatalError(noe)
+
+    def write_batch_summary(self):
+        summary_file = os.path.join(
+            self.config.get("busco_run", "out_path"),
+            self.config.get("busco_run", "out"),
+            "batch_summary.txt",
+        )
+        # for inp, res in type(self).batch_results.items():
+        #     if
+        with open(summary_file, "w") as f:
+            if self.config.getboolean("busco_run", "auto-lineage"):
+                f.write(
+                    "Input file\tDataset\tComplete\tSingle\tDuplicated\tFragmented\tMissing\tn_markers\tScores_archaea_odb10\tScores_bacteria_odb10\tScores_eukaryota_odb10\n"
+                )
+            else:
+                f.write(
+                    "Input file\tDataset\tComplete\tSingle\tDuplicated\tFragmented\tMissing\tn_markers\n"
+                )
+            for line in type(self).batch_results:
+                f.write(line)
+
+
+class AnalysisRunner:
 
     mode_dict = {
         "euk_genome_met": GenomeAnalysisEukaryotesMetaeuk,
@@ -30,8 +236,10 @@ class BuscoRunner:
         "proteins": GeneSetAnalysis,
     }
 
-    final_results = []
+    final_results = {}
     results_datasets = []
+    all_results = defaultdict(dict)
+    selected_dataset = None
 
     def __init__(self, config):
 
@@ -51,7 +259,7 @@ class BuscoRunner:
                 else:
                     self.mode = "euk_genome_met"
             else:
-                raise SystemExit("Unrecognized mode {}".format(self.mode))
+                raise BatchFatalError("Unrecognized mode {}".format(self.mode))
 
         elif self.mode == "transcriptome":
             if self.domain == "prokaryota":
@@ -59,13 +267,57 @@ class BuscoRunner:
             elif self.domain == "eukaryota":
                 self.mode = "euk_tran"
             else:
-                raise SystemExit("Unrecognized mode {}".format(self.mode))
+                raise BatchFatalError("Unrecognized mode {}".format(self.mode))
         analysis_type = type(self).mode_dict[self.mode]
         self.analysis = analysis_type()
         self.prok_fail_count = (
             0  # Needed to check if both bacteria and archaea return no genes.
         )
         self.cleaned_up = False
+
+    @classmethod
+    def reset(cls):
+        cls.final_results = {}
+        cls.results_datasets = []
+        cls.all_results = defaultdict(dict)
+
+    def save_results(self):
+        lineage_basename = os.path.basename(
+            self.config.get("busco_run", "lineage_dataset")
+        )
+        if not self.config.getboolean("busco_run", "auto-lineage"):
+            type(self).selected_dataset = lineage_basename
+        self.final_results[
+            lineage_basename
+        ] = self.analysis.hmmer_runner.hmmer_results_lines
+        self.all_results[lineage_basename][
+            "one_line_summary"
+        ] = self.analysis.hmmer_runner.one_line_summary_raw
+        self.all_results[lineage_basename][
+            "Complete"
+        ] = self.analysis.hmmer_runner.complete_percent
+        self.all_results[lineage_basename][
+            "Single copy"
+        ] = self.analysis.hmmer_runner.s_percent
+        self.all_results[lineage_basename][
+            "Multi copy"
+        ] = self.analysis.hmmer_runner.d_percent
+        self.all_results[lineage_basename][
+            "Fragmented"
+        ] = self.analysis.hmmer_runner.f_percent
+        self.all_results[lineage_basename][
+            "Missing"
+        ] = self.analysis.hmmer_runner.missing_percent
+        self.all_results[lineage_basename][
+            "n_markers"
+        ] = self.analysis.hmmer_runner.total_buscos
+        self.all_results[lineage_basename]["domain"] = self.analysis.domain
+        try:
+            parent_dataset = self.config.get("busco_run", "parent_dataset")
+            self.all_results[lineage_basename]["parent_dataset"] = parent_dataset
+        except NoOptionError:
+            pass
+        self.results_datasets.append(os.path.basename(lineage_basename))
 
     def run_analysis(self, callback=(lambda *args: None)):
         try:
@@ -83,7 +335,7 @@ class BuscoRunner:
                 "{0} did not recognize any genes matching the dataset {1} in the input file. "
                 "If this is unexpected, check your input file and your "
                 "installation of {0}\n".format(
-                    nge.gene_predictor, self.analysis._lineage_name
+                    nge.gene_predictor, self.analysis.lineage_name
                 )
             )
             fatal = (
@@ -99,17 +351,19 @@ class BuscoRunner:
                 and self.prok_fail_count == 1
             )
             if fatal:
-                raise SystemExit(no_genes_msg)
+                raise BuscoError(no_genes_msg)
             else:
                 logger.warning(no_genes_msg)
                 s_buscos = d_buscos = f_buscos = s_percent = d_percent = f_percent = 0.0
                 if self.mode == "prok_genome":
                     self.prok_fail_count += 1
 
-        except SystemExit as se:
+        except (BuscoError, BatchFatalError):
             self.cleanup()
+            raise
 
-            raise se
+        finally:
+            self.save_results()
         return callback(s_buscos, d_buscos, f_buscos, s_percent, d_percent, f_percent)
 
     def cleanup(self):
@@ -118,23 +372,33 @@ class BuscoRunner:
 
     def format_results(self):
         framed_output = []
-        if len(type(self).results_datasets) == 1:
-            header1 = "Results from dataset {}\n".format(type(self).results_datasets[0])
-        else:
-            header1 = "Results from generic domain {}\n".format(
-                type(self).results_datasets[0]
+        final_dataset = type(self).selected_dataset
+        domain = type(self).all_results[final_dataset]["domain"]
+        try:
+            parent_dataset = os.path.basename(
+                type(self).all_results[final_dataset]["parent_dataset"]
             )
-        final_output_results1 = "".join(
-            self._check_parasitic(type(self).final_results[0][1:])
-        )
+        except KeyError:
+            parent_dataset = None
+        if parent_dataset is None or domain == "viruses":
+            header1 = "Results from dataset {}\n".format(final_dataset)
+            final_output_results1 = "".join(
+                self._check_parasitic(type(self).final_results[final_dataset][1:])
+            )
+        else:
+            header1 = "Results from generic domain {}\n".format(parent_dataset)
+            final_output_results1 = "".join(
+                self._check_parasitic(type(self).final_results[parent_dataset][1:])
+            )
+
         sb1 = SmartBox()
         framed_lines1 = sb1.create_results_box(header1, final_output_results1)
         framed_output.append(framed_lines1)
 
-        if len(type(self).final_results) == 2:
-            header2 = "Results from dataset {}\n".format(type(self).results_datasets[1])
+        if domain != "viruses" and parent_dataset != final_dataset:
+            header2 = "Results from dataset {}\n".format(final_dataset)
             final_output_results2 = "".join(
-                self._check_parasitic(type(self).final_results[1][1:])
+                self._check_parasitic(type(self).final_results[final_dataset][1:])
             )
             sb2 = SmartBox()
             framed_lines2 = sb2.create_results_box(header2, final_output_results2)
@@ -142,10 +406,49 @@ class BuscoRunner:
 
         return "".join(framed_output)
 
+    def format_run_summary(self):
+        input_file = os.path.basename(self.config.get("busco_run", "in"))
+        dataset = type(self).selected_dataset
+        complete = type(self).all_results[dataset]["Complete"]
+        single = type(self).all_results[dataset]["Single copy"]
+        duplicated = type(self).all_results[dataset]["Multi copy"]
+        fragmented = type(self).all_results[dataset]["Fragmented"]
+        missing = type(self).all_results[dataset]["Missing"]
+        n_markers = type(self).all_results[dataset]["n_markers"]
+
+        if self.config.getboolean("busco_run", "auto-lineage"):
+            scores_arch = (
+                type(self).all_results["archaea_odb10"]["one_line_summary"].strip()
+            )
+            scores_bact = (
+                type(self).all_results["bacteria_odb10"]["one_line_summary"].strip()
+            )
+            scores_euk = (
+                type(self).all_results["eukaryota_odb10"]["one_line_summary"].strip()
+            )
+        else:
+            scores_arch = ""
+            scores_bact = ""
+            scores_euk = ""
+        summary_line = "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(
+            input_file,
+            dataset,
+            complete,
+            single,
+            duplicated,
+            fragmented,
+            missing,
+            n_markers,
+            scores_arch,
+            scores_bact,
+            scores_euk,
+        )
+        return summary_line
+
     def _check_parasitic(self, final_output_results):
         try:
             with open(
-                os.path.join(self.analysis._lineage_dataset, "missing_in_parasitic.txt")
+                os.path.join(self.analysis.lineage_dataset, "missing_in_parasitic.txt")
             ) as parasitic_file:
                 missing_in_parasitic_buscos = [
                     entry.strip() for entry in parasitic_file.readlines()
@@ -219,8 +522,8 @@ class BuscoRunner:
             root_domain_output_folder_final = os.path.join(
                 main_out_folder, "run_{}".format(domain_results_folder)
             )
-            os.rename(root_domain_output_folder, root_domain_output_folder_final)
-            os.symlink(root_domain_output_folder_final, root_domain_output_folder)
+            print(root_domain_output_folder, root_domain_output_folder_final)
+            os.symlink(root_domain_output_folder, root_domain_output_folder_final)
             shutil.copyfile(
                 os.path.join(root_domain_output_folder_final, "short_summary.txt"),
                 os.path.join(
@@ -258,7 +561,11 @@ class BuscoRunner:
         # This is deliberately a staticmethod so it can be called from run_BUSCO() even if BuscoRunner has not yet
         # been initialized.
         try:
-            log_folder = os.path.join(config.get("busco_run", "main_out"), "logs")
+            log_folder = os.path.join(
+                config.get("busco_run", "out_path"),
+                config.get("busco_run", "out"),
+                "logs",
+            )
             if not os.path.exists(log_folder):
                 os.makedirs(log_folder)
             shutil.move(
@@ -299,8 +606,6 @@ class BuscoRunner:
             "For assistance with interpreting the results, please consult the userguide: "
             "https://busco.ezlab.org/busco_userguide.html\n"
         )
-
-        self.move_log_file(self.config)
 
 
 class SmartBox:
@@ -367,7 +672,7 @@ class SmartBox:
 
     def create_results_box(self, header_text, body_text):
         header = self.wrap_header(header_text)  # Called first to define width
-        box_lines = ["\n"]
+        box_lines = list(["\n"])
         box_lines.append("\t{}".format(self.add_horizontal()))
         framed_header = self.add_vertical(header)
         for line in framed_header:

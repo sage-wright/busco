@@ -22,6 +22,7 @@ import select
 import time
 import threading
 import random
+from busco.Exceptions import BatchFatalError, BuscoError
 
 from configparser import NoOptionError
 from configparser import NoSectionError
@@ -64,7 +65,7 @@ class LogDecorator:
                     self.format_string(*args)
                     self.retval = func(*args, **kwargs)
                 return self.retval
-            except SystemExit:
+            except (BuscoError, BatchFatalError):
                 raise
 
         return wrapped_func
@@ -281,7 +282,7 @@ class BuscoLogger(logging.getLoggerClass()):
                 if e.errno == 13
                 else "IO error({0}): {1}".format(e.errno, e.strerror)
             )
-            raise SystemExit(errStr)
+            raise BatchFatalError(errStr)
 
         self._file_hdlr.setLevel(logging.DEBUG)
         self._file_hdlr.setFormatter(self._verbose_formatter)

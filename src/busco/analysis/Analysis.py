@@ -3,6 +3,7 @@ from busco.BuscoLogger import BuscoLogger
 from abc import ABCMeta
 import os
 from busco.busco_tools.blast import TBLASTNRunner, MKBLASTRunner
+from busco.Exceptions import BuscoError
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -18,7 +19,7 @@ class NucleotideAnalysis(metaclass=ABCMeta):
 
         super().__init__()  # Initialize BuscoAnalysis
         if not self.check_nucleotide_file(self.input_file):
-            raise SystemExit("The input file does not contain nucleotide sequences.")
+            raise BuscoError("The input file does not contain nucleotide sequences.")
 
     def check_nucleotide_file(self, filename):
         i = 0
@@ -77,7 +78,7 @@ class ProteinAnalysis:
     def __init__(self):
         super().__init__()
         if not self.check_protein_file(self.input_file):
-            raise SystemExit("Please provide a protein file as input")
+            raise BuscoError("Please provide a protein file as input")
 
     def check_protein_file(self, filename):
 
@@ -125,7 +126,7 @@ class BLASTAnalysis(metaclass=ABCMeta):
             self.config.set("busco_run", "restart", str(self.restart))
             self.mkblast_runner.run()
         if len(os.listdir(os.path.split(self.mkblast_runner.output_db)[0])) == 0:
-            raise SystemExit(
+            raise BuscoError(
                 "makeblastdb failed to create a BLAST DB at {}".format(
                     self.mkblast_runner.output_db
                 )

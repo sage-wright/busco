@@ -2,6 +2,7 @@ import unittest
 from busco import run_BUSCO
 import sys
 import io
+from unittest.mock import Mock, patch, call
 
 
 class TestParams(unittest.TestCase):
@@ -97,7 +98,7 @@ class TestParams(unittest.TestCase):
         output_file = "output_file"
         mode = "mode"
         lineage_dataset = "lineage_dataset"
-        cpus = "cpus"
+        cpus = 10
         evalue = 0.1
 
         arg_values = {
@@ -153,7 +154,7 @@ class TestParams(unittest.TestCase):
         output_file = "output_file"
         mode = "mode"
         lineage_dataset = "lineage_dataset"
-        cpus = "cpus"
+        cpus = 10
         evalue = 0.1
         limit = 1
         augustus_parameters = "augustus_parameters"
@@ -235,5 +236,97 @@ class TestParams(unittest.TestCase):
         }
         self.assertDictEqual(params, correct_parse)
 
+    def test_command_line_cpu_type(self):
+        bad_args_cpu = ["cpus", "1.5", None]
+
+        for arg in bad_args_cpu:
+            sys.argv[1:] = ["--cpu", arg]
+            with self.assertRaises(SystemExit) as cm:
+                captured_output = io.StringIO()
+                sys.stderr = captured_output
+                try:
+                    run_BUSCO._parse_args()
+                finally:
+                    sys.stderr = sys.__stderr__
+            self.assertEqual(cm.exception.code, 2)
+
+    def test_command_line_evalue_type(self):
+        bad_args_evalue = ["evalue", None]
+
+        for arg in bad_args_evalue:
+            sys.argv[1:] = ["--evalue", arg]
+            with self.assertRaises(SystemExit) as cm:
+                captured_output = io.StringIO()
+                sys.stderr = captured_output
+                try:
+                    run_BUSCO._parse_args()
+                finally:
+                    sys.stderr = sys.__stderr__
+            self.assertEqual(cm.exception.code, 2)
+
+    def test_command_line_limit_type(self):
+        bad_args_limit = ["limit", "1.5", None]
+        for arg in bad_args_limit:
+            sys.argv[1:] = ["--limit", arg]
+            with self.assertRaises(SystemExit) as cm:
+                captured_output = io.StringIO()
+                sys.stderr = captured_output
+                try:
+                    run_BUSCO._parse_args()
+                finally:
+                    sys.stderr = sys.__stderr__
+            self.assertEqual(cm.exception.code, 2)
+
     def tearDown(self):
         sys.argv = [sys.argv[0]]
+
+
+class TestMaster(unittest.TestCase):
+    def setUp(self):
+        self.maxDiff = None
+        self.params = {}
+        pass
+
+    @patch("busco.run_BUSCO.logger.info")
+    def test_log_warning_if_neither_lineage_nor_autolineage_specified(self, *args):
+        bm = run_BUSCO.BuscoMaster(self.params)
+        bm.config = Mock()
+        bm.config.check_lineage_present.return_value = False
+        bm.config.getboolean.side_effect = [False, False, False]
+        with self.assertLogs(run_BUSCO.logger, "WARNING"):
+            bm.harmonize_auto_lineage_settings()
+
+    @patch("busco.run_BUSCO.logger.info")
+    def test_config_updated_if_no_lineage(self, *args):
+        bm = run_BUSCO.BuscoMaster(self.params)
+        bm.config = Mock()
+        bm.config.check_lineage_present.return_value = False
+        calls = [call("busco_run", "auto-lineage", "True")]
+        bm.harmonize_auto_lineage_settings()
+        bm.config.set.assert_has_calls(calls, any_order=True)
+
+    @patch("busco.run_BUSCO.logger.info")
+    def test_config_updated_if_lineage_present(self, *args):
+        bm = run_BUSCO.BuscoMaster(self.params)
+        bm.config = Mock()
+        bm.config.check_lineage_present.return_value = True
+        bm.config.getboolean.side_effect = [False, False, False]
+        calls = [
+            call("busco_run", "auto-lineage", "False"),
+            call("busco_run", "auto-lineage-prok", "False"),
+            call("busco_run", "auto-lineage-euk", "False"),
+        ]
+        bm.harmonize_auto_lineage_settings()
+        bm.config.set.assert_has_calls(calls, any_order=True)
+
+    @patch("busco.run_BUSCO.logger.info")
+    def test_log_warning_if_both_lineage_and_autolineage_specified(self, *args):
+        bm = run_BUSCO.BuscoMaster(self.params)
+        bm.config = Mock()
+        bm.config.check_lineage_present.return_value = True
+        bm.config.getboolean.return_value = True
+        with self.assertLogs(run_BUSCO.logger, "WARNING"):
+            bm.harmonize_auto_lineage_settings()
+
+    def tearDown(self):
+        pass

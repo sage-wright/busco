@@ -9,6 +9,7 @@ from Bio import SeqIO
 import csv
 import subprocess
 from busco.BuscoConfig import BuscoConfigAuto
+from busco.Exceptions import BatchFatalError, BuscoError
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -44,6 +45,7 @@ class HMMERRunner(BaseRunner):
         self.extra_columns = False
         self.log_count = 0  # Dummy variable used to skip logging for intermediate eukaryote pipeline results.
         self.one_line_summary = None
+        self.one_line_summary_raw = None
 
         # to be initialized before run time
         self.input_sequences = None
@@ -85,6 +87,8 @@ class HMMERRunner(BaseRunner):
         self.s_percent = 0
         self.d_percent = 0
         self.f_percent = 0
+        self.complete_percent = 0
+        self.missing_percent = 0
 
         self.hmmer_results_lines = None
 
@@ -199,7 +203,6 @@ class HMMERRunner(BaseRunner):
     def get_version(self):
         """
         check the Tool has the correct version
-        :raises SystemExit: if the version is not correct
         """
         hmmer_version = subprocess.check_output(
             [self.cmd, "-h"], stderr=subprocess.STDOUT, shell=False
@@ -218,11 +221,11 @@ class HMMERRunner(BaseRunner):
     def check_tool_dependencies(self):
         """
         check dependencies on tools
-        :raises SystemExit: if a Tool version is not supported
+        :raises BatchFatalError: if a Tool version is not supported
         """
         # check hmm version
         if not self.version >= BuscoConfig.HMMER_VERSION:
-            raise SystemExit(
+            raise BatchFatalError(
                 "HMMer version detected is not supported, please use HMMer v.{} +".format(
                     BuscoConfig.HMMER_VERSION
                 )
@@ -313,7 +316,7 @@ class HMMERRunner(BaseRunner):
                         records[gene_id]["env_coords"].append((env_start, env_end))
 
                     except IndexError as e:
-                        raise SystemExit(
+                        raise BuscoError(
                             e, "Cannot parse HMMER output file {}".format(filename)
                         )
         return records
@@ -444,7 +447,7 @@ class HMMERRunner(BaseRunner):
             )
             matched_genes = self.matched_genes_fragment
         else:
-            raise SystemExit("Unrecognized dictionary of BUSCOs.")
+            raise BuscoError("Unrecognized dictionary of BUSCOs.")
 
         for busco_id in list(busco_dict.keys()):
             matches = busco_dict[busco_id]
@@ -507,7 +510,7 @@ class HMMERRunner(BaseRunner):
         elif busco_dict == self.is_fragment:
             matched_genes = self.matched_genes_fragment
         else:
-            raise SystemExit("Unrecognized dictionary of BUSCOs.")
+            raise BuscoError("Unrecognized dictionary of BUSCOs.")
 
         busco_matches_to_remove = []
         # Keep the best scoring gene if gene is matched by more than one busco with the same match rank
@@ -778,7 +781,7 @@ class HMMERRunner(BaseRunner):
     def _load_length(self):
         """
         This function loads the length cutoffs file
-        :raises SystemExit: if the lengths_cutoff file cannot be read
+        :raises BuscoError: if the lengths_cutoff file cannot be read
         """
         lengths_cutoff_file = os.path.join(self.lineage_dataset, "lengths_cutoff")
         try:
@@ -797,9 +800,9 @@ class HMMERRunner(BaseRunner):
                             self.cutoff_dict[taxid]["sigma"] = 1
                         self.cutoff_dict[taxid]["length"] = length
                     except IndexError as e:
-                        raise SystemExit(e, "Error parsing the lengths_cutoff file.")
+                        raise BuscoError(e, "Error parsing the lengths_cutoff file.")
         except IOError:
-            raise SystemExit(
+            raise BuscoError(
                 "Impossible to read the lengths in {}".format(
                     os.path.join(lengths_cutoff_file)
                 )
@@ -809,7 +812,7 @@ class HMMERRunner(BaseRunner):
     def _load_score(self):
         """
         This function loads the score cutoffs file
-        :raises SystemExit: if the scores_cutoff file cannot be read
+        :raises BuscoError: if the scores_cutoff file cannot be read
         """
         scores_cutoff_file = os.path.join(self.lineage_dataset, "scores_cutoff")
         try:
@@ -822,9 +825,9 @@ class HMMERRunner(BaseRunner):
                         score = float(line[1])
                         self.cutoff_dict[taxid]["score"] = score
                     except IndexError as e:
-                        raise SystemExit(e, "Error parsing the scores_cutoff file.")
+                        raise BuscoError(e, "Error parsing the scores_cutoff file.")
         except IOError:
-            raise SystemExit(
+            raise BuscoError(
                 "Impossible to read the scores in {}".format(scores_cutoff_file)
             )
         return
@@ -900,52 +903,58 @@ class HMMERRunner(BaseRunner):
         return sorted_lines
 
     def produce_hmmer_summary(self):
-        (
-            single_copy,
-            multi_copy,
-            only_fragments,
-            total_buscos,
-        ) = self._get_busco_percentages()
+        self._get_busco_percentages()
 
         self.hmmer_results_lines.append("***** Results: *****\n\n")
-        self.one_line_summary = "C:{}%[S:{}%,D:{}%],F:{}%,M:{}%,n:{}\t{}\n".format(
-            round(self.s_percent + self.d_percent, 1),
+        self.one_line_summary_raw = "C:{}%[S:{}%,D:{}%],F:{}%,M:{}%,n:{}\t{}\n".format(
+            self.complete_percent,
             self.s_percent,
             self.d_percent,
             self.f_percent,
-            abs(round(100 - self.s_percent - self.d_percent - self.f_percent, 1)),
-            total_buscos,
+            self.missing_percent,
+            self.total_buscos,
             "   ",
         )
-        self.hmmer_results_lines.append(self.one_line_summary)
+        self.one_line_summary = "Results:\t{}".format(self.one_line_summary_raw)
+        self.hmmer_results_lines.append(self.one_line_summary_raw)
         self.hmmer_results_lines.append(
-            "{}\tComplete BUSCOs (C)\t\t\t{}\n".format(single_copy + multi_copy, "   ")
-        )
-        self.hmmer_results_lines.append(
-            "{}\tComplete and single-copy BUSCOs (S)\t{}\n".format(single_copy, "   ")
-        )
-        self.hmmer_results_lines.append(
-            "{}\tComplete and duplicated BUSCOs (D)\t{}\n".format(multi_copy, "   ")
-        )
-        self.hmmer_results_lines.append(
-            "{}\tFragmented BUSCOs (F)\t\t\t{}\n".format(only_fragments, "   ")
-        )
-        self.hmmer_results_lines.append(
-            "{}\tMissing BUSCOs (M)\t\t\t{}\n".format(
-                total_buscos - single_copy - multi_copy - only_fragments, "   "
+            "{}\tComplete BUSCOs (C)\t\t\t{}\n".format(
+                self.single_copy + self.multi_copy, "   "
             )
         )
         self.hmmer_results_lines.append(
-            "{}\tTotal BUSCO groups searched\t\t{}\n".format(total_buscos, "   ")
+            "{}\tComplete and single-copy BUSCOs (S)\t{}\n".format(
+                self.single_copy, "   "
+            )
+        )
+        self.hmmer_results_lines.append(
+            "{}\tComplete and duplicated BUSCOs (D)\t{}\n".format(
+                self.multi_copy, "   "
+            )
+        )
+        self.hmmer_results_lines.append(
+            "{}\tFragmented BUSCOs (F)\t\t\t{}\n".format(self.only_fragments, "   ")
+        )
+        self.hmmer_results_lines.append(
+            "{}\tMissing BUSCOs (M)\t\t\t{}\n".format(
+                self.total_buscos
+                - self.single_copy
+                - self.multi_copy
+                - self.only_fragments,
+                "   ",
+            )
+        )
+        self.hmmer_results_lines.append(
+            "{}\tTotal BUSCO groups searched\t\t{}\n".format(self.total_buscos, "   ")
         )
 
         if isinstance(self.config, BuscoConfigAuto):
-            self._one_line_hmmer_summary()
+            self._log_one_line_hmmer_summary()
         elif self.domain == "eukaryota" and self.log_count == 0:
             self.log_count += 1
             self._produce_full_hmmer_summary_debug()
         else:
-            self._one_line_hmmer_summary()
+            self._log_one_line_hmmer_summary()
 
         with open(self.short_summary_file, "w") as summary_file:
 
@@ -967,6 +976,10 @@ class HMMERRunner(BaseRunner):
             for line in self.hmmer_results_lines:
                 summary_file.write("\t{}".format(line))
 
+            tool_versions_lines = self.report_tool_versions()
+            for line in tool_versions_lines:
+                summary_file.write(line + "\n")
+
             if (
                 self.config.getboolean("busco_run", "auto-lineage")
                 and isinstance(self.config, BuscoConfigMain)
@@ -974,9 +987,16 @@ class HMMERRunner(BaseRunner):
             ):
                 summary_file.write("\nPlacement file versions:\n")
                 for placement_file in self.config.placement_files:
-                    summary_file.write("{}\n".format(placement_file))
+                    summary_file.write("\t{}\n".format(placement_file))
 
         return
+
+    def report_tool_versions(self):
+        lines = []
+        lines.append("\nDependencies and versions:")
+        for key, value in type(self).tool_versions.items():
+            lines.append("\t{}: {}".format(key, value))
+        return lines
 
     @log("{}", logger, attr_name="hmmer_results_lines", apply="join", on_func_exit=True)
     def _produce_full_hmmer_summary(self):
@@ -993,9 +1013,8 @@ class HMMERRunner(BaseRunner):
     def _produce_full_hmmer_summary_debug(self):
         return
 
-    @log("{}", logger, attr_name="one_line_summary", on_func_exit=True)
-    def _one_line_hmmer_summary(self):
-        self.one_line_summary = "Results:\t{}".format(self.one_line_summary)
+    @log("{}", logger, attr_name="one_line_summary")
+    def _log_one_line_hmmer_summary(self):
         return
 
     def _write_output_header(
@@ -1009,7 +1028,7 @@ class HMMERRunner(BaseRunner):
         """
         file_object.write(
             "# BUSCO version is: {} \n"
-            "# The lineage dataset is: {} (Creation date: {}, number of species: {}, number of BUSCOs: {}"
+            "# The lineage dataset is: {} (Creation date: {}, number of genomes: {}, number of BUSCOs: {}"
             ")\n".format(
                 busco.__version__,
                 os.path.basename(self.lineage_dataset),
@@ -1055,5 +1074,9 @@ class HMMERRunner(BaseRunner):
         self.s_percent = abs(round((self.single_copy / self.total_buscos) * 100, 1))
         self.d_percent = abs(round((self.multi_copy / self.total_buscos) * 100, 1))
         self.f_percent = abs(round((self.only_fragments / self.total_buscos) * 100, 1))
+        self.complete_percent = round(self.s_percent + self.d_percent, 1)
+        self.missing_percent = abs(
+            round(100 - self.s_percent - self.d_percent - self.f_percent, 1)
+        )
 
-        return self.single_copy, self.multi_copy, self.only_fragments, self.total_buscos
+        return

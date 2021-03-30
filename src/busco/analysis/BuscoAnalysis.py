@@ -16,6 +16,7 @@ from busco.busco_tools.hmmer import HMMERRunner
 import os
 from busco.BuscoLogger import BuscoLogger
 from busco.BuscoLogger import LogDecorator as log
+from busco.Exceptions import BatchFatalError, BuscoError
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -50,11 +51,14 @@ class BuscoAnalysis(metaclass=ABCMeta):
 
         # Get other useful variables
         self.input_file = self.config.get("busco_run", "in")
-        self._lineage_dataset = self.config.get("busco_run", "lineage_dataset")
-        self._lineage_name = os.path.basename(self._lineage_dataset)
-        self._domain = self.config.get("busco_run", "domain")
+        self.lineage_dataset = self.config.get("busco_run", "lineage_dataset")
+        self.lineage_name = os.path.basename(self.lineage_dataset)
+        self.domain = self.config.get("busco_run", "domain")
         self._has_variants_file = os.path.exists(
-            os.path.join(self._lineage_dataset, "ancestral_variants")
+            os.path.join(self.lineage_dataset, "ancestral_variants")
+        )
+        self.has_dataset_config_file = os.path.exists(
+            os.path.join(self.lineage_dataset, "dataset.cfg")
         )
         self._dataset_creation_date = self.config.get("busco_run", "creation_date")
         self.restart = self.config.getboolean("busco_run", "restart")
@@ -89,7 +93,7 @@ class BuscoAnalysis(metaclass=ABCMeta):
     @log(
         "Running BUSCO using lineage dataset {0} ({1}, {2})",
         logger,
-        attr_name=["_lineage_name", "_domain", "_dataset_creation_date"],
+        attr_name=["lineage_name", "domain", "_dataset_creation_date"],
         on_func_exit=True,
     )
     def run_analysis(self):
@@ -106,7 +110,7 @@ class BuscoAnalysis(metaclass=ABCMeta):
         This function runs hmmsearch.
         """
         if not busco_ids:
-            files = sorted(os.listdir(os.path.join(self._lineage_dataset, "hmms")))
+            files = sorted(os.listdir(os.path.join(self.lineage_dataset, "hmms")))
             busco_ids = [
                 os.path.splitext(f)[0] for f in files
             ]  # Each Busco ID has a HMM file of the form "<busco_id>.hmm"
@@ -116,7 +120,7 @@ class BuscoAnalysis(metaclass=ABCMeta):
         if self.restart and self.hmmer_runner.check_previous_completed_run():
             logger.info("Skipping HMMER run as output already processed")
         elif len(os.listdir(self.hmmer_runner.results_dir)) > 0:
-            raise SystemExit(
+            raise BuscoError(
                 "HMMER results directory not empty. If you are running in restart mode, make sure you are "
                 "using the same eukaryotic gene predictor (metaeuk/augustus) as before."
             )
@@ -146,27 +150,27 @@ class BuscoAnalysis(metaclass=ABCMeta):
         Note: dataset.cfg file is not mandatory for offline mode
         # todo: implement a check for dataset.cfg file if not using offline mode
 
-        :raises SystemExit: if the dataset is missing files or folders
+        :raises BuscoError: if the dataset is missing files or folders
         """
 
         # Check hmm files exist
-        files = os.listdir(os.path.join(self._lineage_dataset, "hmms"))
+        files = os.listdir(os.path.join(self.lineage_dataset, "hmms"))
         if not files:
-            raise SystemExit(
+            raise BuscoError(
                 "The dataset you provided lacks hmm profiles in {}".format(
-                    os.path.join(self._lineage_dataset, "hmms")
+                    os.path.join(self.lineage_dataset, "hmms")
                 )
             )
 
-        if self._domain == "eukaryota":
+        if self.domain == "eukaryota":
             # Check prfl folder exists and contains profiles
             for dirpath, dirnames, files in os.walk(
-                os.path.join(self._lineage_dataset, "prfl")
+                os.path.join(self.lineage_dataset, "prfl")
             ):
                 if not files:
-                    raise SystemExit(
+                    raise BuscoError(
                         "The dataset you provided lacks elements in {}".format(
-                            os.path.join(self._lineage_dataset, "prfl")
+                            os.path.join(self.lineage_dataset, "prfl")
                         )
                     )
 
@@ -175,13 +179,17 @@ class BuscoAnalysis(metaclass=ABCMeta):
                 "The dataset you provided does not contain the file ancestral_variants, likely because it "
                 'is an old version. All blast steps will use the file "ancestral" instead'
             )
+        if not self.has_dataset_config_file:
+            raise BuscoError(
+                "The dataset you provided is missing the dataset.cfg file and is therefore corrupted."
+            )
 
         return
 
     def _check_data_integrity(self):
         self._check_dataset_integrity()
         if not os.stat(self.input_file).st_size > 0:
-            raise SystemExit("Input file is empty.")
+            raise BuscoError("Input file is empty.")
         with open(self.input_file) as f:
             for line in f:
                 if line.startswith(">"):
@@ -192,7 +200,7 @@ class BuscoAnalysis(metaclass=ABCMeta):
     def _check_seq_uniqueness(self, line):
         seq_id = line.split(" ")[0]
         if seq_id in self.headers:
-            raise SystemExit("Duplicate of sequence {} in input file".format(seq_id))
+            raise BuscoError("Duplicate of sequence {} in input file".format(seq_id))
         self.headers.add(seq_id)
         return
 
@@ -203,11 +211,11 @@ class BuscoAnalysis(metaclass=ABCMeta):
         and warns the user and stops the execution
         :param header: a fasta header to check
         :type header: str
-        :raises SystemExit: if a problematic character is found
+        :raises BuscoError: if a problematic character is found
         """
         for char in BuscoConfig.FORBIDDEN_HEADER_CHARS:
             if char in header:
-                raise SystemExit(
+                raise BuscoError(
                     'The character "%s" is present in the fasta header %s, '
                     "which will crash BUSCO. Please clean the header of your "
                     "input file." % (char, header.strip())
@@ -215,14 +223,14 @@ class BuscoAnalysis(metaclass=ABCMeta):
 
         for char in BuscoConfig.FORBIDDEN_HEADER_CHARS_BEFORE_SPLIT:
             if char in header.split()[0]:
-                raise SystemExit(
+                raise BuscoError(
                     'The character "%s" is present in the fasta header %s, '
                     "which will crash Reader. Please clean the header of your"
                     " input file." % (char, header.split()[0].strip())
                 )
 
         if header.split()[0] == ">":
-            raise SystemExit(
+            raise BuscoError(
                 "A space is present in the fasta header %s, directly after "
                 '">" which will crash Reader. Please clean the header of '
                 "your input file." % (header.strip())
@@ -249,18 +257,18 @@ class BuscoAnalysis(metaclass=ABCMeta):
     def _create_main_dir(self):
         """
         This function creates the run (main) directory
-        :raises SystemExit: if write permissions are not available to the specified location
+        :raises BatchFatalError: if write permissions are not available to the specified location
         """
         try:
             os.makedirs(self.run_folder)
         except FileExistsError:
             if not self.restart:
-                raise SystemExit(
+                raise BatchFatalError(
                     "Something went wrong. BUSCO stopped before overwriting run folder "
                     "{}".format(self.run_folder)
                 )
         except PermissionError:
-            raise SystemExit(
+            raise BatchFatalError(
                 "Cannot write to the output directory, please make sure "
                 "you have write permissions to {}".format(self.run_folder)
             )

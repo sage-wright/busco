@@ -11,6 +11,7 @@ import shutil
 import numpy as np
 from configparser import NoOptionError
 import subprocess
+from busco.Exceptions import BuscoError
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -61,8 +62,16 @@ class AugustusRunner(BaseRunner):
 
     def __init__(self):
         self.gene_details = None
-        self._augustus_config_path = os.environ.get("AUGUSTUS_CONFIG_PATH")
-        self.config.set("busco_run", "augustus_config_path", self._augustus_config_path)
+        try:
+            self._augustus_config_path = os.environ.get("AUGUSTUS_CONFIG_PATH")
+            self.config.set(
+                "busco_run", "augustus_config_path", self._augustus_config_path
+            )
+        except TypeError:
+            raise BuscoError(
+                "AUGUSTUS_CONFIG_PATH environment variable has not been set"
+            )
+
         self._target_species = self.config.get("busco_run", "augustus_species")
         super().__init__()
         self._output_folder = os.path.join(self.run_folder, "augustus_output")
@@ -129,22 +138,22 @@ class AugustusRunner(BaseRunner):
         """
         check dependencies on files and folders
         properly configured.
-        :raises SystemExit: if Augustus config path is not writable or
+        :raises BuscoError: if Augustus config path is not writable or
         not set at all
-        :raises SystemExit: if Augustus config path does not contain
+        :raises BuscoError: if Augustus config path does not contain
         the needed species
         present
         """
         try:
             augustus_species_dir = os.path.join(self._augustus_config_path, "species")
             if not os.access(augustus_species_dir, os.W_OK):
-                raise SystemExit(
+                raise BuscoError(
                     "Cannot write to Augustus species folder, please make sure you have write "
                     "permissions to {}".format(augustus_species_dir)
                 )
 
         except TypeError:
-            raise SystemExit("The environment variable AUGUSTUS_CONFIG_PATH is not set")
+            raise BuscoError("The environment variable AUGUSTUS_CONFIG_PATH is not set")
 
         if not os.path.exists(os.path.join(augustus_species_dir, self._target_species)):
             # Exclude the case where this is a restarted run and the retraining parameters have already been moved.
@@ -161,7 +170,7 @@ class AugustusRunner(BaseRunner):
             ):
                 pass
             else:
-                raise SystemExit(
+                raise BuscoError(
                     'Impossible to locate the species "{0}" in Augustus species folder'
                     " ({1}), check that AUGUSTUS_CONFIG_PATH is properly set"
                     " and contains this species. \n\t\tSee the help if you want "
@@ -547,7 +556,7 @@ class AugustusRunner(BaseRunner):
                 if gene_found:
                     break
             if not gene_found and self.run_number == 1:
-                raise SystemExit(
+                raise BuscoError(
                     "Unable to find single copy BUSCO gene in Augustus output."
                 )
 
@@ -745,7 +754,7 @@ class ETrainingRunner(BaseRunner):
         ):
             return
         else:
-            raise SystemExit(
+            raise BuscoError(
                 "Retraining did not complete correctly. Check your Augustus config path environment variable."
             )
 

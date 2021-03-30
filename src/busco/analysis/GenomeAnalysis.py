@@ -31,6 +31,7 @@ import os
 import pandas as pd
 from collections import defaultdict
 import subprocess
+from busco.Exceptions import BuscoError
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -189,7 +190,7 @@ class GenomeAnalysisEukaryotesAugustus(BLASTAnalysis, GenomeAnalysisEukaryotes):
         try:
             self._target_species = self.config.get("busco_run", "augustus_species")
         except KeyError:
-            raise SystemExit(
+            raise BuscoError(
                 "Something went wrong. Eukaryota datasets should specify an augustus species."
             )
         try:
@@ -398,7 +399,7 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                 if i == 1:
                     logger.info("Metaeuk rerun did not find any genes")
                 else:
-                    raise SystemExit(
+                    raise BuscoError(
                         "Metaeuk did not find any genes in the input file."
                     )
 
@@ -406,7 +407,7 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
             self.metaeuk_runner.combine_run_results()
         except FileNotFoundError:
             # This exception should only happen if the rerun file does not exist. If the initial run file was
-            # missing there would have been a SystemExit call above. The index 0 sets the "combined" file to the
+            # missing there would have been a BatchFatalError call above. The index 0 sets the "combined" file to the
             # output of the initial run.
             self.metaeuk_runner.combined_pred_protein_seqs = (
                 self.metaeuk_runner.pred_protein_mod_files[0]
@@ -744,7 +745,7 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
             exon_matched = False
             exon_size_nt = int(entry["Stop"]) - int(entry["Start"]) + 1
             if not exon_size_nt % 3 == 0:
-                raise SystemExit(
+                raise BuscoError(
                     "The exon coordinates contain fractional reading frames and are ambiguous."
                 )
             exon_size_aa = exon_size_nt / 3

@@ -4,7 +4,7 @@
 .. module:: run_BUSCO
    :synopsis:
 .. versionadded:: 3.0.0
-.. versionchanged:: 5.0.0
+.. versionchanged:: 5.1.0
 
 BUSCO - Benchmarking Universal Single-Copy Orthologs.
 This is the BUSCO main script.
@@ -18,25 +18,108 @@ Licensed under the MIT license. See LICENSE.md file.
 
 """
 
-import time
-import traceback
-import sys
+
 import argparse
-import os
-import shutil
 from argparse import RawTextHelpFormatter
 import busco
+from busco.BuscoRunner import AnalysisRunner, BatchRunner, SingleRunner
+from busco.Exceptions import BatchFatalError, BuscoError
 from busco.BuscoLogger import BuscoLogger
 from busco.BuscoLogger import LogDecorator as log
 from busco.ConfigManager import BuscoConfigManager
-from busco.busco_tools.Toolset import ToolException
-from busco.BuscoRunner import BuscoRunner
 from busco.Actions import ListLineagesAction, CleanHelpAction, CleanVersionAction
 from busco.ConfigManager import BuscoConfigMain
+
+# from busco.busco_tools.Toolset import ToolException
+import sys
+import time
+
 
 logger = BuscoLogger.get_logger(__name__)
 
 
+@log(
+    "***** Start a BUSCO v{} analysis, current time: {} *****".format(
+        busco.__version__, time.strftime("%m/%d/%Y %H:%M:%S")
+    ),
+    logger,
+)
+class BuscoMaster:
+    def __init__(self, params):
+        self.params = params
+        self.config_manager = BuscoConfigManager(self.params)
+        self.config = self.config_manager.config_main
+
+    def harmonize_auto_lineage_settings(self):
+        if not self.config.check_lineage_present():
+            if (
+                not self.config.getboolean("busco_run", "auto-lineage")
+                and not self.config.getboolean("busco_run", "auto-lineage-prok")
+                and not self.config.getboolean("busco_run", "auto-lineage-euk")
+            ):
+                logger.warning(
+                    "Running Auto Lineage Selector as no lineage dataset was specified. This will take a "
+                    "little longer than normal. If you know what lineage dataset you want to use, please "
+                    "specify this in the config file or using the -l (--lineage-dataset) flag in the "
+                    "command line."
+                )
+            self.config.set("busco_run", "auto-lineage", "True")
+
+        else:
+            if (
+                self.config.getboolean("busco_run", "auto-lineage")
+                or self.config.getboolean("busco_run", "auto-lineage-prok")
+                or self.config.getboolean("busco_run", "auto-lineage-euk")
+            ):
+                logger.warning(
+                    "You have selected auto-lineage but you have also provided a lineage dataset. "
+                    "BUSCO will proceed with the specified dataset. "
+                    "To run auto-lineage do not specify a dataset."
+                )
+            self.config.set("busco_run", "auto-lineage", "False")
+            self.config.set("busco_run", "auto-lineage-prok", "False")
+            self.config.set("busco_run", "auto-lineage-euk", "False")
+        return
+
+    def load_config(self):
+        """
+        Load a busco config file that will figure out all the params from all sources
+        i.e. provided config file, dataset cfg, and user args
+        """
+        self.config_manager.load_busco_config_main(sys.argv)
+        self.config = self.config_manager.config_main
+
+    def check_batch_mode(self):
+        return self.config.getboolean("busco_run", "batch_mode")
+
+    def run(self):
+        # Need to add try/except blocks, distinguishing between run fatal and batch fatal
+        try:
+            self.load_config()
+            self.harmonize_auto_lineage_settings()
+            runner = (
+                BatchRunner(self.config_manager)
+                if self.check_batch_mode()
+                else SingleRunner(self.config_manager)
+            )
+            runner.run()
+
+        except BuscoError as be:
+            SingleRunner.log_error(be)
+            raise SystemExit(1)
+
+        except BatchFatalError as bfe:
+            SingleRunner.log_error(bfe)
+            raise SystemExit(1)
+
+        finally:
+            try:
+                AnalysisRunner.move_log_file(self.config)
+            except:
+                pass
+
+
+@log("Command line: {}".format(" ".join(sys.argv[:])), logger, debug=True)
 def _parse_args():
     """
     This function parses the arguments provided by the user
@@ -45,9 +128,9 @@ def _parse_args():
     """
 
     parser = argparse.ArgumentParser(
-        description="Welcome to BUSCO %s: the Benchmarking Universal Single-Copy Ortholog assessment tool.\n"
+        description="Welcome to BUSCO {}: the Benchmarking Universal Single-Copy Ortholog assessment tool.\n"
         "For more detailed usage information, please review the README file provided with "
-        "this distribution and the BUSCO user guide." % busco.__version__,
+        "this distribution and the BUSCO user guide.".format(busco.__version__),
         usage="busco -i [SEQUENCE_FILE] -l [LINEAGE] -o [OUTPUT_NAME] -m [MODE] [OTHER OPTIONS]",
         formatter_class=RawTextHelpFormatter,
         add_help=False,
@@ -60,7 +143,7 @@ def _parse_args():
         "--in",
         dest="in",
         required=False,
-        metavar="FASTA FILE",
+        metavar="SEQUENCE_FILE",
         help="Input sequence file in FASTA format. "
         "Can be an assembled genome or transcriptome (DNA), or protein sequences from an annotated gene set.",
     )
@@ -97,19 +180,35 @@ def _parse_args():
     )
 
     optional.add_argument(
+        "--augustus",
+        dest="use_augustus",
+        action="store_true",
+        required=False,
+        help="Use augustus gene predictor for eukaryote runs",
+    )
+
+    optional.add_argument(
+        "--augustus_parameters",
+        dest="augustus_parameters",
+        metavar='"--PARAM1=VALUE1,--PARAM2=VALUE2"',
+        required=False,
+        help="Pass additional arguments to Augustus. All arguments should be contained within a "
+        "single pair of quotation marks, separated by commas.",
+    )
+
+    optional.add_argument(
+        "--augustus_species",
+        dest="augustus_species",
+        required=False,
+        help="Specify a species for Augustus training.",
+    )
+
+    optional.add_argument(
         "--auto-lineage",
         dest="auto-lineage",
         action="store_true",
         required=False,
         help="Run auto-lineage to find optimum lineage path",
-    )
-
-    optional.add_argument(
-        "--auto-lineage-prok",
-        dest="auto-lineage-prok",
-        action="store_true",
-        required=False,
-        help="Run auto-lineage just on non-eukaryote trees to find optimum lineage path",
     )
 
     optional.add_argument(
@@ -121,56 +220,25 @@ def _parse_args():
     )
 
     optional.add_argument(
+        "--auto-lineage-prok",
+        dest="auto-lineage-prok",
+        action="store_true",
+        required=False,
+        help="Run auto-lineage just on non-eukaryote trees to find optimum lineage path",
+    )
+
+    optional.add_argument(
         "-c",
         "--cpu",
         dest="cpu",
+        type=int,
         required=False,
         metavar="N",
         help="Specify the number (N=integer) " "of threads/cores to use.",
     )
 
     optional.add_argument(
-        "-f",
-        "--force",
-        action="store_true",
-        required=False,
-        dest="force",
-        help="Force rewriting of existing files. "
-        "Must be used when output files with the provided name already exist.",
-    )
-
-    optional.add_argument(
-        "-r",
-        "--restart",
-        action="store_true",
-        required=False,
-        dest="restart",
-        help="Continue a run that had already partially completed.",
-    )
-
-    optional.add_argument(
-        "-q",
-        "--quiet",
-        dest="quiet",
-        required=False,
-        help="Disable the info logs, displays only errors",
-        action="store_true",
-    )
-
-    optional.add_argument(
-        "--out_path",
-        dest="out_path",
-        required=False,
-        metavar="OUTPUT_PATH",
-        help="Optional location for results folder, excluding results folder name. "
-        "Default is current working directory.",
-    )
-
-    optional.add_argument(
-        "--download_path",
-        dest="download_path",
-        required=False,
-        help="Specify local filepath for storing BUSCO dataset downloads",
+        "--config", dest="config_file", required=False, help="Provide a config file"
     )
 
     optional.add_argument(
@@ -188,38 +256,10 @@ def _parse_args():
     )
 
     optional.add_argument(
-        "--update-data",
-        dest="update-data",
-        action="store_true",
+        "--download_path",
+        dest="download_path",
         required=False,
-        help="Download and replace with last versions all lineages datasets and files necessary"
-        " to their automated selection",
-    )
-
-    optional.add_argument(
-        "--offline",
-        dest="offline",
-        action="store_true",
-        required=False,
-        help="To indicate that BUSCO cannot attempt to download files",
-    )
-
-    optional.add_argument(
-        "--metaeuk_parameters",
-        dest="metaeuk_parameters",
-        required=False,
-        help="Pass additional arguments to Metaeuk for the first run. All arguments should be "
-        "contained within a single pair of quotation marks, separated by commas. "
-        'E.g. "--param1=1,--param2=2"',
-    )
-
-    optional.add_argument(
-        "--metaeuk_rerun_parameters",
-        dest="metaeuk_rerun_parameters",
-        required=False,
-        help="Pass additional arguments to Metaeuk for the second run. All arguments should be "
-        "contained within a single pair of quotation marks, separated by commas. "
-        'E.g. "--param1=1,--param2=2"',
+        help="Specify local filepath for storing BUSCO dataset downloads",
     )
 
     optional.add_argument(
@@ -230,41 +270,40 @@ def _parse_args():
         metavar="N",
         type=float,
         help="E-value cutoff for BLAST searches. "
-        "Allowed formats, 0.001 or 1e-03 (Default: %.0e)"
-        % BuscoConfigMain.DEFAULT_ARGS_VALUES["evalue"],
+        "Allowed formats, 0.001 or 1e-03 (Default: {:.0e})".format(
+            BuscoConfigMain.DEFAULT_ARGS_VALUES["evalue"]
+        ),
+    )
+
+    optional.add_argument(
+        "-f",
+        "--force",
+        action="store_true",
+        required=False,
+        dest="force",
+        help="Force rewriting of existing files. "
+        "Must be used when output files with the provided name already exist.",
+    )
+
+    optional.add_argument(
+        "-h", "--help", action=CleanHelpAction, help="Show this help message and exit"
     )
 
     optional.add_argument(
         "--limit",
         dest="limit",
-        metavar="REGION_LIMIT",
+        metavar="N",
         required=False,
         type=int,
-        help="How many candidate regions (contig or transcript) to consider per BUSCO (default: %s)"
-        % str(BuscoConfigMain.DEFAULT_ARGS_VALUES["limit"]),
+        help="How many candidate regions (contig or transcript) to consider per BUSCO (default: {})".format(
+            str(BuscoConfigMain.DEFAULT_ARGS_VALUES["limit"])
+        ),
     )
 
     optional.add_argument(
-        "--augustus",
-        dest="use_augustus",
-        action="store_true",
-        required=False,
-        help="Use augustus gene predictor for eukaryote runs",
-    )
-
-    optional.add_argument(
-        "--augustus_parameters",
-        dest="augustus_parameters",
-        required=False,
-        help="Pass additional arguments to Augustus. All arguments should be contained within a "
-        'single pair of quotation marks, separated by commas. E.g. "--param1=1,--param2=2"',
-    )
-
-    optional.add_argument(
-        "--augustus_species",
-        dest="augustus_species",
-        required=False,
-        help="Specify a species for Augustus training.",
+        "--list-datasets",
+        action=ListLineagesAction,
+        help="Print the list of available BUSCO datasets",
     )
 
     optional.add_argument(
@@ -277,7 +316,65 @@ def _parse_args():
     )
 
     optional.add_argument(
-        "--config", dest="config_file", required=False, help="Provide a config file"
+        "--metaeuk_parameters",
+        dest="metaeuk_parameters",
+        metavar='"--PARAM1=VALUE1,--PARAM2=VALUE2"',
+        required=False,
+        help="Pass additional arguments to Metaeuk for the first run. All arguments should be "
+        "contained within a single pair of quotation marks, separated by commas. ",
+    )
+
+    optional.add_argument(
+        "--metaeuk_rerun_parameters",
+        dest="metaeuk_rerun_parameters",
+        metavar='"--PARAM1=VALUE1,--PARAM2=VALUE2"',
+        required=False,
+        help="Pass additional arguments to Metaeuk for the second run. All arguments should be "
+        "contained within a single pair of quotation marks, separated by commas. ",
+    )
+
+    optional.add_argument(
+        "--offline",
+        dest="offline",
+        action="store_true",
+        required=False,
+        help="To indicate that BUSCO cannot attempt to download files",
+    )
+
+    optional.add_argument(
+        "--out_path",
+        dest="out_path",
+        required=False,
+        metavar="OUTPUT_PATH",
+        help="Optional location for results folder, excluding results folder name. "
+        "Default is current working directory.",
+    )
+
+    optional.add_argument(
+        "-q",
+        "--quiet",
+        dest="quiet",
+        required=False,
+        help="Disable the info logs, displays only errors",
+        action="store_true",
+    )
+
+    optional.add_argument(
+        "-r",
+        "--restart",
+        action="store_true",
+        required=False,
+        dest="restart",
+        help="Continue a run that had already partially completed.",
+    )
+
+    optional.add_argument(
+        "--update-data",
+        dest="update-data",
+        action="store_true",
+        required=False,
+        help="Download and replace with last versions all lineages datasets and files necessary"
+        " to their automated selection",
     )
 
     optional.add_argument(
@@ -285,17 +382,7 @@ def _parse_args():
         "--version",
         action=CleanVersionAction,
         help="Show this version and exit",
-        version="BUSCO %s" % busco.__version__,
-    )
-
-    optional.add_argument(
-        "-h", "--help", action=CleanHelpAction, help="Show this help message and exit"
-    )
-
-    optional.add_argument(
-        "--list-datasets",
-        action=ListLineagesAction,
-        help="Print the list of available BUSCO datasets",
+        version="BUSCO {}".format(busco.__version__),
     )
 
     return vars(parser.parse_args())
@@ -308,105 +395,9 @@ def main():
     ``busco -h``
     :raises SystemExit: if any errors occur
     """
-
     params = _parse_args()
-    run_BUSCO(params)
-
-
-@log(
-    "***** Start a BUSCO v{} analysis, current time: {} *****".format(
-        busco.__version__, time.strftime("%m/%d/%Y %H:%M:%S")
-    ),
-    logger,
-)
-def run_BUSCO(params):
-    start_time = time.time()
-
-    try:
-        # Load a busco config file that will figure out all the params from all sources
-        # i.e. provided config file, dataset cfg, and user args
-        config_manager = BuscoConfigManager(params)
-        config_manager.load_busco_config(sys.argv)
-        config = config_manager.config
-
-        lineage_basename = os.path.basename(config.get("busco_run", "lineage_dataset"))
-        main_out_folder = config.get("busco_run", "main_out")
-        lineage_results_folder = os.path.join(
-            main_out_folder,
-            "auto_lineage",
-            config.get("busco_run", "lineage_results_dir"),
-        )
-
-        if config.getboolean("busco_run", "auto-lineage"):
-            if lineage_basename.startswith(("bacteria", "archaea", "eukaryota")):
-                busco_run = config_manager.runner
-
-            # It is possible that the following lineages were arrived at either by the Prodigal genetic code shortcut
-            # or by BuscoPlacer. If the former, the run will have already been completed. If the latter it still needs
-            # to be done.
-            elif lineage_basename.startswith(
-                ("mollicutes", "mycoplasmatales", "entomoplasmatales")
-            ) and os.path.exists(lineage_results_folder):
-                busco_run = config_manager.runner
-            else:
-                busco_run = BuscoRunner(config)
-        else:
-            busco_run = BuscoRunner(config)
-
-        if os.path.exists(lineage_results_folder):
-            new_dest = os.path.join(
-                main_out_folder, config.get("busco_run", "lineage_results_dir")
-            )
-            if os.path.exists(
-                new_dest
-            ):  # New dest would only exist if this is a rerun of a previously completed run
-                shutil.rmtree(new_dest)
-            os.rename(lineage_results_folder, new_dest)
-        else:
-            busco_run.run_analysis()
-            BuscoRunner.final_results.append(
-                busco_run.analysis.hmmer_runner.hmmer_results_lines
-            )
-            BuscoRunner.results_datasets.append(lineage_basename)
-        busco_run.finish(time.time() - start_time)
-
-    except ToolException as e:
-        logger.error(e)
-        raise SystemExit(1)
-
-    except SystemExit as se:
-        logger.error(se)
-        logger.debug(se, exc_info=True)
-        logger.error("BUSCO analysis failed !")
-        logger.error(
-            "Check the logs, read the user guide (https://busco.ezlab.org/busco_userguide.html), "
-            "and check the BUSCO issue board on https://gitlab.com/ezlab/busco/issues"
-        )
-        try:
-            BuscoRunner.move_log_file(config)
-        except NameError:
-            try:
-                BuscoRunner.move_log_file(config_manager.config)
-            except:
-                pass
-        except:
-            pass
-        raise SystemExit(1)
-
-    except KeyboardInterrupt:
-        logger.exception(
-            "A signal was sent to kill the process. \nBUSCO analysis failed !"
-        )
-        raise SystemExit(1)
-
-    except BaseException:
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        logger.critical(
-            "Unhandled exception occurred:\n{}\n".format(
-                "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
-            )
-        )
-        raise SystemExit(1)
+    busco_run = BuscoMaster(params)
+    busco_run.run()
 
 
 # Entry point

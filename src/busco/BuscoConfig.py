@@ -4,6 +4,7 @@ from configparser import ParsingError
 from configparser import DuplicateOptionError
 from busco.BuscoLogger import BuscoLogger
 from busco.BuscoLogger import LogDecorator as log
+from busco.Exceptions import BatchFatalError
 from abc import ABCMeta, abstractmethod
 from busco.BuscoDownloadManager import BuscoDownloadManager
 import os
@@ -34,6 +35,7 @@ class BaseConfig(ConfigParser):
         "limit": 3,
         "use_augustus": False,
         "long": False,
+        "batch_mode": False,
     }
 
     DEPENDENCY_SECTIONS = {
@@ -70,13 +72,15 @@ class BaseConfig(ConfigParser):
             with open(self.conf_file) as cfg_file:
                 self.read_file(cfg_file)
         except IOError:
-            raise SystemExit("Config file {} cannot be found".format(self.conf_file))
+            raise BatchFatalError(
+                "Config file {} cannot be found".format(self.conf_file)
+            )
         except ParsingError:
-            raise SystemExit(
+            raise BatchFatalError(
                 "Unable to parse the contents of config file {}".format(self.conf_file)
             )
         except DuplicateOptionError:
-            raise SystemExit(
+            raise BatchFatalError(
                 "Duplicated entry in config file {}. Unable to load configuration.".format(
                     self.conf_file
                 )
@@ -148,9 +152,8 @@ class PseudoConfig(BaseConfig):
                         "you have set 'update-data=True' in your config file."
                     )
                 else:
-                    raise SystemExit(
-                        "Unable to download list of datasets. Please make sure you have set "
-                        "update-data=True in your config file."
+                    raise BatchFatalError(
+                        "Unable to download list of datasets. Please use the --update-data option to use the latest available datasets."
                     )
 
         except NoOptionError:
@@ -224,6 +227,13 @@ class BuscoConfig(ConfigParser, metaclass=ABCMeta):
         self.set("busco_run", "lineage_dataset", local_lineage_filepath)
         return
 
+    def load_dataset(self, lineage):
+        self.set_results_dirname(lineage)  # function always only uses basename
+        self.download_lineage_file(
+            lineage
+        )  # full path will return, base name will attempt download
+        self.load_dataset_config()
+
     def load_dataset_config(self):
         """
         Load BUSCO dataset config file.
@@ -289,11 +299,8 @@ class BuscoConfigAuto(BuscoConfig):
     def __init__(self, config, lineage, **kwargs):
         super().__init__(**kwargs)
         self._propagate_config(config)
-        self.set_results_dirname(lineage)
-
+        self.load_dataset(lineage)
         self._create_required_paths()
-        self.download_lineage_file(lineage)
-        self.load_dataset_config()
 
     def _create_required_paths(self):
         """
@@ -348,6 +355,7 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
         "evalue",
         "limit",
         "use_augustus",
+        "batch_mode",
     ]
 
     def __init__(self, conf_file, params, **kwargs):
@@ -361,6 +369,7 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
         self.conf_file = conf_file
         self.params = params
         self.main_out = None
+        self._input_filepath = None
 
     def configure(self):
         if self.conf_file != "local environment":
@@ -378,11 +387,12 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
 
     def validate(self):
         self._check_mandatory_keys_exist()
+        self._cleanup_config()
         self._check_no_previous_run()
         self._check_allowed_keys()
         self._create_required_paths()
-        self._cleanup_config()
         self._check_required_input_exists()
+        self._check_batch_mode()
 
         self._init_downloader()
 
@@ -418,15 +428,24 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
 
             datasets_version = self.get("busco_run", "datasets_version")
             if datasets_version != "odb10":
-                raise SystemExit(
-                    "BUSCO v4 only works with datasets from OrthoDB v10 (with the suffix '_odb10'). "
+                raise BatchFatalError(
+                    "BUSCO v5 only works with datasets from OrthoDB v10 (with the suffix '_odb10'). "
                     "For a full list of available datasets, enter 'busco --list-datasets'. "
-                    "You can also run BUSCO using auto-lineage, to allow BUSCO to automatically select "
+                    "You can also run BUSCO using --auto-lineage, to allow BUSCO to automatically select "
                     "the best dataset for your input data."
                 )
             return True
-        except NoOptionError:  # todo: need a helpful error message if datasets_version is not set but lineage_dataset is.
+        except NoOptionError:
             return False
+
+    def _check_batch_mode(self):
+        if os.path.isdir(self._input_filepath):
+            self.set("busco_run", "batch_mode", "True")
+        elif not os.path.isfile(self._input_filepath):
+            raise BatchFatalError(
+                "Unrecognized input type. Please use either a single file or a directory name (for batch mode)"
+            )
+        return
 
     def _check_evalue(self):
         """
@@ -436,20 +455,18 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
         if (
             self.getfloat("busco_run", "evalue")
             != type(self).DEFAULT_ARGS_VALUES["evalue"]
-        ):  # todo: introduce systemexit if not float
+        ):
             logger.warning("You are using a custom e-value cutoff")
         return
 
     def _check_limit_value(self):
         """
-        Check the value of limit. Ensure it is between 1 and 20, otherwise raise SystemExit.
+        Check the value of limit. Ensure it is between 1 and 20, otherwise raise BatchFatalError.
         :return:
         """
-        limit_val = self.getint(
-            "busco_run", "limit"
-        )  # todo: introduce systemexit if not int.
+        limit_val = self.getint("busco_run", "limit")
         if limit_val <= 0 or limit_val > 20:
-            raise SystemExit(
+            raise BatchFatalError(
                 "Limit must be an integer between 1 and 20 (you have used: {}). Note that this parameter "
                 "is not needed by the protein mode.".format(limit_val)
             )
@@ -502,7 +519,7 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
                         + synonyms["transcriptome"]
                         + synonyms["proteins"]
                     ):
-                        raise SystemExit(
+                        raise BatchFatalError(
                             "Unknown mode {}.\n'Mode' parameter must be one of "
                             "['genome', 'transcriptome', 'proteins']".format(value)
                         )
@@ -517,12 +534,12 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
 
                 if param == "out":
                     if value == "":
-                        raise SystemExit(
+                        raise BatchFatalError(
                             "Please specify an output name for the BUSCO run. "
                             "This can be done using the -o flag or in the config file"
                         )
             except NoOptionError:
-                raise SystemExit(
+                raise BatchFatalError(
                     'The parameter "{} (--{})" was not provided. '
                     "Please add it in the config file or provide it "
                     "through the command line".format(param, param)
@@ -542,7 +559,7 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
             try:
                 for option in self.options(section_name):
                     if option not in options:
-                        raise SystemExit(
+                        raise BatchFatalError(
                             "Unrecognized option '{}' in config file".format(option)
                         )
             except NoSectionError:
@@ -555,19 +572,12 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
         :return:
         """
         if "/" in self.get("busco_run", "out"):
-            raise SystemExit(
+            raise BatchFatalError(
                 "Please do not provide a full path in --out parameter, no slash. "
                 "Use out_path in the config.ini file to specify the full path."
             )
         return
 
-    @log(
-        "Input file is {}",
-        logger,
-        attr_name="_input_filepath",
-        on_func_exit=True,
-        log_once=True,
-    )
     def _check_required_input_exists(self):
         """
         Test for existence of input file.
@@ -575,8 +585,8 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
         """
         self._input_filepath = self.get("busco_run", "in")
         if not os.path.exists(self._input_filepath):
-            raise SystemExit(
-                "Input file {} does not exist".format(self._input_filepath)
+            raise BatchFatalError(
+                "Input {} does not exist".format(self._input_filepath)
             )
         return
 
@@ -594,7 +604,7 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
                     )
                 )
             else:
-                raise SystemExit(
+                raise BatchFatalError(
                     "A run with the name {} already exists...\n"
                     "\tIf you are sure you wish to overwrite existing files, "
                     "please use the -f (force) option".format(self.main_out)
@@ -650,7 +660,7 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
                 if item[0].endswith("_path") or item[0] == "path" or item[0] == "in":
                     if item[1].startswith("~"):
                         self.set(key, item[0], os.path.expanduser(item[1]))
-                    elif item[1].startswith(".") or (item[1] and "/" not in item[1]):
+                    elif item[1]:
                         self.set(key, item[0], os.path.abspath(item[1]))
 
         return

@@ -18,7 +18,7 @@ class ListLineagesAction(argparse.Action):
             self.config_manager = BuscoConfigManager({})
         except SystemExit as se:
             type(self).logger.error(se)
-            raise SystemExit()
+            raise SystemExit(1)
 
         self.config = PseudoConfig(self.config_manager.config_file)
         try:

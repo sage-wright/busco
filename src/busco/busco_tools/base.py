@@ -4,6 +4,7 @@ from busco.busco_tools.Toolset import Tool
 from shutil import which
 from abc import ABCMeta, abstractmethod
 from busco.BuscoConfig import BuscoConfigAuto
+from busco.Exceptions import BuscoError
 import time
 
 logger = BuscoLogger.get_logger(__name__)
@@ -24,6 +25,7 @@ class ToolException(Exception):
 class BaseRunner(Tool, metaclass=ABCMeta):
 
     config = None
+    tool_versions = {}
 
     def __init__(self):
         super().__init__()
@@ -49,6 +51,7 @@ class BaseRunner(Tool, metaclass=ABCMeta):
                 "path!".format(self.name)
             )
         self.version = self.get_version()
+        type(self).tool_versions[self.name] = self.version
         self.check_tool_dependencies()
 
         self.checkpoint_file = None
@@ -102,7 +105,7 @@ class BaseRunner(Tool, metaclass=ABCMeta):
                         elif int(tool_run_numbers[tool_ind]) < int(self.run_number):
                             start_search = tool_ind + 1
                         else:
-                            raise SystemExit(
+                            raise BuscoError(
                                 "Something went wrong. Information for {} run {} missing but "
                                 "information for run {} found.".format(
                                     self.name,

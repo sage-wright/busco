@@ -1,33 +1,34 @@
 import unittest
 from unittest.mock import patch, call, Mock
 from busco import AutoLineage, BuscoRunner
+from busco.ConfigManager import BuscoConfigManager
 
 
 class TestAutoLineage(unittest.TestCase):
     def setUp(self):
         pass
 
-    @patch("busco.BuscoConfig.BuscoConfigMain", autospec=True)
-    def test_init_autolineage(self, mock_config_main):
+    @patch("busco.ConfigManager.BuscoConfigManager")
+    def test_init_autolineage(self, mock_config_manager):
         with self.assertLogs(AutoLineage.logger, 20):
-            AutoLineage.AutoSelectLineage(mock_config_main)
+            AutoLineage.AutoSelectLineage(mock_config_manager)
 
     @patch("busco.AutoLineage.AutoSelectLineage.virus_check", return_value=False)
-    @patch(
-        "busco.BuscoConfig.BuscoConfigMain.getboolean",
-        side_effect=[True, False, True, False, False],
-    )
     @patch("busco.AutoLineage.logger.info")
     @patch("busco.AutoLineage.os")
-    @patch("busco.AutoLineage.BuscoRunner")
+    @patch("busco.AutoLineage.AnalysisRunner")
     @patch("busco.AutoLineage.AutoSelectLineage.get_best_match_lineage")
     @patch("busco.AutoLineage.AutoSelectLineage.run_lineages_list")
-    @patch("busco.BuscoConfig.BuscoConfigMain", autospec=True)
     def test_run_auto_selector_lineage_lists_no_virus(
-        self, mock_config_main, mock_run_lineages_list, *args
+        self, mock_run_lineages_list, *args
     ):
+        config_manager = BuscoConfigManager({})
+        config_manager.config_main = Mock()
+        config_manager.config_main.getboolean = Mock(
+            side_effect=[True, False, True, False, False]
+        )
         for _ in range(3):
-            asl = AutoLineage.AutoSelectLineage(mock_config_main)
+            asl = AutoLineage.AutoSelectLineage(config_manager)
             asl.selected_runner = Mock()
             asl.selected_runner.analysis.hmmer_runner.single_copy_buscos = [
                 0
@@ -44,38 +45,41 @@ class TestAutoLineage(unittest.TestCase):
         mock_run_lineages_list.assert_has_calls(calls, any_order=True)
 
     @patch("busco.AutoLineage.logger.info")
-    @patch("__main__.AutoLineage_unittests.AutoLineage.BuscoRunner")
-    @patch("busco.AutoLineage.BuscoConfigAuto", autospec=True)
-    @patch("busco.BuscoConfig.BuscoConfigMain")
-    def test_run_lineages_initializes_BuscoConfigAuto(
-        self, mock_config_main, mock_config_auto, *args
-    ):
-        asl = AutoLineage.AutoSelectLineage(mock_config_main)
+    @patch("__main__.AutoLineage_unittests.AutoLineage.AnalysisRunner")
+    @patch("busco.ConfigManager.BuscoConfigAuto", autospec=True)
+    def test_run_lineages_initializes_BuscoConfigAuto(self, mock_config_auto, *args):
+        config_manager = BuscoConfigManager({})
+        config_manager.config_main = Mock()
+        asl = AutoLineage.AutoSelectLineage(config_manager)
         test_lineages = ["a", "b", "c"]
         test_dataset_version = "<dataset_version>"
         asl.dataset_version = test_dataset_version
         asl.run_lineages_list(test_lineages)
         calls = [
             call(
-                mock_config_main, "{}_{}".format(test_lineages[0], test_dataset_version)
+                config_manager.config_main,
+                "{}_{}".format(test_lineages[0], test_dataset_version),
             ),
             call(
-                mock_config_main, "{}_{}".format(test_lineages[1], test_dataset_version)
+                config_manager.config_main,
+                "{}_{}".format(test_lineages[1], test_dataset_version),
             ),
             call(
-                mock_config_main, "{}_{}".format(test_lineages[2], test_dataset_version)
+                config_manager.config_main,
+                "{}_{}".format(test_lineages[2], test_dataset_version),
             ),
         ]
         mock_config_auto.assert_has_calls(calls, any_order=True)
 
     @patch("busco.AutoLineage.logger.info")
-    @patch("busco.AutoLineage.BuscoConfigAuto", autospec=True)
-    @patch("busco.BuscoConfig.BuscoConfigMain")
-    @patch("__main__.AutoLineage_unittests.AutoLineage.BuscoRunner")
+    @patch("__main__.AutoLineage_unittests.BuscoConfigManager.load_busco_config_auto")
+    @patch("__main__.AutoLineage_unittests.AutoLineage.AnalysisRunner")
     def test_run_lineages_initializes_BuscoRunner(
-        self, mock_runner, mock_config_main, mock_config_auto, *args
+        self, mock_runner, mock_config_auto, *args
     ):
-        asl = AutoLineage.AutoSelectLineage(mock_config_main)
+        config_manager = BuscoConfigManager({})
+        config_manager.config_main = Mock()
+        asl = AutoLineage.AutoSelectLineage(config_manager)
         test_lineages = ["a", "b", "c"]
         test_dataset_version = "<dataset_version>"
         asl.dataset_version = test_dataset_version
@@ -83,11 +87,11 @@ class TestAutoLineage(unittest.TestCase):
         mock_runner.assert_called_with(mock_config_auto.return_value)
 
     @patch("busco.AutoLineage.logger.info")
-    @patch("busco.AutoLineage.BuscoConfigAuto", autospec=True)
-    @patch("busco.BuscoConfig.BuscoConfigMain")
-    @patch("__main__.AutoLineage_unittests.AutoLineage.BuscoRunner")
-    def test_run_lineages_runs_analysis(self, mock_runner, mock_config_main, *args):
-        asl = AutoLineage.AutoSelectLineage(mock_config_main)
+    @patch("busco.BuscoConfig.BuscoConfigAuto", autospec=True)
+    @patch("busco.ConfigManager.BuscoConfigManager")
+    @patch("__main__.AutoLineage_unittests.AutoLineage.AnalysisRunner")
+    def test_run_lineages_runs_analysis(self, mock_runner, mock_config_manager, *args):
+        asl = AutoLineage.AutoSelectLineage(mock_config_manager.config_main)
         test_lineages = ["a", "b", "c"]
         test_dataset_version = "<dataset_version>"
         asl.dataset_version = test_dataset_version
@@ -97,11 +101,13 @@ class TestAutoLineage(unittest.TestCase):
         )
 
     @patch("busco.AutoLineage.logger.info")
-    @patch("busco.AutoLineage.BuscoConfigAuto", autospec=True)
-    @patch("busco.BuscoConfig.BuscoConfigMain")
-    @patch("__main__.AutoLineage_unittests.AutoLineage.BuscoRunner")
-    def test_run_lineages_returns_runners(self, mock_runner, mock_config_main, *args):
-        asl = AutoLineage.AutoSelectLineage(mock_config_main)
+    @patch("busco.BuscoConfig.BuscoConfigAuto", autospec=True)
+    @patch("busco.ConfigManager.BuscoConfigManager")
+    @patch("__main__.AutoLineage_unittests.AutoLineage.AnalysisRunner")
+    def test_run_lineages_returns_runners(
+        self, mock_runner, mock_config_manager, *args
+    ):
+        asl = AutoLineage.AutoSelectLineage(mock_config_manager.config_main)
         test_lineages = ["a", "b", "c"]
         test_dataset_version = "<dataset_version>"
         asl.dataset_version = test_dataset_version
@@ -116,11 +122,11 @@ class TestAutoLineage(unittest.TestCase):
         )
 
     @patch("busco.AutoLineage.logger.info")
-    @patch("busco.AutoLineage.BuscoConfigAuto", autospec=True)
-    @patch("__main__.AutoLineage_unittests.AutoLineage.BuscoRunner")
-    @patch("busco.BuscoConfig.BuscoConfigMain")
-    def test_record_results_first_run(self, mock_config_main, *args):
-        asl = AutoLineage.AutoSelectLineage(mock_config_main)
+    @patch("busco.BuscoConfig.BuscoConfigAuto", autospec=True)
+    @patch("__main__.AutoLineage_unittests.AutoLineage.AnalysisRunner")
+    @patch("busco.ConfigManager.BuscoConfigManager")
+    def test_record_results_first_run(self, mock_config_manager, *args):
+        asl = AutoLineage.AutoSelectLineage(mock_config_manager.config_main)
         asl.record_results(0, 1, 2, 0, 1, 2)
         self.assertGreater(len(asl.s_buscos), 0)
         self.assertGreater(len(asl.d_buscos), 0)
@@ -130,11 +136,11 @@ class TestAutoLineage(unittest.TestCase):
         self.assertGreater(len(asl.f_percents), 0)
 
     @patch("busco.AutoLineage.logger.info")
-    @patch("busco.AutoLineage.BuscoConfigAuto", autospec=True)
-    @patch("__main__.AutoLineage_unittests.AutoLineage.BuscoRunner")
-    @patch("busco.BuscoConfig.BuscoConfigMain")
-    def test_record_results_multiple_runs(self, mock_config_main, *args):
-        asl = AutoLineage.AutoSelectLineage(mock_config_main)
+    @patch("busco.BuscoConfig.BuscoConfigAuto", autospec=True)
+    @patch("__main__.AutoLineage_unittests.AutoLineage.AnalysisRunner")
+    @patch("busco.ConfigManager.BuscoConfigManager")
+    def test_record_results_multiple_runs(self, mock_config_manager, *args):
+        asl = AutoLineage.AutoSelectLineage(mock_config_manager.config_main)
         asl.record_results(0, 1, 2, 0, 1, 2)
         asl.record_results(0, 1, 2, 0, 1, 2)
         self.assertGreater(len(asl.s_buscos), 1)
@@ -145,19 +151,19 @@ class TestAutoLineage(unittest.TestCase):
         self.assertGreater(len(asl.f_percents), 1)
 
     @patch("busco.AutoLineage.logger.info")
-    @patch("busco.BuscoConfig.BuscoConfigMain")
-    def test_evaluate_single_runner(self, mock_config_main, *args):
+    @patch("busco.ConfigManager.BuscoConfigManager")
+    def test_evaluate_single_runner(self, mock_config_manager, *args):
         runner1 = Mock()
         runner1.analysis.hmmer_runner.single_copy = 1
         runner1.analysis.hmmer_runner.multi_copy = 1
         runner1.analysis.hmmer_runner.only_fragments = 1
-        asl = AutoLineage.AutoSelectLineage(mock_config_main)
+        asl = AutoLineage.AutoSelectLineage(mock_config_manager.config_main)
         max_ind = asl.evaluate([runner1])
         self.assertEqual(max_ind, 0)
 
     @patch("busco.AutoLineage.logger.info")
-    @patch("busco.BuscoConfig.BuscoConfigMain")
-    def test_evaluate_multiple_runners(self, mock_config_main, *args):
+    @patch("busco.ConfigManager.BuscoConfigManager")
+    def test_evaluate_multiple_runners(self, mock_config_manager, *args):
         runner1 = Mock()
         runner2 = Mock()
         runner3 = Mock()
@@ -167,7 +173,7 @@ class TestAutoLineage(unittest.TestCase):
         runner2.analysis.hmmer_runner.multi_copy = 5
         runner3.analysis.hmmer_runner.single_copy = 12
         runner3.analysis.hmmer_runner.multi_copy = 5
-        asl = AutoLineage.AutoSelectLineage(mock_config_main)
+        asl = AutoLineage.AutoSelectLineage(mock_config_manager.config_main)
         max_ind = asl.evaluate([runner1, runner2, runner3])
         self.assertEqual(max_ind, 1)
 
@@ -179,8 +185,8 @@ class TestAutoLineage(unittest.TestCase):
         self.assertEqual(max_ind, 2)
 
     @patch("busco.AutoLineage.logger.info")
-    @patch("busco.BuscoConfig.BuscoConfigMain")
-    def test_evaluate_first_order_tiebreak(self, mock_config_main, *args):
+    @patch("busco.ConfigManager.BuscoConfigManager")
+    def test_evaluate_first_order_tiebreak(self, mock_config_manager, *args):
         runner1 = Mock()
         runner2 = Mock()
         runner3 = Mock()
@@ -193,13 +199,13 @@ class TestAutoLineage(unittest.TestCase):
         runner3.analysis.hmmer_runner.single_copy = 12
         runner3.analysis.hmmer_runner.multi_copy = 0
         runner3.analysis.hmmer_runner.only_fragments = 3
-        asl = AutoLineage.AutoSelectLineage(mock_config_main)
+        asl = AutoLineage.AutoSelectLineage(mock_config_manager.config_main)
         max_ind = asl.evaluate([runner1, runner2, runner3])
         self.assertEqual(max_ind, 1)
 
     @patch("busco.AutoLineage.logger.info")
-    @patch("busco.BuscoConfig.BuscoConfigMain")
-    def test_evaluate_second_order_tiebreak(self, mock_config_main, *args):
+    @patch("busco.ConfigManager.BuscoConfigManager")
+    def test_evaluate_second_order_tiebreak(self, mock_config_manager, *args):
         runner1 = Mock()
         runner2 = Mock()
         runner3 = Mock()
@@ -220,13 +226,13 @@ class TestAutoLineage(unittest.TestCase):
         runner4.analysis.hmmer_runner.multi_copy = 1
         runner4.analysis.hmmer_runner.only_fragments = 2
         runner4.analysis.hmmer_runner.s_percent = 80
-        asl = AutoLineage.AutoSelectLineage(mock_config_main)
+        asl = AutoLineage.AutoSelectLineage(mock_config_manager.config_main)
         max_ind = asl.evaluate([runner1, runner2, runner3, runner4])
         self.assertEqual(max_ind, 3)
 
     @patch("busco.AutoLineage.logger.info")
-    @patch("busco.BuscoConfig.BuscoConfigMain")
-    def test_evaluate_third_order_tiebreak(self, mock_config_main, *args):
+    @patch("busco.ConfigManager.BuscoConfigManager")
+    def test_evaluate_third_order_tiebreak(self, mock_config_manager, *args):
         runner1 = Mock()
         runner2 = Mock()
         runner3 = Mock()
@@ -247,19 +253,19 @@ class TestAutoLineage(unittest.TestCase):
         runner4.analysis.hmmer_runner.multi_copy = 1
         runner4.analysis.hmmer_runner.only_fragments = 2
         runner4.analysis.hmmer_runner.s_percent = 80
-        asl = AutoLineage.AutoSelectLineage(mock_config_main)
+        asl = AutoLineage.AutoSelectLineage(mock_config_manager.config_main)
         with self.assertLogs(AutoLineage.logger, "WARNING"):
             max_ind = asl.evaluate([runner1, runner2, runner3, runner4])
         self.assertEqual(max_ind, 1)
 
     @patch("busco.AutoLineage.logger.info")
     @patch("busco.AutoLineage.AutoSelectLineage.cleanup_disused_runs")
-    @patch("__main__.AutoLineage_unittests.BuscoRunner.BuscoRunner.mode_dict")
-    @patch("busco.BuscoConfig.BuscoConfigMain", autospec=True)
+    @patch("__main__.AutoLineage_unittests.BuscoRunner.AnalysisRunner.mode_dict")
+    @patch("busco.ConfigManager.BuscoConfigManager")
     def test_get_best_match_lineage(
-        self, mock_config_main, fake_modedict, mock_cleanup, *args
+        self, mock_config_manager, fake_modedict, mock_cleanup, *args
     ):
-        mock_config_main.get.side_effect = [None]
+        mock_config_manager.config_main.get.side_effect = [None]
 
         mock_config1 = Mock()
         mock_config2 = Mock()
@@ -284,20 +290,20 @@ class TestAutoLineage(unittest.TestCase):
             mock_analysis3,
         ]
 
-        runner1 = BuscoRunner.BuscoRunner(mock_config1)
-        runner2 = BuscoRunner.BuscoRunner(mock_config2)
-        runner3 = BuscoRunner.BuscoRunner(mock_config3)
+        runner1 = BuscoRunner.AnalysisRunner(mock_config1)
+        runner2 = BuscoRunner.AnalysisRunner(mock_config2)
+        runner3 = BuscoRunner.AnalysisRunner(mock_config3)
 
-        asl = AutoLineage.AutoSelectLineage(mock_config_main)
+        asl = AutoLineage.AutoSelectLineage(mock_config_manager.config_main)
         asl.get_best_match_lineage([runner1, runner2, runner3])
         self.assertEqual(asl.best_match_lineage_dataset, "test2")
         self.assertEqual(asl.selected_runner, runner2)
         mock_cleanup.assert_called_with([runner1, runner3])
 
     @patch("busco.AutoLineage.logger.info")
-    @patch("busco.BuscoConfig.BuscoConfigMain", autospec=True)
-    def test_cleanup_disused_runs(self, mock_config_main, *args):
-        asl = AutoLineage.AutoSelectLineage(mock_config_main)
+    @patch("busco.ConfigManager.BuscoConfigManager")
+    def test_cleanup_disused_runs(self, mock_config_manager, *args):
+        asl = AutoLineage.AutoSelectLineage(mock_config_manager)
         mock_runner1 = Mock()
         mock_runner2 = Mock()
         mock_runner1.cleaned_up = False

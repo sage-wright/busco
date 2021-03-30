@@ -16,6 +16,7 @@ import json
 import os
 from busco.BuscoLogger import BuscoLogger
 from busco.BuscoLogger import LogDecorator as log
+from busco.Exceptions import BuscoError
 from Bio import SeqIO
 from busco.busco_tools.sepp import SEPPRunner
 
@@ -176,7 +177,7 @@ class BuscoPlacer:
             tree = data["tree"]
             placements = data["placements"]
         except FileNotFoundError:
-            raise SystemExit(
+            raise BuscoError(
                 "Placements failed. Try to rerun increasing the memory or select a lineage manually."
             )
 
