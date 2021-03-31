@@ -182,7 +182,7 @@ class BatchRunner:
                         input_id,
                     ),
                 )
-                single_run = SingleRunner(self.config)
+                single_run = SingleRunner(self.config_manager)
                 single_run.run()
 
                 run_summary = single_run.runner.format_run_summary()
@@ -215,11 +215,11 @@ class BatchRunner:
         with open(summary_file, "w") as f:
             if self.config.getboolean("busco_run", "auto-lineage"):
                 f.write(
-                    "Input file\tDataset\tComplete\tSingle\tDuplicated\tFragmented\tMissing\tn_markers\tScores_archaea_odb10\tScores_bacteria_odb10\tScores_eukaryota_odb10\n"
+                    "Input_file\tDataset\tComplete\tSingle\tDuplicated\tFragmented\tMissing\tn_markers\tScores_archaea_odb10\tScores_bacteria_odb10\tScores_eukaryota_odb10\n"
                 )
             else:
                 f.write(
-                    "Input file\tDataset\tComplete\tSingle\tDuplicated\tFragmented\tMissing\tn_markers\n"
+                    "Input_file\tDataset\tComplete\tSingle\tDuplicated\tFragmented\tMissing\tn_markers\n"
                 )
             for line in type(self).batch_results:
                 f.write(line)
@@ -417,15 +417,26 @@ class AnalysisRunner:
         n_markers = type(self).all_results[dataset]["n_markers"]
 
         if self.config.getboolean("busco_run", "auto-lineage"):
-            scores_arch = (
-                type(self).all_results["archaea_odb10"]["one_line_summary"].strip()
-            )
-            scores_bact = (
-                type(self).all_results["bacteria_odb10"]["one_line_summary"].strip()
-            )
-            scores_euk = (
-                type(self).all_results["eukaryota_odb10"]["one_line_summary"].strip()
-            )
+            try:
+                scores_arch = (
+                    type(self).all_results["archaea_odb10"]["one_line_summary"].strip()
+                )
+            except KeyError:
+                scores_arch = "Not run"
+            try:
+                scores_bact = (
+                    type(self).all_results["bacteria_odb10"]["one_line_summary"].strip()
+                )
+            except KeyError:
+                scores_bact = "Not run"
+            try:
+                scores_euk = (
+                    type(self)
+                    .all_results["eukaryota_odb10"]["one_line_summary"]
+                    .strip()
+                )
+            except KeyError:
+                scores_euk = "Not run"
         else:
             scores_arch = ""
             scores_bact = ""
