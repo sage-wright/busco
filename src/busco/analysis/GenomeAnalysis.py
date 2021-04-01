@@ -188,7 +188,10 @@ class GenomeAnalysisEukaryotesAugustus(BLASTAnalysis, GenomeAnalysisEukaryotes):
         super().__init__()
         self._long = self.config.getboolean("busco_run", "long")
         try:
-            self._target_species = self.config.get("busco_run", "augustus_species")
+            self._target_species_initial = self.config.get(
+                "busco_run", "augustus_species"
+            )
+            self._target_species = self._target_species_initial
         except KeyError:
             raise BuscoError(
                 "Something went wrong. Eukaryota datasets should specify an augustus species."
@@ -221,6 +224,9 @@ class GenomeAnalysisEukaryotesAugustus(BLASTAnalysis, GenomeAnalysisEukaryotes):
         try:
             if self._target_species.startswith("BUSCO"):
                 self.augustus_runner.move_retraining_parameters()
+                self.config.set(
+                    "busco_run", "augustus_species", self._target_species_initial
+                )  # Reset parameter for batch mode
         except OSError:
             pass
         super().cleanup()

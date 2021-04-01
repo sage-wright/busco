@@ -1,3 +1,6 @@
+5.1.2
+- Fix bug in batch  mode that affects Augustus runs
+
 5.1.1
 - Fix bug in batch mode
 

@@ -395,7 +395,7 @@ class AnalysisRunner:
         framed_lines1 = sb1.create_results_box(header1, final_output_results1)
         framed_output.append(framed_lines1)
 
-        if domain != "viruses" and parent_dataset != final_dataset:
+        if domain != "viruses" and parent_dataset and parent_dataset != final_dataset:
             header2 = "Results from dataset {}\n".format(final_dataset)
             final_output_results2 = "".join(
                 self._check_parasitic(type(self).final_results[final_dataset][1:])
