@@ -268,6 +268,13 @@ class HMMERRunner(BaseRunner):
                 total_len[entry] += hit[1] - hit[0]
         return total_len
 
+    def merge_dicts(self):
+        merged_dict = defaultdict(lambda: defaultdict(list))
+        for hmmer_dict in [self.is_complete, self.is_very_large, self.is_fragment]:
+            for busco_id, busco_matches in hmmer_dict.items():
+                merged_dict[busco_id].update(busco_matches)
+        return merged_dict
+
     def parse_hmmer_output(self, filename, busco_query):
         """
         Read and parse HMMER output file.
@@ -701,11 +708,14 @@ class HMMERRunner(BaseRunner):
                             )
                     elif self.mode == "genome":
                         scaffold = self.gene_details[gene_id][m]
-                        location_pattern = ":{}-{}".format(
-                            scaffold["gene_start"], scaffold["gene_end"]
-                        )
-                        if gene_id.endswith(location_pattern):
-                            gene_id = gene_id.replace(location_pattern, "")
+                        if self.domain == "eukaryota":
+                            location_pattern = ":{}-{}".format(
+                                scaffold["gene_start"], scaffold["gene_end"]
+                            )
+                            if gene_id.endswith(location_pattern):
+                                gene_id = gene_id.replace(location_pattern, "")
+                        else:  # Remove suffix assigned by Prodigal
+                            gene_id = gene_id.rsplit("_", 1)[0]
                         try:
                             desc = links_info[busco]["description"]
                             link = links_info[busco]["link"]

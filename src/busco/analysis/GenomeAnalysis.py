@@ -222,11 +222,10 @@ class GenomeAnalysisEukaryotesAugustus(BLASTAnalysis, GenomeAnalysisEukaryotes):
 
     def cleanup(self):
         try:
-            if self._target_species.startswith("BUSCO"):
-                self.augustus_runner.move_retraining_parameters()
-                self.config.set(
-                    "busco_run", "augustus_species", self._target_species_initial
-                )  # Reset parameter for batch mode
+            self.augustus_runner.move_retraining_parameters()
+            self.config.set(
+                "busco_run", "augustus_species", self._target_species_initial
+            )  # Reset parameter for batch mode
         except OSError:
             pass
         super().cleanup()
@@ -437,11 +436,8 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
     def validate_output(self):
         if len(self.metaeuk_runner.headers_files) < 2:
             return
-        hmmer_results = {
-            **self.hmmer_runner.is_complete,
-            **self.hmmer_runner.is_very_large,
-            **self.hmmer_runner.is_fragment,
-        }
+        hmmer_results = self.hmmer_runner.merge_dicts()
+
         if len(hmmer_results) > 0:
             exon_records = self.get_exon_records(hmmer_results)
             df = self.exons_to_df(exon_records)
@@ -542,6 +538,7 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                             strand,
                             score,
                             run_found,
+                            gene_id,
                         )
                         exon_records.append(record)
         return exon_records
@@ -555,10 +552,12 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                 busco_group = busco_groups.get_group(busco_id)
             except KeyError:  # if busco was removed during overlap filtering
                 continue
-            busco_score_groups = busco_group.groupby(["Score"])
-            for _, busco_score_group in busco_score_groups:
+            busco_gene_groups = busco_group.groupby("Orig gene ID")
+            for gene_match, busco_gene_group in busco_gene_groups:
+                if gene_match not in matches:
+                    continue
                 min_coord = None
-                for idx, row in busco_score_group.iterrows():
+                for idx, row in busco_gene_group.iterrows():
                     low_coord = row["Start"]
                     high_coord = row["Stop"]
                     score = row["Score"]
@@ -569,19 +568,22 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                     else:
                         min_coord = low_coord
                         max_coord = high_coord
-                for gene_match, details in matches.items():
-                    if details[0]["bitscore"] == score:
-                        new_gene_match = "{}:{}-{}".format(seq, min_coord, max_coord)
-                        hmmer_result_dict_new[busco_id].update(
-                            {new_gene_match: details}
-                        )
-                        matched_genes_new[new_gene_match].append(busco_id)
-                        self.gene_details[new_gene_match] = self.gene_details[
-                            gene_match
-                        ]
-                        self.sequences_aa[
-                            new_gene_match
-                        ] = self.metaeuk_runner.sequences_aa[gene_match]
+
+                details = matches[gene_match]
+                df_strand = busco_gene_group["Strand"].iloc[0]
+                new_gene_match = "{}:{}-{}".format(seq, min_coord, max_coord)
+                hmmer_result_dict_new[busco_id].update({new_gene_match: details})
+                matched_genes_new[new_gene_match].append(busco_id)
+                self.gene_details[new_gene_match] = [
+                    {
+                        "gene_start": min_coord,
+                        "gene_end": max_coord,
+                        "strand": df_strand,
+                    }
+                ]
+                self.sequences_aa[new_gene_match] = self.metaeuk_runner.sequences_aa[
+                    gene_match
+                ]
         return hmmer_result_dict_new, matched_genes_new
 
     @log("Validating exons and removing overlapping matches", logger)

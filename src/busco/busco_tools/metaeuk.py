@@ -264,6 +264,7 @@ class MetaeukRunner(BaseRunner):
                 "Strand",
                 "Score",
                 "Run found",
+                "Orig gene ID",
             ],
             index=np.arange(len(records)),
         )
@@ -593,6 +594,7 @@ class MetaeukRunner(BaseRunner):
                         header_details["high_coord"],
                         header_details["S"],
                         header_details["bitscore"],
+                        None,
                         None,
                     )
                     all_headers.append(header_df_info)

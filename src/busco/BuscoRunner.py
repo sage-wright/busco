@@ -132,12 +132,11 @@ class SingleRunner:
             raise BatchFatalError(e)
 
         except KeyboardInterrupt:
-            logger.exception(
+            raise BatchFatalError(
                 "A signal was sent to kill the process. \nBUSCO analysis failed !"
             )
-            raise BatchFatalError
 
-        except BaseException:
+        except BaseException as e:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             logger.critical(
                 "Unhandled exception occurred:\n{}\n".format(
@@ -146,7 +145,7 @@ class SingleRunner:
                     )
                 )
             )
-            raise BatchFatalError
+            raise BatchFatalError(e)
 
 
 class BatchRunner:

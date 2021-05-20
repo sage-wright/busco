@@ -72,7 +72,13 @@ class AugustusRunner(BaseRunner):
                 "AUGUSTUS_CONFIG_PATH environment variable has not been set"
             )
 
-        self._target_species = self.config.get("busco_run", "augustus_species")
+        try:
+            self._target_species = self.config.get("busco_run", "augustus_species")
+        except KeyError:
+            raise SystemExit(
+                "Something went wrong. Eukaryota datasets should specify an augustus species."
+            )
+
         super().__init__()
         self._output_folder = os.path.join(self.run_folder, "augustus_output")
         self.tmp_dir = os.path.join(self._output_folder, "tmp")
@@ -591,22 +597,23 @@ class AugustusRunner(BaseRunner):
         This function moves retraining parameters from augustus species folder
         to the run folder
         """
-        augustus_species_path = os.path.join(
-            self._augustus_config_path, "species", self._target_species
-        )
-        if os.path.exists(augustus_species_path):
-            new_path = os.path.join(
-                self._output_folder, "retraining_parameters", self._target_species
+        if self._target_species.startswith("BUSCO"):
+            augustus_species_path = os.path.join(
+                self._augustus_config_path, "species", self._target_species
             )
-            shutil.move(augustus_species_path, new_path)
-        elif self.config.getboolean("busco_run", "restart") and os.path.exists(
-            os.path.join(
-                self._output_folder, "retraining_parameters", self._target_species
-            )
-        ):
-            pass
-        else:
-            logger.warning("Augustus did not produce a retrained species folder.")
+            if os.path.exists(augustus_species_path):
+                new_path = os.path.join(
+                    self._output_folder, "retraining_parameters", self._target_species
+                )
+                shutil.move(augustus_species_path, new_path)
+            elif self.config.getboolean("busco_run", "restart") and os.path.exists(
+                os.path.join(
+                    self._output_folder, "retraining_parameters", self._target_species
+                )
+            ):
+                pass
+            else:
+                logger.warning("Augustus did not produce a retrained species folder.")
         return
 
 
