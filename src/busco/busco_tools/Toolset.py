@@ -14,14 +14,12 @@ Licensed under the MIT license. See LICENSE.md file.
 import os
 import subprocess
 from subprocess import TimeoutExpired
-from multiprocessing import Process, Pool, Value, Lock
+from multiprocessing import Process, Pool, Value, set_start_method
 import time
 from abc import ABCMeta, abstractmethod
-from busco.BuscoLogger import BuscoLogger, ToolLogger
+from busco.BuscoLogger import BuscoLogger
 from busco.BuscoLogger import LogDecorator as log
-from busco.BuscoLogger import StreamLogger
 from busco.Exceptions import BatchFatalError
-import logging
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -65,26 +63,25 @@ class Job(Process):
         Start external process and block the current thread's execution
         till the process' run is over
         """
-        with StreamLogger(logging.DEBUG, self.job_outlogger, **self.kwargs) as out:
-            with StreamLogger(logging.ERROR, self.job_errlogger) as err:
+
+        with open(self.job_outlogger, "wb") as f_out:
+            with open(self.job_errlogger, "wb") as f_err:
                 try:
-                    # Stick with Popen(), communicate() and wait() instead of just run() to ensure compatibility with
-                    # Python versions < 3.5.
-                    p = subprocess.Popen(
-                        self.cmd_line, shell=False, stdout=out, stderr=err, cwd=self.cwd
+                    process = subprocess.run(
+                        self.cmd_line,
+                        capture_output=True,  # stdout and stderr streams are stored and written to file after job completion
+                        cwd=self.cwd,
+                        shell=False,
+                        timeout=self.timeout,
                     )
-                    p.wait(self.timeout)
                 except TimeoutExpired:
-                    p.kill()
                     logger.warning(
                         "The following job was killed as it was taking too long (>1hr) to "
                         "complete.\n{}".format(" ".join(self.cmd_line))
                     )
+                f_out.write(process.stdout)
+                f_err.write(process.stderr)
 
-        self.job_outlogger._file_hdlr.close()
-        self.job_outlogger.removeHandler(self.job_outlogger._file_hdlr)
-        self.job_errlogger._file_hdlr.close()
-        self.job_errlogger.removeHandler(self.job_errlogger._file_hdlr)
         with cnt.get_lock():
             cnt.value += 1
 
@@ -106,6 +103,8 @@ class Tool(metaclass=ABCMeta):
     Collection of utility methods used by all tools
     """
 
+    set_start_method("spawn", force=True)
+
     def __init__(self):
         """
         Initialize job list for a tool
@@ -116,7 +115,7 @@ class Tool(metaclass=ABCMeta):
         """
         if self.name == "augustus":
             self.kwargs = {"augustus_out": True}
-            self.timeout = 3600
+            self.timeout = 3600  # Possibly no longer necessary from 5.2.0 with the new logging system in place, but no harm to leave it here
         else:
             self.kwargs = {}
             self.timeout = None
@@ -149,20 +148,16 @@ class Tool(metaclass=ABCMeta):
         """
         Create one work item
         """
-        self.tool_outlogger = ToolLogger(self.logfile_path_out)
-        self.tool_errlogger = ToolLogger(self.logfile_path_err)
         job = Job(
             self.name,
             self.cmd[:],
-            self.tool_outlogger,
-            self.tool_errlogger,
+            self.logfile_path_out,
+            self.logfile_path_err,
             self.timeout,
             self.cwd,
             **self.kwargs
         )
         self.jobs_to_run.append(job)
-        # if self.count_jobs_created:
-        #     self.total += 1
         return job
 
     def remove_job(self, job):

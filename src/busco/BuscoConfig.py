@@ -52,6 +52,35 @@ class BaseConfig(ConfigParser):
         "hmmsearch",
     }
 
+    PERMITTED_OPTIONS = [
+        "in",
+        "out",
+        "out_path",
+        "mode",
+        "auto-lineage",
+        "auto-lineage-prok",
+        "auto-lineage-euk",
+        "cpu",
+        "force",
+        "restart",
+        "download_path",
+        "datasets_version",
+        "quiet",
+        "offline",
+        "long",
+        "augustus_parameters",
+        "augustus_species",
+        "download_base_url",
+        "lineage_dataset",
+        "update-data",
+        "metaeuk_parameters",
+        "metaeuk_rerun_parameters",
+        "evalue",
+        "limit",
+        "use_augustus",
+        "batch_mode",
+    ]
+
     def __init__(self):
         super().__init__()
         config_dict = {"busco_run": type(self).DEFAULT_ARGS_VALUES}
@@ -95,21 +124,36 @@ class BaseConfig(ConfigParser):
         self.downloader = BuscoDownloadManager(self)
         return
 
-    # @log("Setting value in config")
-    # def set(self, *args, **kwargs):
-    #     super().set(*args, **kwargs)
+    def _update_config_with_args(self, args):
+        """
+        Include command line arguments in config. Overwrite any values given in the config file.
+        :param args: Dictionary of parsed command line arguments. To see full list, inspect run_BUSCO_unittests.py or
+        type busco -h
+        :type args: dict
+        :return:
+        """
+        for key, val in args.items():
+            if key in type(self).PERMITTED_OPTIONS:
+                if val is not None and type(val) is not bool:
+                    self.set("busco_run", key, str(val))
+                elif val:  # if True
+                    self.set("busco_run", key, "True")
+        return
 
 
 class PseudoConfig(BaseConfig):
-    def __init__(self, conf_file):
+    def __init__(self, conf_file, params):
         super().__init__()
         self.conf_file = conf_file
+        self.params = params
+        self.params = params
 
     def load(self):
         if self.conf_file != "local environment":
             self._load_config_file()
         else:
             self.set("busco_run", "update-data", "True")
+        self._update_config_with_args(self.params)
         self._fill_default_values()
         self._init_downloader()
 
@@ -328,35 +372,6 @@ class BuscoConfigAuto(BuscoConfig):
 class BuscoConfigMain(BuscoConfig, BaseConfig):
 
     MANDATORY_USER_PROVIDED_PARAMS = ["in", "out", "mode"]
-
-    PERMITTED_OPTIONS = [
-        "in",
-        "out",
-        "out_path",
-        "mode",
-        "auto-lineage",
-        "auto-lineage-prok",
-        "auto-lineage-euk",
-        "cpu",
-        "force",
-        "restart",
-        "download_path",
-        "datasets_version",
-        "quiet",
-        "offline",
-        "long",
-        "augustus_parameters",
-        "augustus_species",
-        "download_base_url",
-        "lineage_dataset",
-        "update-data",
-        "metaeuk_parameters",
-        "metaeuk_rerun_parameters",
-        "evalue",
-        "limit",
-        "use_augustus",
-        "batch_mode",
-    ]
 
     def __init__(self, conf_file, params, **kwargs):
         """
@@ -691,22 +706,6 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
             self.set("busco_run", "auto-lineage-prok", "False")
             self.set("busco_run", "auto-lineage-euk", "False")
 
-        return
-
-    def _update_config_with_args(self, args):
-        """
-        Include command line arguments in config. Overwrite any values given in the config file.
-        :param args: Dictionary of parsed command line arguments. To see full list, inspect run_BUSCO_unittests.py or
-        type busco -h
-        :type args: dict
-        :return:
-        """
-        for key, val in args.items():
-            if key in type(self).PERMITTED_OPTIONS:
-                if val is not None and type(val) is not bool:
-                    self.set("busco_run", key, str(val))
-                elif val:  # if True
-                    self.set("busco_run", key, "True")
         return
 
 

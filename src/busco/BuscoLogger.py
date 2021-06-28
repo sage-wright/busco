@@ -18,10 +18,6 @@ import logging.handlers
 import sys
 import io
 import os
-import select
-import time
-import threading
-import random
 from busco.Exceptions import BatchFatalError, BuscoError
 
 from configparser import NoOptionError
@@ -138,103 +134,6 @@ class LogDecorator:
         return
 
 
-class ToolLogger(logging.getLoggerClass()):
-
-    _level = logging.DEBUG
-
-    def __init__(self, filename):
-        super().__init__(filename)
-        self.setLevel(type(self)._level)
-        self._external_formatter = logging.Formatter("%(message)s")
-        self._file_hdlr = logging.FileHandler(filename, mode="a", encoding="UTF-8")
-        self._file_hdlr.setFormatter(self._external_formatter)
-        self.addHandler(self._file_hdlr)
-
-
-# The following code was created by combining code based on a SO answer here:
-# https://stackoverflow.com/questions/4713932/decorate-delegate-a-file-object-to-add-functionality/4838875#4838875
-# with code from the Python docs here:
-# https://docs.python.org/3.7/howto/logging-cookbook.html#network-logging
-# and is used to log multiple processes to the same file by way of a SocketHandler and separate the streams of
-# external tools into stdout and stderr.
-
-
-class StreamLogger(io.IOBase):
-    def __init__(self, level, logger, augustus_out=False):
-        self.logger = logger
-        self.level = level
-        self.augustus_out = augustus_out
-        self._run = None
-        self.pipe = os.pipe()
-        if self.augustus_out:
-            self.gene_found = False
-            self.output_complete = False
-            self.thread = threading.Thread(target=self._flusher_augustus_out)
-        else:
-            self.thread = threading.Thread(target=self._flusher)
-        self.thread.start()
-
-    def _flusher_augustus_out(self):
-        self._run = True
-        buf = b""
-        timeout = 10
-        read_only = select.POLLIN | select.POLLPRI | select.POLLHUP | select.POLLERR
-        # Switched from select.select() to select.poll() using examples at https://pymotw.com/2/select/
-        # This is necessary to handle greater than 1024 file descriptors, but makes BUSCO incompatible with Windows.
-        poller = select.poll()
-        server = self.pipe[0]
-        poller.register(server, read_only)
-        while self._run or (self.gene_found and not self.output_complete):
-            events = poller.poll(timeout)
-            for fd, flag in events:
-                if flag & (select.POLLIN | select.POLLPRI):
-                    buf += os.read(fd, 4096)
-                    while b"\n" in buf:
-                        if b"start gene" in buf:
-                            self.gene_found = True
-                        if b"command line" in buf:
-                            self.output_complete = True
-                        data, buf = buf.split(b"\n", 1)
-                        self.write(data.decode())
-
-        self._run = None
-
-    def _flusher(self):
-        self._run = True
-        buf = b""
-        timeout = 10
-        read_only = select.POLLIN | select.POLLPRI | select.POLLHUP | select.POLLERR
-        # Switched from select.select() to select.poll() using examples at https://pymotw.com/2/select/
-        # This is necessary to handle greater than 1024 file descriptors, but makes BUSCO incompatible with Windows.
-        poller = select.poll()
-        server = self.pipe[0]
-        poller.register(server, read_only)
-        while self._run:
-            events = poller.poll(timeout)
-            for fd, flag in events:
-                if flag & (select.POLLIN | select.POLLPRI):
-                    buf += os.read(fd, 4096)
-                    while b"\n" in buf:
-                        data, buf = buf.split(b"\n", 1)
-                        self.write(data.decode())
-
-        self._run = None
-
-    def write(self, data):
-        return self.logger.log(self.level, data)
-
-    def fileno(self):
-        return self.pipe[1]
-
-    def close(self):
-        if self._run:
-            self._run = False
-            while self._run is not None:
-                time.sleep(0.01)
-            os.close(self.pipe[0])
-            os.close(self.pipe[1])
-
-
 class BuscoLogger(logging.getLoggerClass()):
     """
     This class customizes the _logger class
@@ -243,7 +142,8 @@ class BuscoLogger(logging.getLoggerClass()):
     _level = logging.DEBUG
     _has_warning = False
     warn_output = io.StringIO()
-    random_id = str(random.getrandbits(32))
+    ppid = str(os.getppid())
+    pid = str(os.getpid())
 
     def __init__(self, name):
         """
@@ -252,9 +152,12 @@ class BuscoLogger(logging.getLoggerClass()):
         """
         super(BuscoLogger, self).__init__(name)
         self.setLevel(BuscoLogger._level)
-        self._normal_formatter = logging.Formatter("%(levelname)s:\t%(message)s")
+        self._normal_formatter = logging.Formatter(
+            "%(asctime)s %(levelname)s:\t%(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+        )
         self._verbose_formatter = logging.Formatter(
-            "%(levelname)s:%(name)s\t%(message)s"
+            "%(asctime)s %(levelname)s:%(name)s\t%(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
         )
         self._external_formatter = logging.Formatter("%(message)s")
 
@@ -270,10 +173,13 @@ class BuscoLogger(logging.getLoggerClass()):
         self.addHandler(self._err_hdlr)
 
         try:
-            # Random id used in filename to avoid complications for parallel BUSCO runs.
-            self._file_hdlr = logging.FileHandler(
-                "busco_{}.log".format(type(self).random_id), mode="a"
-            )
+            # Identify main log file with process ID and have all spawned processes log to the correct file
+            log_filename = "busco_{}.log".format(type(self).ppid)
+            if not os.path.exists(log_filename):
+                log_filename = "busco_{}.log".format(type(self).pid)
+
+            # Process id used in filename to avoid complications for parallel BUSCO runs.
+            self._file_hdlr = logging.FileHandler(log_filename, mode="a")
         except IOError as e:
             errStr = (
                 "No permission to write in the current directory: {}".format(
@@ -295,6 +201,13 @@ class BuscoLogger(logging.getLoggerClass()):
 
     def __call__(self):
         pass
+
+    @classmethod
+    def reset(cls):
+        cls._level = logging.DEBUG
+        cls._has_warning = False
+        cls.warn_output = io.StringIO()
+        return
 
     @staticmethod
     def get_logger(name, config=None):

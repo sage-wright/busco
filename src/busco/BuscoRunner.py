@@ -188,6 +188,7 @@ class BatchRunner:
                 type(self).batch_results.append(run_summary)
 
                 AnalysisRunner.reset()
+                BuscoLogger.reset()
 
             except NoOptionError as noe:
                 raise BatchFatalError(noe)
@@ -195,7 +196,17 @@ class BatchRunner:
             except BatchFatalError:
                 raise
 
-            except BuscoError:
+            except BuscoError as be:
+                if "did not recognize any genes" in be.value:
+                    type(self).batch_results.append(
+                        "{}\tNo genes found\n".format(os.path.basename(input_file))
+                    )
+                else:
+                    type(self).batch_results.append(
+                        "{}\tRun failed; check logs\n".format(
+                            os.path.basename(input_file)
+                        )
+                    )
                 continue
 
         try:
@@ -579,13 +590,13 @@ class AnalysisRunner:
             if not os.path.exists(log_folder):
                 os.makedirs(log_folder)
             shutil.move(
-                "busco_{}.log".format(BuscoLogger.random_id),
+                "busco_{}.log".format(BuscoLogger.pid),
                 os.path.join(log_folder, "busco.log"),
             )
         except OSError:
             logger.warning(
                 "Unable to move 'busco_{}.log' to the 'logs' folder.".format(
-                    BuscoLogger.random_id
+                    BuscoLogger.pid
                 )
             )
         return
@@ -615,6 +626,9 @@ class AnalysisRunner:
         logger.info(
             "For assistance with interpreting the results, please consult the userguide: "
             "https://busco.ezlab.org/busco_userguide.html\n"
+        )
+        logger.info(
+            "Visit this page https://gitlab.com/ezlab/busco#how-to-cite-busco to see how to cite BUSCO"
         )
 
 

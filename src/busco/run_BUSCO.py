@@ -27,7 +27,12 @@ from busco.Exceptions import BatchFatalError, BuscoError
 from busco.BuscoLogger import BuscoLogger
 from busco.BuscoLogger import LogDecorator as log
 from busco.ConfigManager import BuscoConfigManager
-from busco.Actions import ListLineagesAction, CleanHelpAction, CleanVersionAction
+from busco.Actions import (
+    ListLineagesAction,
+    CleanHelpAction,
+    CleanVersionAction,
+    DirectDownload,
+)
 from busco.ConfigManager import BuscoConfigMain
 
 # from busco.busco_tools.Toolset import ToolException
@@ -130,7 +135,9 @@ def _parse_args():
     parser = argparse.ArgumentParser(
         description="Welcome to BUSCO {}: the Benchmarking Universal Single-Copy Ortholog assessment tool.\n"
         "For more detailed usage information, please review the README file provided with "
-        "this distribution and the BUSCO user guide.".format(busco.__version__),
+        "this distribution and the BUSCO user guide. Visit this page https://gitlab.com/ezlab/busco#how-to-cite-busco to see how to cite BUSCO".format(
+            busco.__version__
+        ),
         usage="busco -i [SEQUENCE_FILE] -l [LINEAGE] -o [OUTPUT_NAME] -m [MODE] [OTHER OPTIONS]",
         formatter_class=RawTextHelpFormatter,
         add_help=False,
@@ -246,6 +253,16 @@ def _parse_args():
         dest="datasets_version",
         required=False,
         help="Specify the version of BUSCO datasets, e.g. odb10",
+    )
+
+    optional.add_argument(
+        "--download",
+        dest="download",
+        required=False,
+        type=str,
+        metavar="dataset",
+        action=DirectDownload,
+        help='Download dataset. Possible values are a specific dataset name, "all", "prokaryota", "eukaryota", or "virus". If used together with other command line arguments, make sure to place this last.',
     )
 
     optional.add_argument(

@@ -19,6 +19,7 @@ import hashlib
 import urllib.request
 from urllib.error import URLError
 import gzip
+import pandas as pd
 
 from busco.BuscoLogger import BuscoLogger
 from busco.BuscoLogger import LogDecorator as log
@@ -35,7 +36,7 @@ class BuscoDownloadManager:
     Else, a warning is produced.
     """
 
-    version_files = {}
+    version_files = None
 
     def __init__(self, config):
         """
@@ -47,7 +48,7 @@ class BuscoDownloadManager:
         self.download_base_url = config.get("busco_run", "download_base_url")
         self.local_download_path = config.get("busco_run", "download_path")
         self._create_main_download_dir()
-        if not type(self).version_files and not self.offline:
+        if not type(self).version_files is not None and not self.offline:
             self._load_versions()
 
     def _create_main_download_dir(self):
@@ -58,15 +59,12 @@ class BuscoDownloadManager:
     def _load_versions(self):
         try:
             versions_file = self._obtain_versions_file()
-            with open(versions_file, "r") as v_file:
-                for line in v_file:
-                    line = line.strip().split("\t")
-                    dataset_name = line[0]
-                    dataset_date = line[1]
-                    dataset_hash = line[2]
-                    type(self).version_files.update(
-                        {dataset_name: (dataset_date, dataset_hash)}
-                    )
+            type(self).version_files = pd.read_csv(
+                versions_file,
+                sep="\t",
+                names=["dataset", "date", "hash", "domain", "type"],
+                index_col="dataset",
+            )
         except URLError as e:
             if self.offline:
                 logger.warning(
@@ -118,7 +116,7 @@ class BuscoDownloadManager:
 
     def _check_existing_version(self, local_filepath, category, data_basename):
         try:
-            latest_update = type(self).version_files[data_basename][0]
+            latest_update = type(self).version_files.loc[data_basename]["date"]
         except KeyError:
             raise BuscoError(
                 "{} is not a valid option for '{}'".format(data_basename, category)
@@ -153,7 +151,7 @@ class BuscoDownloadManager:
                 > 0
             )
 
-        hash = type(self).version_files[data_basename][1]
+        hash = type(self).version_files.loc[data_basename]["hash"]
 
         return present, up_to_date, latest_version, local_filepath, hash
 

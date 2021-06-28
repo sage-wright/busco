@@ -1,3 +1,13 @@
+5.2.0
+- Issue #224 fixed
+- Issue #232 fixed
+- Issue #266 fixed
+- Issue #270 fixed
+- Issue #352 fixed
+- Issue #368 fixed
+- Issue #386 fixed
+- Introduce direct download option (Issues #252, #288)
+
 5.1.3
 - Issue #408 fixed
 - Bug fixes
