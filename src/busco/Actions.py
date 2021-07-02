@@ -31,7 +31,10 @@ class ListLineagesAction(argparse.Action):
             type(self).logger.error(se)
             raise SystemExit(1)
         finally:
-            os.remove("busco_{}.log".format(BuscoLogger.pid))
+            try:
+                os.remove("busco_{}.log".format(BuscoLogger.pid))
+            except FileNotFoundError:
+                pass
             parser.exit()
 
     def print_lineages(self):
@@ -77,7 +80,10 @@ class DirectDownload(argparse.Action):
             type(self).logger.error(se)
             raise SystemExit(1)
         finally:
-            os.remove("busco_{}.log".format(BuscoLogger.random_id))
+            try:
+                os.remove("busco_{}.log".format(BuscoLogger.pid))
+            except FileNotFoundError:
+                pass
             parser.exit()
 
     def download_datasets(self, bdm, values):

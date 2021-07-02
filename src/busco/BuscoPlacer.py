@@ -6,7 +6,7 @@
    :synopsis: BuscoPlacer implements methods required for automatically selecting the appropriate dataset
    to be used during BUSCO analysis
 .. versionadded:: 4.0.0
-.. versionchanged:: 4.0.0
+.. versionchanged:: 5.2.1
 
 Copyright (c) 2016-2021, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
@@ -21,6 +21,18 @@ from Bio import SeqIO
 from busco.busco_tools.sepp import SEPPRunner
 
 logger = BuscoLogger.get_logger(__name__)
+
+
+class NoMarkersError(Exception):
+    """
+    Module-specific exception
+    """
+
+    def __init__(self, value=None):
+        self.value = value
+
+    def __str__(self):
+        return self.value
 
 
 class BuscoPlacer:
@@ -107,10 +119,19 @@ class BuscoPlacer:
         # If mode is genome, substitute input with prodigal/augustus output
         self._download_placement_files()
         placement_file_versions = self._get_placement_file_versions()
-        self._extract_marker_sequences()
-        self._run_sepp()
+        try:
+            self._extract_marker_sequences()
+            self._run_sepp()
 
-        dataset = self._pick_dataset()
+            dataset = self._pick_dataset()
+        except NoMarkersError:
+            root_lineage = self._config.get("busco_run", "name")
+            logger.info(
+                "No marker genes were found. Root lineage {} is kept".format(
+                    root_lineage
+                )
+            )
+            dataset = (root_lineage.split("_")[0], None, None)
 
         return dataset, placement_file_versions
 
@@ -343,6 +364,9 @@ class BuscoPlacer:
                 marker_genes_names.append(
                     list(gene_matches.keys())[0]
                 )  # The list should only have one entry because they are single copy buscos
+
+        if len(marker_genes_names) == 0:
+            raise NoMarkersError
 
         marker_genes_records = []
         if isinstance(self.protein_seqs, (str,)):

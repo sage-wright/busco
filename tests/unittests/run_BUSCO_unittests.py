@@ -58,6 +58,31 @@ class TestParams(unittest.TestCase):
                 sys.stdout = sys.__stdout__
         self.assertEqual(cm.exception.code, 0)
 
+    def test_list_lineages(self):
+        args = ["--list-datasets"]
+        sys.argv[1:] = args
+        with self.assertRaises(SystemExit) as cm:
+            captured_output = io.StringIO()
+            sys.stdout = captured_output
+            try:
+                run_BUSCO._parse_args()
+            finally:
+                sys.stdout = sys.__stdout__
+        self.assertEqual(cm.exception.code, 0)
+
+    @patch("busco.BuscoDownloadManager.logger.info")
+    def test_direct_download(self, *args):
+        args = ["--download", "archaea_odb10"]
+        sys.argv[1:] = args
+        with self.assertRaises(SystemExit) as cm:
+            captured_output = io.StringIO()
+            sys.stdout = captured_output
+            try:
+                run_BUSCO._parse_args()
+            finally:
+                sys.stdout = sys.__stdout__
+        self.assertEqual(cm.exception.code, 0)
+
     def test_cmdline_options_short_minimum(self):
         params = run_BUSCO._parse_args()
         correct_parse = {
