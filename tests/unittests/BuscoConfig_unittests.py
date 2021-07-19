@@ -43,6 +43,7 @@ class TestBuscoConfig(unittest.TestCase):
             "download_path": None,
             "update-data": False,
             "version": "==SUPPRESS==",
+            "tar": False,
         }
 
         self.test_params = {
@@ -80,6 +81,7 @@ class TestBuscoConfig(unittest.TestCase):
                 "limit",
                 "use_augustus",
                 "batch_mode",
+                "tar",
             ],
             "etraining": ["path", "command"],
             "gff2gbSmallDNA.pl": ["path", "command"],

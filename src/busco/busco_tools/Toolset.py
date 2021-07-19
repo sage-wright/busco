@@ -69,7 +69,8 @@ class Job(Process):
                 try:
                     process = subprocess.run(
                         self.cmd_line,
-                        capture_output=True,  # stdout and stderr streams are stored and written to file after job completion
+                        stdout=subprocess.PIPE,  # stdout and stderr streams are stored and written to file after job completion
+                        stderr=subprocess.PIPE,
                         cwd=self.cwd,
                         shell=False,
                         timeout=self.timeout,

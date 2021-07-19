@@ -101,6 +101,7 @@ class HMMERRunner(BaseRunner):
         self.mode = mode
 
         self.is_fragment = {}
+        self.matched_genes_fragment = {}
 
         self.single_copy_buscos = {}
         self.multi_copy_buscos = {}

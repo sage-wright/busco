@@ -152,7 +152,8 @@ def _parse_args():
         required=False,
         metavar="SEQUENCE_FILE",
         help="Input sequence file in FASTA format. "
-        "Can be an assembled genome or transcriptome (DNA), or protein sequences from an annotated gene set.",
+        "Can be an assembled genome or transcriptome (DNA), or protein sequences from an annotated gene set. "
+        "Also possible to use a path to a directory containing multiple input files.",
     )
 
     optional.add_argument(
@@ -383,6 +384,14 @@ def _parse_args():
         required=False,
         dest="restart",
         help="Continue a run that had already partially completed.",
+    )
+
+    optional.add_argument(
+        "--tar",
+        dest="tar",
+        action="store_true",
+        required=False,
+        help="Compress some subdirectories with many files to save space",
     )
 
     optional.add_argument(

@@ -119,6 +119,12 @@ class BuscoAnalysis(metaclass=ABCMeta):
         )
         if self.restart and self.hmmer_runner.check_previous_completed_run():
             logger.info("Skipping HMMER run as output already processed")
+        elif self.restart and os.path.exists(
+            "{}.tar.gz".format(self.hmmer_runner.output_folder)
+        ):
+            raise BuscoError(
+                "Restart mode incompatible with a previously compressed (--tar) run. Please decompress the HMMER results folder and try again."
+            )
         elif len(os.listdir(self.hmmer_runner.results_dir)) > 0:
             raise BuscoError(
                 "HMMER results directory not empty. If you are running in restart mode, make sure you are "
@@ -190,11 +196,14 @@ class BuscoAnalysis(metaclass=ABCMeta):
         self._check_dataset_integrity()
         if not os.stat(self.input_file).st_size > 0:
             raise BuscoError("Input file is empty.")
-        with open(self.input_file) as f:
-            for line in f:
-                if line.startswith(">"):
-                    self._check_fasta_header(line)
-                    self._check_seq_uniqueness(line)
+        try:
+            with open(self.input_file) as f:
+                for line in f:
+                    if line.startswith(">"):
+                        self._check_fasta_header(line)
+                        self._check_seq_uniqueness(line)
+        except UnicodeDecodeError as ude:
+            raise BuscoError(ude.msg)
         return
 
     def _check_seq_uniqueness(self, line):

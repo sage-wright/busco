@@ -28,6 +28,9 @@ logger = BuscoLogger.get_logger(__name__)
 
 
 class SingleRunner:
+
+    all_runners = []
+
     def __init__(self, config_manager):
         self.start_time = time.time()
         self.config_manager = config_manager
@@ -65,6 +68,7 @@ class SingleRunner:
         asl.set_best_match_lineage()
         lineage_dataset = asl.best_match_lineage_dataset
         runner = asl.selected_runner
+        type(self).all_runners.extend(asl.runners)
         asl.reset()
         return lineage_dataset, runner
 
@@ -121,10 +125,13 @@ class SingleRunner:
             else:
                 self.runner.run_analysis()
                 AnalysisRunner.selected_dataset = lineage_basename
+            type(self).all_runners.append(self.runner)
+
+            if self.config.getboolean("busco_run", "tar"):
+                self.compress_folders()
             self.runner.finish(time.time() - self.start_time)
 
-        except BuscoError as e:
-            self.log_error(e)
+        except BuscoError:
             raise
 
         except ToolException as e:
@@ -146,6 +153,34 @@ class SingleRunner:
                 )
             )
             raise BatchFatalError(e)
+
+    def compress_folders(self):
+        for runner in type(self).all_runners:
+            folders_to_compress = [
+                runner.analysis.hmmer_runner.single_copy_sequences_folder,
+                runner.analysis.hmmer_runner.multi_copy_sequences_folder,
+                runner.analysis.hmmer_runner.fragmented_sequences_folder,
+                runner.analysis.hmmer_runner.output_folder,
+            ]
+            if self.config.getboolean("busco_run", "use_augustus"):
+                folders_to_compress.append(
+                    runner.analysis.augustus_runner.pred_genes_dir_initial,
+                    runner.analysis.augustus_runner.pred_genes_dir_rerun,
+                    runner.analysis.augustus_runner.gff_dir,
+                    runner.analysis.gff2gb_runner.gb_folder,
+                )
+            for folder in folders_to_compress:
+                try:
+                    shutil.make_archive(
+                        folder,
+                        "gztar",
+                        os.path.dirname(folder),
+                        os.path.basename(folder),
+                    )
+                    shutil.rmtree(folder)
+                except OSError:
+                    raise
+                    # logger.warning("Unable to compress folder {}".format(folder))
 
 
 class BatchRunner:
@@ -276,6 +311,8 @@ class AnalysisRunner:
                 self.mode = "prok_tran"
             elif self.domain == "eukaryota":
                 self.mode = "euk_tran"
+            elif self.domain == "viruses":
+                self.mode = "prok_genome"  # Suggested by Mose - Prodigal may perform better on viruses than BLAST + HMMER.
             else:
                 raise BatchFatalError("Unrecognized mode {}".format(self.mode))
         analysis_type = type(self).mode_dict[self.mode]
@@ -505,6 +542,10 @@ class AnalysisRunner:
                     if not self.config.getboolean("busco_run", "auto-lineage"):
                         auto_lineage_line = "\nConsider using the auto-lineage mode to select a more specific lineage."
                         final_output_results.append(auto_lineage_line)
+                    with open(
+                        self.analysis.hmmer_runner.short_summary_file, "a"
+                    ) as short_summary_file:
+                        short_summary_file.write(positive_parasitic_line)
 
         except OSError:
             pass

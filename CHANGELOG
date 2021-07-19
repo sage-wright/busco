@@ -1,3 +1,11 @@
+5.2.2
+- Issue #390 fixed
+- Issue #423 fixed
+- Issue #464 fixed
+- Issue #467 fixed
+- Issue #470 fixed
+- Add --tar option to compress some output folders
+
 5.2.1
 - Minor bug fixes
 

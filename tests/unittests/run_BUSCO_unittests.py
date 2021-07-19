@@ -116,6 +116,7 @@ class TestParams(unittest.TestCase):
             "download_path": None,
             "update-data": False,
             "version": "==SUPPRESS==",
+            "tar": False,
         }
         self.assertDictEqual(params, correct_parse)
 
@@ -173,6 +174,7 @@ class TestParams(unittest.TestCase):
             "download_path": None,
             "update-data": False,
             "version": "==SUPPRESS==",
+            "tar": False,
         }
         self.assertDictEqual(params, correct_parse)
 
@@ -223,6 +225,7 @@ class TestParams(unittest.TestCase):
             "--augustus",
             "--update-data",
             "--offline",
+            "--tar",
         ]
         command_str = " ".join(
             [" ".join([key, str(value)]) for key, value in arg_values.items()]
@@ -261,6 +264,7 @@ class TestParams(unittest.TestCase):
             "quiet": True,
             "update-data": True,
             "version": "==SUPPRESS==",
+            "tar": True,
         }
         self.assertDictEqual(params, correct_parse)
 

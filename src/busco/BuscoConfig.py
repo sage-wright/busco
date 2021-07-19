@@ -36,6 +36,7 @@ class BaseConfig(ConfigParser):
         "use_augustus": False,
         "long": False,
         "batch_mode": False,
+        "tar": False,
     }
 
     DEPENDENCY_SECTIONS = {
@@ -79,6 +80,7 @@ class BaseConfig(ConfigParser):
         "limit",
         "use_augustus",
         "batch_mode",
+        "tar",
     ]
 
     def __init__(self):
@@ -682,16 +684,9 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
 
     def _check_value_constraints(self):
         """
-        Load default values into config if not provided in config file or on the command line.
         :return:
         """
-        # for param in list(type(self).DEFAULT_ARGS_VALUES.keys()):
-        #     try:
-        #         self.get("busco_run", param)
-        #     except NoOptionError:
-        #         self.set("busco_run", param, str(type(self).DEFAULT_ARGS_VALUES[param]))
 
-        # Set auto-lineage to True if either auto-lineage-prok or auto-lineage-euk is selected
         if self.getboolean("busco_run", "auto-lineage-prok") or self.getboolean(
             "busco_run", "auto-lineage-euk"
         ):

@@ -586,8 +586,10 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                 ]
         return hmmer_result_dict_new, matched_genes_new
 
-    @log("Validating exons and removing overlapping matches", logger)
     def exons_to_df(self, records):
+        if self._mode == "genome":
+            logger.info("Validating exons and removing overlapping matches")
+
         df = self.metaeuk_runner.records_to_df(records)
         df["Start"] = df["Start"].astype(int)
         df["Stop"] = df["Stop"].astype(int)
