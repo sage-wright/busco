@@ -44,6 +44,9 @@ class MKBLASTRunner(BaseRunner):
 
         self.run_jobs()
 
+    def reset(self):
+        super().reset()
+
     def generate_job_args(self):
         yield
 
@@ -140,10 +143,6 @@ class TBLASTNRunner(BaseRunner):
         return self._output_folder
 
     def _define_flank(self):
-        """
-        TODO: Add docstring
-        :return:
-        """
         try:
             size = os.path.getsize(self.input_file) / 1000  # size in mb
             flank = int(size / 50)  # proportional flank size
@@ -162,6 +161,9 @@ class TBLASTNRunner(BaseRunner):
         self.run_jobs()
         self._check_output()
         return
+
+    def reset(self):
+        super().reset()
 
     def check_tool_dependencies(self):
         if (

@@ -8,12 +8,13 @@
 .. versionadded:: 4.0.0
 .. versionchanged:: 5.2.1
 
-Copyright (c) 2016-2021, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2022, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 
 """
 import json
 import os
+import re
 from busco.BuscoLogger import BuscoLogger
 from busco.BuscoLogger import LogDecorator as log
 from busco.Exceptions import BuscoError
@@ -148,14 +149,10 @@ class BuscoPlacer:
 
         with open(self.taxid_busco_file) as f:
             for line in f:
-                datasets_mapping.update(
-                    {
-                        line.strip()
-                        .split("\t")[0]: line.strip()
-                        .split("\t")[1]
-                        .split(",")[0]
-                    }
-                )
+                parts = line.strip().split("\t")
+                tax_id = parts[0]
+                dataset = parts[1].split(",")[0]
+                datasets_mapping.update({tax_id: dataset})
 
         # load the lineage for each taxid in a dict {taxid:reversed_lineage}
         # lineage is 1:2:3:4:5:6 => {6:[6,5,4,3,2,1]}
@@ -168,19 +165,18 @@ class BuscoPlacer:
             for line in f:
                 if line.startswith("#"):
                     continue
-                lineages.add(line.strip().split("\t")[4])
+                lineage = line.strip().split("\t")[4]
+                lineages.add(lineage)
 
-                i = 0
                 # for each line, e.g. 6\t1:2:3:4:5:6, create/update the lineage for each level
                 # 6:[1,2,3,4,5,6], 5:[1,2,3,4,5], 4:[1,2,3,4], etc.
-                for t in line.strip().split("\t")[4].split(","):
-                    i += 1
-                    parents.update({t: line.strip().split("\t")[4].split(",")[0:i]})
+                levels = lineage.split(",")
+
+                for i, t in enumerate(levels):
+                    parents.update({t: levels[0 : i + 1][::-1]})
 
         for t in parents:
-            for p in parents[t][
-                ::-1
-            ]:  # reverse the order to get the deepest parent, not the root one
+            for p in parents[t]:  # get the deepest parent, not the root one
                 if p in datasets_mapping:
                     taxid_dataset.update({t: p})
                     break
@@ -209,7 +205,6 @@ class BuscoPlacer:
             for individual_placement in placement["p"]:
                 # find the taxid in tree
                 node = individual_placement[0]
-                import re
 
                 match = re.findall(  # deal with weird character in the json file, see the output yourself.
                     # if this pattern is inconsistant with pplacer version, it may break buscoplacer.
@@ -265,8 +260,6 @@ class BuscoPlacer:
         if len(choice) > 1:
             # more than one taxid should be considered, pick the common ancestor
             choice = self._get_common_ancestor(choice, parents)
-            # print('last common')
-            # print(choice)
         elif len(choice) == 0:
             if run_folder.split("/")[-1].split("_")[-2] == "bacteria":
                 choice.append("2")
@@ -287,25 +280,26 @@ class BuscoPlacer:
                 "Not enough markers were placed on the tree (%s). Root lineage %s is kept"
                 % (max_markers, datasets_mapping[taxid_dataset[key_taxid]])
             )
-            return [
-                datasets_mapping[taxid_dataset[key_taxid]],
-                max_markers,
-                sum(node_weight.values()),
-            ]
+            lineage = datasets_mapping[taxid_dataset[key_taxid]]
 
-        type(self)._logger.info(
-            "Lineage %s is selected, supported by %s markers out of %s"
-            % (
-                datasets_mapping[taxid_dataset[choice[0]]],
-                max_markers,
-                sum(node_weight.values()),
+        else:
+            type(self)._logger.info(
+                "Lineage %s is selected, supported by %s markers out of %s"
+                % (
+                    datasets_mapping[taxid_dataset[choice[0]]],
+                    max_markers,
+                    sum(node_weight.values()),
+                )
             )
+            lineage = datasets_mapping[taxid_dataset[choice[0]]]
+        lineage = "{}_{}".format(
+            lineage, self._config.get("busco_run", "datasets_version")
         )
-
+        placed_markers = sum(node_weight.values())
         return [
-            datasets_mapping[taxid_dataset[choice[0]]],
+            lineage,
             max_markers,
-            sum(node_weight.values()),
+            placed_markers,
         ]
 
     @staticmethod
@@ -315,13 +309,9 @@ class BuscoPlacer:
         # order will be lost with sets, so keep in a list the lineage of one entry to later pick the deepest ancestor
         ordered_lineage = []
         for c in choice:
-            # print('c is %s' % c)
             if len(parents[c]) > len(ordered_lineage):
-                #    print('len parent c is %s' % len(parents[c]))
-                #    print('len ordered lineage is %s' % ordered_lineage)
                 # probably useless. Init with parents[choice[0] should work
                 ordered_lineage = parents[c]
-            #    print('ordered_lineage us %s' % ordered_lineage)
             # keep in set only entries that are in the currently explored lineage
             all_ancestors = all_ancestors.intersection(parents[c])
 

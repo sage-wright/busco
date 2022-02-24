@@ -6,7 +6,7 @@
 .. versionadded:: 3.0.0
 .. versionchanged:: 3.0.0
 
-Copyright (c) 2016-2021, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2022, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 
 """
@@ -49,3 +49,6 @@ class GeneSetAnalysis(ProteinAnalysis, BuscoAnalysis):
         # if self._tarzip:
         #     self._run_tarzip_hmmer_output()
         return
+
+    def reset(self):
+        super().reset()

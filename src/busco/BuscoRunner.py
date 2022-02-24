@@ -41,19 +41,20 @@ class SingleRunner:
 
     def get_lineage(self):
         if self.config.getboolean("busco_run", "auto-lineage"):
-            lineage_dataset_fullpath, runner = self.auto_select_lineage()  # full path
-            if not runner.config.get("busco_run", "domain") == "viruses":
-                self.config.set(
-                    "busco_run",
-                    "parent_dataset",
-                    runner.config.get("busco_run", "lineage_dataset"),
-                )
+            (
+                lineage_dataset_fullpath,
+                runner,
+                parent_domain,
+            ) = self.auto_select_lineage()  # full path
             self.config.set("busco_run", "lineage_dataset", lineage_dataset_fullpath)
+            self.config.set("busco_run", "domain_run_name", parent_domain)
             self.runner = runner
+            self.runner.set_parent_dataset()
 
         self.lineage_dataset = self.config.get(
             "busco_run", "lineage_dataset"
         )  # full path
+
         return
 
     @log("No lineage specified. Running lineage auto selector.\n", logger)
@@ -62,15 +63,18 @@ class SingleRunner:
             AutoSelectLineage,
         )  # Import statement inside method to avoid circular imports
 
-        asl = AutoSelectLineage(self.config_manager)
-        asl.run_auto_selector()
-        asl.get_lineage_dataset()
-        asl.set_best_match_lineage()
-        lineage_dataset = asl.best_match_lineage_dataset
-        runner = asl.selected_runner
-        type(self).all_runners.extend(asl.runners)
-        asl.reset()
-        return lineage_dataset, runner
+        try:
+            asl = AutoSelectLineage(self.config_manager)
+            asl.run_auto_selector()
+            asl.get_lineage_dataset()
+            asl.set_best_match_lineage()
+            lineage_dataset = asl.best_match_lineage_dataset
+            runner = asl.selected_runner
+            parent_domain = runner.config.get("busco_run", "domain_run_name")
+        finally:
+            type(self).all_runners.extend(asl.runners)
+            asl.reset()
+        return lineage_dataset, runner, parent_domain
 
     @staticmethod
     def log_error(err):
@@ -81,6 +85,12 @@ class SingleRunner:
             "Check the logs, read the user guide (https://busco.ezlab.org/busco_userguide.html), "
             "and check the BUSCO issue board on https://gitlab.com/ezlab/busco/issues\n"
         )
+
+    def reset(self):
+        for runner in type(self).all_runners:
+            runner.reset()
+            runner.analysis.reset()
+        type(self).all_runners = []
 
     @log("Input file is {}", logger, attr_name="input_file")
     def run(self):
@@ -116,6 +126,8 @@ class SingleRunner:
 
                 self.runner = AnalysisRunner(self.config)
 
+            type(self).all_runners.append(self.runner)
+
             if os.path.exists(lineage_results_folder):
                 new_dest = os.path.join(
                     main_out_folder, self.config.get("busco_run", "lineage_results_dir")
@@ -125,13 +137,14 @@ class SingleRunner:
             else:
                 self.runner.run_analysis()
                 AnalysisRunner.selected_dataset = lineage_basename
-            type(self).all_runners.append(self.runner)
 
             if self.config.getboolean("busco_run", "tar"):
                 self.compress_folders()
             self.runner.finish(time.time() - self.start_time)
 
         except BuscoError:
+            if self.runner is not None:
+                type(self).all_runners.append(self.runner)
             raise
 
         except ToolException as e:
@@ -163,11 +176,13 @@ class SingleRunner:
                 runner.analysis.hmmer_runner.output_folder,
             ]
             if self.config.getboolean("busco_run", "use_augustus"):
-                folders_to_compress.append(
-                    runner.analysis.augustus_runner.pred_genes_dir_initial,
-                    runner.analysis.augustus_runner.pred_genes_dir_rerun,
-                    runner.analysis.augustus_runner.gff_dir,
-                    runner.analysis.gff2gb_runner.gb_folder,
+                folders_to_compress.extend(
+                    [
+                        runner.analysis.augustus_runner.pred_genes_dir_initial,
+                        runner.analysis.augustus_runner.pred_genes_dir_rerun,
+                        runner.analysis.augustus_runner.gff_dir,
+                        runner.analysis.gff2gb_runner.gb_folder,
+                    ]
                 )
             for folder in folders_to_compress:
                 try:
@@ -198,7 +213,9 @@ class BatchRunner:
         self.config = self.config_manager.config_main
         self.input_dir = self.config.get("busco_run", "in")
         self.input_files = [
-            os.path.join(self.input_dir, f) for f in os.listdir(self.input_dir)
+            os.path.join(self.input_dir, f)
+            for f in os.listdir(self.input_dir)
+            if not f.startswith(".")
         ]
         self.num_inputs = len(self.input_files)
 
@@ -222,9 +239,6 @@ class BatchRunner:
                 run_summary = single_run.runner.format_run_summary()
                 type(self).batch_results.append(run_summary)
 
-                AnalysisRunner.reset()
-                BuscoLogger.reset()
-
             except NoOptionError as noe:
                 raise BatchFatalError(noe)
 
@@ -242,7 +256,12 @@ class BatchRunner:
                             os.path.basename(input_file)
                         )
                     )
+                logger.error(be.value)
                 continue
+            finally:
+                AnalysisRunner.reset()
+                BuscoLogger.reset()
+                single_run.reset()
 
         try:
             self.write_batch_summary()
@@ -359,12 +378,40 @@ class AnalysisRunner:
             "n_markers"
         ] = self.analysis.hmmer_runner.total_buscos
         self.all_results[lineage_basename]["domain"] = self.analysis.domain
+        self.save_parent_dataset(lineage_basename)
+        self.results_datasets.append(os.path.basename(lineage_basename))
+
+    def save_parent_dataset(self, lineage_basename):
         try:
             parent_dataset = self.config.get("busco_run", "parent_dataset")
-            self.all_results[lineage_basename]["parent_dataset"] = parent_dataset
+            if os.path.basename(parent_dataset) == os.path.basename(
+                self.config.get("busco_run", "lineage_dataset")
+            ):
+                pass
+            else:
+                self.all_results[os.path.basename(lineage_basename)][
+                    "parent_dataset"
+                ] = os.path.basename(parent_dataset)
         except NoOptionError:
             pass
-        self.results_datasets.append(os.path.basename(lineage_basename))
+
+    def set_parent_dataset(self):
+        lineage_dataset = self.config.get("busco_run", "lineage_dataset")
+        domain_run_name = self.config.get("busco_run", "domain_run_name")
+        if not lineage_dataset.endswith(
+            domain_run_name
+        ):  # Don't add a parent if Busco Placer failed to place
+            self.config.set(
+                "busco_run",
+                "parent_dataset",
+                os.path.join(
+                    os.path.dirname(
+                        lineage_dataset,
+                    ),
+                    domain_run_name,
+                ),
+            )
+        self.save_parent_dataset(lineage_dataset)
 
     def run_analysis(self, callback=(lambda *args: None)):
         try:
@@ -573,6 +620,17 @@ class AnalysisRunner:
         )
         return one_line_summary
 
+    def copy_summary_file(self, from_dir, main_dir, domain_dir, tag, ext):
+        shutil.copyfile(
+            os.path.join(from_dir, "short_summary.{}".format(ext)),
+            os.path.join(
+                main_dir,
+                "short_summary.{}.{}.{}.{}".format(
+                    tag, domain_dir.replace("run_", ""), os.path.basename(main_dir), ext
+                ),
+            ),
+        )
+
     def organize_final_output(self):
         main_out_folder = self.config.get("busco_run", "main_out")
 
@@ -584,37 +642,44 @@ class AnalysisRunner:
             root_domain_output_folder_final = os.path.join(
                 main_out_folder, "run_{}".format(domain_results_folder)
             )
-            print(root_domain_output_folder, root_domain_output_folder_final)
             os.symlink(root_domain_output_folder, root_domain_output_folder_final)
-            shutil.copyfile(
-                os.path.join(root_domain_output_folder_final, "short_summary.txt"),
-                os.path.join(
-                    main_out_folder,
-                    "short_summary.generic.{}.{}.txt".format(
-                        domain_results_folder.replace("run_", ""),
-                        os.path.basename(main_out_folder),
-                    ),
-                ),
+            self.copy_summary_file(
+                root_domain_output_folder_final,
+                main_out_folder,
+                domain_results_folder,
+                "generic",
+                "txt",
+            )
+            self.copy_summary_file(
+                root_domain_output_folder_final,
+                main_out_folder,
+                domain_results_folder,
+                "generic",
+                "json",
             )
 
         except NoOptionError:
             pass
 
-        except OSError:
+        except OSError:  # FileExistsError in restart mode
             pass
 
         finally:
             lineage_results_folder = self.config.get("busco_run", "lineage_results_dir")
             lineage_results_path = os.path.join(main_out_folder, lineage_results_folder)
-            shutil.copyfile(
-                os.path.join(lineage_results_path, "short_summary.txt"),
-                os.path.join(
-                    main_out_folder,
-                    "short_summary.specific.{}.{}.txt".format(
-                        lineage_results_folder.replace("run_", ""),
-                        os.path.basename(main_out_folder),
-                    ),
-                ),
+            self.copy_summary_file(
+                lineage_results_path,
+                main_out_folder,
+                lineage_results_folder,
+                "specific",
+                "txt",
+            )
+            self.copy_summary_file(
+                lineage_results_path,
+                main_out_folder,
+                lineage_results_folder,
+                "specific",
+                "json",
             )
         return
 

@@ -13,8 +13,11 @@ class TestAutoLineage(unittest.TestCase):
         runner = BuscoRunner.SingleRunner(mock_config_manager)
         analysis_runner = Mock()
         test_dataset_path = "/path/to/lineage_dataset"
+        test_parent = "parent"
         with patch.object(
-            runner, "auto_select_lineage", lambda: (test_dataset_path, analysis_runner)
+            runner,
+            "auto_select_lineage",
+            lambda: (test_dataset_path, analysis_runner, test_parent),
         ):
             runner.get_lineage()
         calls = [
@@ -76,7 +79,7 @@ class TestAutoLineage(unittest.TestCase):
         mock_asl.return_value.best_match_lineage_dataset = lineage_dataset
         mock_asl.return_value.selected_runner = Mock()
         runner = BuscoRunner.SingleRunner(config)
-        retval_dataset, retval_runner = runner.auto_select_lineage()
+        retval_dataset, retval_runner, retval_parent = runner.auto_select_lineage()
         self.assertEqual(retval_dataset, lineage_dataset)
 
     @patch("busco.BuscoRunner.logger.info")
@@ -90,8 +93,23 @@ class TestAutoLineage(unittest.TestCase):
         mock_asl.return_value.best_match_lineage_dataset = lineage_dataset
         mock_asl.return_value.selected_runner = Mock()
         runner = BuscoRunner.SingleRunner(config)
-        retval_dataset, retval_runner = runner.auto_select_lineage()
+        retval_dataset, retval_runner, retval_parent = runner.auto_select_lineage()
         self.assertEqual(retval_runner, mock_asl.return_value.selected_runner)
+
+    @patch("busco.BuscoRunner.logger.info")
+    @patch(
+        "busco.AutoLineage.AutoSelectLineage",
+        autospec=True,
+    )
+    def test_auto_select_lineage_call_function_returns_parent(self, mock_asl, *args):
+        config = Mock()
+        lineage_dataset = "best_match_dataset"
+        mock_asl.return_value.best_match_lineage_dataset = lineage_dataset
+        mock_asl.return_value.selected_runner = Mock()
+        mock_asl.return_value.selected_runner.config.get.side_effect = ["parent"]
+        runner = BuscoRunner.SingleRunner(config)
+        retval_dataset, retval_runner, retval_parent = runner.auto_select_lineage()
+        self.assertEqual(retval_parent, "parent")
 
     @patch("busco.ConfigManager.BuscoConfigManager")
     def test_config_set_parent_dataset_if_not_virus(self, mock_config_manager, *args):
@@ -101,11 +119,13 @@ class TestAutoLineage(unittest.TestCase):
         analysis_runner = Mock()
         analysis_runner.config.get.side_effect = ["bacteria", test_parent_dataset]
         with patch.object(
-            runner, "auto_select_lineage", lambda: (test_dataset_path, analysis_runner)
+            runner,
+            "auto_select_lineage",
+            lambda: (test_dataset_path, analysis_runner, test_parent_dataset),
         ):
             runner.get_lineage()
         calls = [
-            call("busco_run", "parent_dataset", test_parent_dataset),
+            call("busco_run", "domain_run_name", test_parent_dataset),
         ]
         mock_config_manager.config_main.set.assert_has_calls(calls, any_order=True)
 

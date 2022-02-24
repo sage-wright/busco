@@ -13,7 +13,7 @@ To get help, ``busco -h``. See also the user guide.
 
 And visit our website `<http://busco.ezlab.org/>`_
 
-Copyright (c) 2016-2021, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2022, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 
 """
@@ -163,7 +163,8 @@ def _parse_args():
         required=False,
         metavar="OUTPUT",
         help="Give your analysis run a recognisable short name. "
-        "Output folders and files will be labelled with this name. WARNING: do not provide a path",
+        "Output folders and files will be labelled with this name. "
+        "The path to the output folder is set with --out_path.",
     )
 
     optional.add_argument(
@@ -198,10 +199,10 @@ def _parse_args():
     optional.add_argument(
         "--augustus_parameters",
         dest="augustus_parameters",
-        metavar='"--PARAM1=VALUE1,--PARAM2=VALUE2"',
+        metavar="--PARAM1=VALUE1,--PARAM2=VALUE2",
         required=False,
         help="Pass additional arguments to Augustus. All arguments should be contained within a "
-        "single pair of quotation marks, separated by commas.",
+        "single string with no white space, with each argument separated by a comma.",
     )
 
     optional.add_argument(
@@ -338,8 +339,8 @@ def _parse_args():
         dest="metaeuk_parameters",
         metavar='"--PARAM1=VALUE1,--PARAM2=VALUE2"',
         required=False,
-        help="Pass additional arguments to Metaeuk for the first run. All arguments should be "
-        "contained within a single pair of quotation marks, separated by commas. ",
+        help="Pass additional arguments to Metaeuk for the first run. All arguments should be contained within a "
+        "single string with no white space, with each argument separated by a comma.",
     )
 
     optional.add_argument(
@@ -347,8 +348,8 @@ def _parse_args():
         dest="metaeuk_rerun_parameters",
         metavar='"--PARAM1=VALUE1,--PARAM2=VALUE2"',
         required=False,
-        help="Pass additional arguments to Metaeuk for the second run. All arguments should be "
-        "contained within a single pair of quotation marks, separated by commas. ",
+        help="Pass additional arguments to Metaeuk for the second run. All arguments should be contained within a "
+        "single string with no white space, with each argument separated by a comma.",
     )
 
     optional.add_argument(

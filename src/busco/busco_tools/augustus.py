@@ -201,6 +201,9 @@ class AugustusRunner(BaseRunner):
         self.total = self._count_jobs()
         self.run_jobs()
 
+    def reset(self):
+        super().reset()
+
     def process_output(self):
         logger.info("Extracting predicted proteins...")
         files = [
@@ -323,7 +326,7 @@ class AugustusRunner(BaseRunner):
         shutil.rmtree(self.tmp_dir)
         return
 
-    def get_version(self):  # todo: need to handle all possible exceptions
+    def get_version(self):
         augustus_help_output = subprocess.check_output(
             [self.cmd, "--version"], stderr=subprocess.STDOUT, shell=False
         )
@@ -640,6 +643,9 @@ class GFF2GBRunner(BaseRunner):
         self.total = self._count_jobs()
         self.run_jobs()
 
+    def reset(self):
+        super().reset()
+
     def _count_jobs(self):
         n = len(self.single_copy_buscos)
         return n
@@ -687,6 +693,9 @@ class NewSpeciesRunner(BaseRunner):
         super().run()
         self.total = 1
         self.run_jobs()
+
+    def reset(self):
+        super().reset()
 
     def configure_job(self, *args):
 
@@ -737,6 +746,9 @@ class ETrainingRunner(BaseRunner):
         self.total = 1
         self.run_jobs()
         self._validate_run()
+
+    def reset(self):
+        super().reset()
 
     def check_tool_dependencies(self):
         pass
@@ -813,6 +825,9 @@ class OptimizeAugustusRunner(BaseRunner):
         super().run()
         self.total = 1
         self.run_jobs()
+
+    def reset(self):
+        super().reset()
 
     def generate_job_args(self):
         yield

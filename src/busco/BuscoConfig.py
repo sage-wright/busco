@@ -336,7 +336,7 @@ class BuscoConfig(ConfigParser, metaclass=ABCMeta):
         self.set(
             "busco_run",
             "lineage_results_dir",
-            "run_{}".format(os.path.basename(lineage)),
+            "run_{}".format(os.path.basename(lineage.rstrip("/"))),
         )
         return
 
@@ -585,14 +585,12 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
 
     def _check_out_value(self):
         """
-        Prevent the user form using "/" in out name
+        Previously prevented the user form using "/" in out name. Now just strips any trailing "/".
         :return:
         """
-        if "/" in self.get("busco_run", "out"):
-            raise BatchFatalError(
-                "Please do not provide a full path in --out parameter, no slash. "
-                "Use out_path in the config.ini file to specify the full path."
-            )
+        out = self.get("busco_run", "out")
+        if "/" in out:
+            self.set("busco_run", "out", out.strip("/"))
         return
 
     def _check_required_input_exists(self):
@@ -645,11 +643,27 @@ class BuscoConfigMain(BuscoConfig, BaseConfig):
         self._check_limit_value()
         self._check_evalue()
         self._expand_all_paths()
+        self._harmonize_augustus_options()
+
+    def _harmonize_augustus_options(self):
+        augustus_selected = self.getboolean("busco_run", "use_augustus")
+        if not augustus_selected:
+            try:
+                augustus_species = self.get("busco_run", "augustus_species")
+            except NoOptionError:
+                augustus_species = None
+
+            try:
+                augustus_params = self.get("busco_run", "augustus_parameters")
+            except NoOptionError:
+                augustus_params = None
+
+            if (augustus_species or augustus_params) and not augustus_selected:
+                self.set("busco_run", "use_augustus", "True")
+        return
 
     @staticmethod
-    @log(
-        "'Force' option selected; overwriting previous results directory", logger
-    )  # todo: review log messages
+    @log("'Force' option selected; overwriting previous results directory", logger)
     def _force_remove_existing_output_dir(dirpath):
         """
         Remove main output folder from a previous BUSCO run.

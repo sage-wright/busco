@@ -28,6 +28,9 @@ class ProdigalRunner(BaseRunner):
         self._tmp_path = os.path.join(self._pred_genes_dir, "tmp")
         self.cpus = 1
         self.create_dirs([self._pred_genes_dir, self._tmp_path])
+        self.opt_gc_file = os.path.join(
+            self._output_folder, ".optimal_gc"
+        )  # hidden file useful for restart mode
 
         # Get genetic_code from dataset.cfg file
         # bacteria/archaea=11; Entomoplasmatales,Mycoplasmatales=4
@@ -52,7 +55,8 @@ class ProdigalRunner(BaseRunner):
 
         self.current_gc = None
         self._current_run_mode = None
-        self._tmp_name = None
+        self._tmp_name_faa = None
+        self._tmp_name_fna = None
 
         self.output_faa = os.path.join(self._pred_genes_dir, "predicted.faa")
         self._output_fna = os.path.join(self._pred_genes_dir, "predicted.fna")
@@ -76,13 +80,7 @@ class ProdigalRunner(BaseRunner):
     def generate_job_args(self):
         yield
 
-    @log(
-        "Genetic code {} selected as optimal",
-        logger,
-        attr_name="current_gc",
-        on_func_exit=True,
-    )
-    def run(self):
+    def run(self, restart=False, run_check=False):
         """
         1) If genome length > 100000 run in "single" mode, then "meta" mode if there are no gene predictions. Otherwise
         just run in "meta" mode. This is based on the recommendations in the Prodigal docs.
@@ -99,30 +97,35 @@ class ProdigalRunner(BaseRunner):
         super().run()
         tmp_files = []
 
+        number_of_runs = 0
+        self.good_run_found = False
+
         for ix, m in enumerate(self._run_mode):
             self._current_run_mode = m
             for g in self._genetic_code:
+                number_of_runs += 1
+
                 self.current_gc = g
 
-                file_id = os.path.join(
-                    self._tmp_path,
-                    "prodigal_mode_{0}_code_{1}".format(
-                        self._current_run_mode, self.current_gc
-                    ),
-                )
-                self._tmp_name = "{}.faa".format(file_id)
-                self.logfile_path_out = "{}_out.log".format(file_id)
-                self.logfile_path_err = "err".join(
-                    self.logfile_path_out.rsplit("out", 1)
-                )  # Replace only the last occurence of "out" substring
+                (
+                    self._tmp_name_fna,
+                    self._tmp_name_faa,
+                    self.logfile_path_out,
+                    self.logfile_path_err,
+                ) = self.get_output_filenames()
+
                 self._gc_run_results[self.current_gc].update(
-                    {"tmp_name": self._tmp_name, "log_file": self.logfile_path_out}
+                    {"tmp_name": self._tmp_name_faa, "log_file": self.logfile_path_out}
                 )
 
-                if os.path.exists(
-                    self._tmp_name
+                if (
+                    os.path.exists(self._tmp_name_faa) and not restart
                 ):  # Check to see if has already been run with these parameters
                     coding_density = self._gc_run_results[g]["cd"]
+                elif restart:
+                    coding_length = self._get_coding_length(self.logfile_path_out)
+                    coding_density = coding_length / self._input_length
+                    self._gc_run_results[self.current_gc].update({"cd": coding_density})
                 else:
                     logger.info(
                         "Running Prodigal with genetic code {} in {} mode".format(
@@ -130,7 +133,8 @@ class ProdigalRunner(BaseRunner):
                         )
                     )
                     self.total = 1
-                    self.run_jobs()
+                    if not restart:
+                        self.run_jobs()
                     coding_length = self._get_coding_length(self.logfile_path_out)
                     coding_density = coding_length / self._input_length
                     self._gc_run_results[self.current_gc].update({"cd": coding_density})
@@ -140,7 +144,13 @@ class ProdigalRunner(BaseRunner):
 
                 # if the coding density is above the ambiguous range, then continue with these parameters
                 if coding_density >= self._cd_upper:
+                    self.good_run_found = True
                     break
+
+            if (
+                self.good_run_found and run_check
+            ):  # run check is for restart mode to check if an existing run is good enough to skip any outstanding GCs.
+                break
 
             # If output files from both runs in "single" mode are empty, run again in "meta" mode, else raise Exception.
             if not any([os.stat(tmp_file).st_size > 0 for tmp_file in tmp_files]):
@@ -152,7 +162,7 @@ class ProdigalRunner(BaseRunner):
             # if only one genetic code to consider, proceed with it
             # if there is more than one possible set of parameters, decide which to use
             self.current_gc = (
-                self._select_best_gc() if len(tmp_files) > 1 else self._genetic_code[0]
+                self._select_best_gc() if number_of_runs > 1 else self._genetic_code[0]
             )
 
             selected_logfile = self._gc_run_results[self.current_gc]["log_file"]
@@ -168,11 +178,58 @@ class ProdigalRunner(BaseRunner):
                 }
             )
             break
+        if not run_check:
+            logger.info("Genetic code {} selected as optimal".format(self.current_gc))
+        return
 
+    def get_output_filenames(self):
+        file_id = os.path.join(
+            self._tmp_path,
+            "prodigal_mode_{0}_code_{1}".format(
+                self._current_run_mode, self.current_gc
+            ),
+        )
+        tmp_name_fna = "{}.fna".format(file_id)
+        tmp_name_faa = "{}.faa".format(file_id)
+        logfile_path_out = "{}_out.log".format(file_id)
+        logfile_path_err = "err".join(
+            logfile_path_out.rsplit("out", 1)
+        )  # Replace only the last occurence of "out" substring
+        return tmp_name_fna, tmp_name_faa, logfile_path_out, logfile_path_err
+
+    def reset(self):
+        super().reset()
+        type(self)._gc_run_results = defaultdict(dict)
+
+    def write_checkpoint_file(self):
+        super().write_checkpoint_file(
+            additional_args=[("GC", self.current_gc)]
+        )  # The GC saved in the checkpoint file is used on restart to determine if all the GCs required have already been run
+
+    def check_previous_completed_run(self):
+        """
+        This checks to see if an existing run is sufficient to proceed. For example, an existing run for GC=11 might
+        exist, but the current GC list is ["11", "4"]. Before breaking out of restart mode and running GC=4 it is
+        important to check the coding density of GC=11 to see if there is any need for GC=4 to run.
+        :return:
+        """
+        completed = super().check_previous_completed_run(additional_args=["GC"])
+        if completed:
+            gcs_completed = self.add_args["GC"]
+            for g in self._genetic_code:
+                if g not in gcs_completed:
+                    self.check_completed_runs(gcs_completed)
+                    return self.good_run_found
+        return completed
+
+    def check_completed_runs(self, gc_list):
+        original_gc_list = self._genetic_code
+        self._genetic_code = gc_list
+        self.run(restart=True, run_check=True)
+        self._genetic_code = original_gc_list
         return
 
     def configure_job(self, *args):
-        tmp_name_nt = self._tmp_name.rpartition(".faa")[0] + ".fna"
 
         prodigal_job = self.create_job()
         prodigal_job.add_parameter("-p")
@@ -182,9 +239,9 @@ class ProdigalRunner(BaseRunner):
         prodigal_job.add_parameter("-g")
         prodigal_job.add_parameter("%s" % self.current_gc)
         prodigal_job.add_parameter("-a")
-        prodigal_job.add_parameter("%s" % self._tmp_name)
+        prodigal_job.add_parameter("%s" % self._tmp_name_faa)
         prodigal_job.add_parameter("-d")
-        prodigal_job.add_parameter("%s" % tmp_name_nt)
+        prodigal_job.add_parameter("%s" % self._tmp_name_fna)
         prodigal_job.add_parameter("-i")
         prodigal_job.add_parameter("%s" % self.input_file)
 
@@ -192,8 +249,14 @@ class ProdigalRunner(BaseRunner):
 
     def get_gene_details(self):
         self.gene_details = defaultdict(list)
+        (
+            output_filename_fna,
+            output_filename_faa,
+            self.logfile_path_out,
+            self.logfile_path_err,
+        ) = self.get_output_filenames()
 
-        with open(self._output_fna, "rU") as f:
+        with open(output_filename_fna, "rU") as f:
             for record in SeqIO.parse(f, "fasta"):
                 gene_name = record.id
                 self.sequences_nt[gene_name] = record
@@ -205,7 +268,7 @@ class ProdigalRunner(BaseRunner):
                     {"gene_start": gene_start, "gene_end": gene_end, "strand": strand}
                 )
 
-        with open(self.output_faa, "rU") as f:
+        with open(output_filename_faa, "rU") as f:
             for record in SeqIO.parse(f, "fasta"):
                 self.sequences_aa[record.id] = record
 

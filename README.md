@@ -34,7 +34,7 @@ Report problems on the BUSCO issue board at https://gitlab.com/ezlab/busco/issue
 
 If you have used BUSCO v4 or V5 in your analyses, please cite:
 
-Manni M, Berkeley MR, Seppey M, Simão FA, Zdobnov EM. 2021. BUSCO update: novel and streamlined workflows along with broader and deeper phylogenetic coverage for scoring of eukaryotic, prokaryotic, and viral genomes. Molecular Biology and Evolution [Internet]. Available from: https://doi.org/10.1093/molbev/msab199
+Manni M., Berkeley M.R., Seppey M., Simao F.A., Zdobnov E.M. 2021. BUSCO update: novel and streamlined workflows along with broader and deeper phylogenetic coverage for scoring of eukaryotic, prokaryotic, and viral genomes. arXiv:2106.11799 [q-bio] [Internet]. Available from: http://arxiv.org/abs/2106.11799
 
 Previous publications:
 BUSCO: Assessing Genome Assembly and Annotation Completeness. Mathieu Seppey, Mosè Manni, Evgeny M. Zdobnov In: Kollmar M. (eds) Gene Prediction. Methods in Molecular Biology, vol 1962. Humana, New York, NY. 2019 doi.org/10.1007/978-1-4939-9173-0_14
@@ -43,5 +43,5 @@ BUSCO applications from quality assessments to gene prediction and phylogenomics
 
 BUSCO: assessing genome assembly and annotation completeness with single-copy orthologs. Felipe A. Simão, Robert M. Waterhouse, Panagiotis Ioannidis, Evgenia V. Kriventseva, and Evgeny M. Zdobnov Bioinformatics, published online June 9, 2015 doi: 10.1093/bioinformatics/btv351
 
-Copyright (c) 2016-2021, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2022, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.

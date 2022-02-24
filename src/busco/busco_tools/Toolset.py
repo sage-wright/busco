@@ -7,7 +7,7 @@
 .. versionadded:: 3.0.0
 .. versionchanged:: 4.0.0
 
-Copyright (c) 2016-2021, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2022, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 
 """
@@ -75,13 +75,14 @@ class Job(Process):
                         shell=False,
                         timeout=self.timeout,
                     )
+                    f_out.write(process.stdout)
+                    f_err.write(process.stderr)
+
                 except TimeoutExpired:
                     logger.warning(
                         "The following job was killed as it was taking too long (>1hr) to "
                         "complete.\n{}".format(" ".join(self.cmd_line))
                     )
-                f_out.write(process.stdout)
-                f_err.write(process.stderr)
 
         with cnt.get_lock():
             cnt.value += 1

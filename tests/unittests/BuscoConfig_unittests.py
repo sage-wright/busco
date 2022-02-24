@@ -321,12 +321,11 @@ class TestBuscoConfig(unittest.TestCase):
                 config._check_allowed_keys()
 
     def test_out_value_check_invalid(self):
-        for str_format in ["/path/to/output", "output/"]:
-            self.test_params["out"] = str_format
-            with self.assertRaises(BuscoConfig.BatchFatalError):
-                config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
-                config.configure()
-                config._check_out_value()
+        self.test_params["out"] = "output/"
+        config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
+        config.configure()
+        config._check_out_value()
+        self.assertTrue(config.get("busco_run", "out") == "output")
 
     def test_out_value_check_valid(self):
         config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)

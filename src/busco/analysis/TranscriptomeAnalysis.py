@@ -6,7 +6,7 @@
 .. versionadded:: 3.0.0
 .. versionchanged:: 5.0.0
 
-Copyright (c) 2016-2021, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2022, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 
 """
@@ -88,6 +88,9 @@ class TranscriptomeAnalysisProkaryotes(
 
     def init_tools(self):
         super().init_tools()
+
+    def reset(self):
+        super().reset()
 
     def cleanup(self):
         """
@@ -232,15 +235,6 @@ class TranscriptomeAnalysisProkaryotes(
                 SeqIO.write(translated_records, out_faa, "fasta")
 
         return protein_seq_files
-
-    # def _run_tarzip_translated_proteins(self):
-    #     """
-    #     This function tarzips results folder
-    #     """
-    #     # translated_proteins # Todo: rewrite with tarfile module
-    #     self._p_open(["tar", "-C", "%s" % self.mainout, "-zcf",
-    #                  "%stranslated_proteins.tar.gz" % self.mainout, "translated_proteins", "--remove-files"], "bash",
-    #                  shell=False)
 
 
 class TranscriptomeAnalysisEukaryotes(

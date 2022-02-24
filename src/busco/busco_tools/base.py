@@ -68,23 +68,35 @@ class BaseRunner(Tool, metaclass=ABCMeta):
     def init_checkpoint_file(self):
         self.checkpoint_file = os.path.join(self.output_folder, ".checkpoint")
 
-    def write_checkpoint_file(self):
+    def write_checkpoint_file(self, additional_args=[]):
         with open(self.checkpoint_file, "a") as cpt_file:
             cpt_file.write("Tool: {}\n".format(self.name))
             cpt_file.write("Version: {}\n".format(self.version))
             cpt_file.write("Run: {}\n".format(self.run_number))
-            cpt_file.write("Time: {}\n".format(time.strftime("%m/%d/%Y %H:%M:%S")))
+            for args in additional_args:
+                cpt_file.write("{}: {}\n".format(args[0], args[1]))
+            cpt_file.write("Time: {}\n".format(time.strftime("%d/%m/%Y %H:%M:%S")))
             cpt_file.write("Completed {} jobs\n\n".format(self.total))
 
-    def check_previous_completed_run(self):
+    def check_previous_completed_run(self, additional_args=[]):
         if not os.path.exists(self.checkpoint_file):
             return False
         else:
             with open(self.checkpoint_file, "r") as cpt_file:
+                block_size = 6 + len(additional_args)
                 lines = cpt_file.readlines()
-                tool_names = [s.strip().split(": ")[1] for s in lines[0::6]]
-                tool_versions = [s.strip().split(": ")[1] for s in lines[1::6]]
-                tool_run_numbers = [s.strip().split(": ")[1] for s in lines[2::6]]
+                tool_names = [s.strip().split(": ")[1] for s in lines[0::block_size]]
+                tool_versions = [s.strip().split(": ")[1] for s in lines[1::block_size]]
+                tool_run_numbers = [
+                    s.strip().split(": ")[1] for s in lines[2::block_size]
+                ]
+                self.add_args = {}
+                for a, arg in enumerate(additional_args):
+                    self.add_args[arg] = [
+                        s.strip().split(": ")[1]
+                        for s in lines[a + 3 :: block_size]
+                        if s.strip().split(": ")[0] == arg
+                    ]
                 try:
                     start_search = 0
                     while True:
@@ -224,6 +236,11 @@ class BaseRunner(Tool, metaclass=ABCMeta):
     @abstractmethod
     def get_version(self):
         return
+
+    @classmethod
+    def reset(cls):
+        BaseRunner.config = None
+        BaseRunner.tool_versions = {}
 
 
 class NoGenesError(Exception):

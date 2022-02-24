@@ -649,3 +649,6 @@ class MetaeukRunner(BaseRunner):
                 raise BuscoError("*headersMap.tsv file could not be parsed.")
         except FileNotFoundError:
             raise NoRerunFile
+
+    def reset(self):
+        super().reset()

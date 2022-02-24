@@ -259,6 +259,7 @@ class TestAutoLineage(unittest.TestCase):
         self.assertEqual(max_ind, 1)
 
     @patch("busco.AutoLineage.logger.info")
+    @patch("busco.BuscoRunner.AnalysisRunner.set_parent_dataset")
     @patch("busco.AutoLineage.AutoSelectLineage.cleanup_disused_runs")
     @patch("__main__.AutoLineage_unittests.BuscoRunner.AnalysisRunner.mode_dict")
     @patch("busco.ConfigManager.BuscoConfigManager")

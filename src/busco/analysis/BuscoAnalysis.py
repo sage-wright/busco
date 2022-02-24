@@ -6,7 +6,7 @@
 .. versionadded:: 3.0.0
 .. versionchanged:: 5.0.0
 
-Copyright (c) 2016-2021, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2022, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 """
 
@@ -73,11 +73,6 @@ class BuscoAnalysis(metaclass=ABCMeta):
         )
 
         self.hmmer_runner = None
-
-        # Create optimized command line call for the given input
-        # self.busco_type = "main" if isinstance(self._config, BuscoConfigMain) else "auto"
-        # if self.busco_type == "main":
-        #     self.set_rerun_busco_command(self._config.clargs)  # todo: rework rerun command
 
     @abstractmethod
     def cleanup(self):
@@ -291,64 +286,10 @@ class BuscoAnalysis(metaclass=ABCMeta):
         self.hmmer_runner = HMMERRunner()
         return
 
+    def reset(self):
+        self.hmmer_runner.reset()
+
     @property
     @abstractmethod
     def _mode(self):
         pass
-
-    # def _run_tarzip_hmmer_output(self):  # todo: rewrite using tarfile
-    #     """
-    #     This function tarzips "hmmer_output" results folder
-    #     """
-    #     self._p_open(["tar", "-C", "%s" % self.run_folder, "-zcf", "%shmmer_output.tar.gz" % self.run_folder,
-    #                   "hmmer_output", "--remove-files"], "bash", shell=False)
-    #
-    # @log("To reproduce this run: {}", logger, attr_name="_rerun_cmd", on_func_exit=True)
-    # def set_rerun_busco_command(self, clargs):  # todo: reconfigure
-    #     """
-    #     This function sets the command line to call to reproduce this run
-    #     """
-    #
-    #     # Find python script path
-    #     entry_point = ""
-    #     frame_ind = -1
-    #     while "run_BUSCO.py" not in entry_point:
-    #         entry_point = inspect.stack()[frame_ind].filename
-    #         frame_ind -= 1
-    #
-    #     # Add required parameters and other options
-    #     self._rerun_cmd = "python %s -i %s -o %s -l %s -m %s -c %s" % (entry_point, self._input_file, os.path.basename(self.main_out),
-    #                                                                    self._lineage_dataset, self._mode, self._cpus)
-    #
-    #     try:
-    #         if self._long:
-    #             self._rerun_cmd += " --long"
-    #         if self._region_limit != BuscoConfig.DEFAULT_ARGS_VALUES["limit"]:
-    #             self._rerun_cmd += " --limit %s" % self._region_limit
-    #         # if self._tmp != BuscoConfig.DEFAULT_ARGS_VALUES["tmp_path"]:
-    #         #     self._rerun_cmd += " -t %s" % self._tmp
-    #         if self._ev_cutoff != BuscoConfig.DEFAULT_ARGS_VALUES["evalue"]:
-    #             self._rerun_cmd += " -e %s" % self._ev_cutoff
-    #         # if self._tarzip:
-    #         #     self._rerun_cmd += " -z"
-    #     except AttributeError:
-    #         pass
-    #
-    #     # Include any command line arguments issued by the user
-    #     # arg_aliases = {"-i": "--in", "-o": "--out", "-l": "--lineage_dataset", "-m": "--mode", "-c": "--cpu",
-    #     #                "-e": "--evalue", "-f": "--force", "-sp": "--species", "-z": "--tarzip",
-    #     #                "-r": "--restart", "-q": "--quiet", "-v": "--version", "-h": "--help"}
-    #     arg_aliases.update(dict(zip(arg_aliases.values(), arg_aliases.keys())))
-    #     for a, arg in enumerate(clargs):
-    #         if arg.startswith("-") and not arg in self._rerun_cmd:
-    #             if arg in arg_aliases:
-    #                 if arg_aliases[arg] in self._rerun_cmd:
-    #                     continue
-    #             if a + 1 < len(clargs) and not clargs[a + 1].startswith("-"):
-    #                 self._rerun_cmd += " %s %s" % (arg, clargs[a + 1])
-    #             else:
-    #                 self._rerun_cmd += " %s" % arg
-    #     return
-
-    # TODO: catch unicode encoding exception and report invalid character line instead of doing content validation
-    # todo: check config file exists before parsing

@@ -47,6 +47,9 @@ class NucleotideAnalysis(metaclass=ABCMeta):
     def init_tools(self):
         super().init_tools()
 
+    def reset(self):
+        super().reset()
+
 
 class ProteinAnalysis:
 
@@ -113,6 +116,11 @@ class BLASTAnalysis(metaclass=ABCMeta):
                     self.mkblast_runner.version, self.tblastn_runner.version
                 )
             )
+
+    def reset(self):
+        super().reset()
+        self.mkblast_runner.reset()
+        self.tblastn_runner.reset()
 
     def _run_mkblast(self):
         if self.restart and self.mkblast_runner.check_previous_completed_run():

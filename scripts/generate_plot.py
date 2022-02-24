@@ -19,7 +19,7 @@ automatically runs it.
 
 You can find both the resulting R script for customisation and the figure in the working directory.
 
-Copyright (c) 2016-2021, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2022, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 
 """
@@ -54,7 +54,7 @@ RCODE = (
     "# @version 4.0.0\n"
     "# @since BUSCO 2.0.0\n"
     "# \n"
-    "# Copyright (c) 2016-2021, Evgeny Zdobnov (ez@ezlab.org)\n"
+    "# Copyright (c) 2016-2022, Evgeny Zdobnov (ez@ezlab.org)\n"
     "# Licensed under the MIT license. See LICENSE.md file.\n"
     "#\n"
     "######################################\n"
@@ -300,7 +300,7 @@ def _set_args():
     if _plot_dir[-1] != "/":
         _plot_dir += "/"
     global _run_type
-    _run_type = "*"
+    _run_type = "[generic|specific]*"
     if args["run_type"]:
         _run_type = args["run_type"]
 

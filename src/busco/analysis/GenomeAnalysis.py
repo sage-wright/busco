@@ -6,7 +6,7 @@
 .. versionadded:: 3.0.0
 .. versionchanged:: 5.0.0
 
-Copyright (c) 2016-2021, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2022, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 
 """
@@ -54,40 +54,8 @@ class GenomeAnalysis(NucleotideAnalysis, BuscoAnalysis, metaclass=ABCMeta):
         """
         super().init_tools()
 
-    # def _run_tarzip_augustus_output(self): # Todo: rewrite using tarfile
-    #     """
-    #     This function tarzips results folder
-    #     """
-    #     # augustus_output/predicted_genes
-    #
-    #     self._p_open(["tar", "-C", "%saugustus_output" % self.main_out,
-    #                   "-zcf", "%saugustus_output/predicted_genes.tar.gz" %
-    #                   self.main_out, "predicted_genes", "--remove-files"],
-    #                  "bash", shell=False)
-    #     # augustus_output/extracted_proteins
-    #     self._p_open(["tar", "-C", "%saugustus_output" % self.main_out,
-    #                   "-zcf", "%saugustus_output/extracted_proteins.tar.gz" %
-    #                   self.main_out, "extracted_proteins", "--remove-files"],
-    #                  "bash", shell=False)
-    #     # augustus_output/gb
-    #     self._p_open(["tar", "-C", "%saugustus_output" % self.main_out,
-    #                   "-zcf", "%saugustus_output/gb.tar.gz" % self.main_out, "gb", "--remove-files"],
-    #                  "bash", shell=False)
-    #     # augustus_output/gffs
-    #     self._p_open(["tar", "-C", "%saugustus_output" % self.main_out,
-    #                   "-zcf", "%saugustus_output/gffs.tar.gz" %
-    #                   self.main_out, "gffs", "--remove-files"], "bash", shell=False)
-    #     # single_copy_busco_sequences
-    #     self._p_open(["tar", "-C", "%s" % self.main_out, "-zcf",
-    #                   "%ssingle_copy_busco_sequences.tar.gz" % self.main_out,
-    #                   "single_copy_busco_sequences", "--remove-files"], "bash", shell=False)
-
-    # def set_rerun_busco_command(self, clargs):
-    #     """
-    #     This function sets the command line to call to reproduce this run
-    #     """
-    #     clargs.extend(["-sp", self._target_species])
-    #     super().set_rerun_busco_command(clargs)
+    def reset(self):
+        super().reset()
 
 
 class GenomeAnalysisProkaryotes(GenomeAnalysis):
@@ -122,6 +90,10 @@ class GenomeAnalysisProkaryotes(GenomeAnalysis):
         super().init_tools()
         self.prodigal_runner = ProdigalRunner()
 
+    def reset(self):
+        super().reset()
+        self.prodigal_runner.reset()
+
     @log("***** Run Prodigal on input to predict and extract genes *****", logger)
     def _run_prodigal(self):
         """
@@ -130,7 +102,7 @@ class GenomeAnalysisProkaryotes(GenomeAnalysis):
         """
         if self.restart and self.prodigal_runner.check_previous_completed_run():
             logger.info("Skipping Prodigal run as it has already completed")
-            self.prodigal_runner.get_gene_details()
+            self.prodigal_runner.run(restart=self.restart)
         else:
             self.restart = False
             self.config.set("busco_run", "restart", str(self.restart))
@@ -169,18 +141,12 @@ class GenomeAnalysisEukaryotes(GenomeAnalysis):
 
         return
 
+    def reset(self):
+        super().reset()
+
     @abstractmethod
     def run_analysis(self):
         super().run_analysis()
-
-    # def set_rerun_busco_command(self, clargs):
-    #     """
-    #     This function sets the command line to call to reproduce this run
-    #     """
-    #     clargs.extend(["-sp", self._target_species])
-    #     if self._augustus_parameters:
-    #         clargs.extend(["--augustus_parameters", "\"%s\"" % self._augustus_parameters])
-    #     super().set_rerun_busco_command(clargs)
 
 
 class GenomeAnalysisEukaryotesAugustus(BLASTAnalysis, GenomeAnalysisEukaryotes):
@@ -219,6 +185,15 @@ class GenomeAnalysisEukaryotesAugustus(BLASTAnalysis, GenomeAnalysisEukaryotes):
 
         if self._long:
             self.optimize_augustus_runner = OptimizeAugustusRunner()
+
+    def reset(self):
+        super().reset()
+        self.augustus_runner.reset()
+        self.gff2gb_runner.reset()
+        self.new_species_runner.reset()
+        self.etraining_runner.reset()
+        if self._long:
+            self.optimize_augustus_runner.reset()
 
     def cleanup(self):
         try:
@@ -292,11 +267,6 @@ class GenomeAnalysisEukaryotesAugustus(BLASTAnalysis, GenomeAnalysisEukaryotes):
         except NoGenesError:
             logger.warning("No genes found on Augustus rerun.")
 
-        # if self._tarzip:  # todo: zip folders with a lot of output
-        #     self._run_tarzip_augustus_output()
-        #     self._run_tarzip_hmmer_output()
-        # remove the checkpoint, run is done
-        # self._set_checkpoint()
         return
 
     @log("Running Augustus gene predictor on BLAST search results.", logger)
@@ -381,6 +351,10 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
         super().init_tools()
 
         self.metaeuk_runner = MetaeukRunner()
+
+    def reset(self):
+        super().reset()
+        self.metaeuk_runner.reset()
 
     def run_analysis(self):
         """This function calls all needed steps for running the analysis."""
@@ -495,27 +469,34 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                     )
                     else "1"
                 )
-
-                if run_found == "2":
-                    matches = subprocess.check_output(
-                        [
-                            "grep",
-                            "{}|{}|.*|{}|{}|".format(
-                                sequence, strand, gene_start, gene_end
-                            ),
-                            rerun_results,
-                        ]
-                    ).decode("utf-8")
-                else:
-                    matches = subprocess.check_output(
-                        [
-                            "grep",
-                            "{}|{}|.*|{}|{}|".format(
-                                sequence, strand, gene_start, gene_end
-                            ),
-                            initial_run_results,
-                        ]
-                    ).decode("utf-8")
+                try:
+                    if run_found == "2":
+                        matches = subprocess.check_output(
+                            [
+                                "grep",
+                                "{}|{}|.*|{}|{}|".format(
+                                    sequence, strand, gene_start, gene_end
+                                ),
+                                rerun_results,
+                            ]
+                        ).decode("utf-8")
+                    else:
+                        matches = subprocess.check_output(
+                            [
+                                "grep",
+                                "{}|{}|.*|{}|{}|".format(
+                                    sequence, strand, gene_start, gene_end
+                                ),
+                                initial_run_results,
+                            ]
+                        ).decode("utf-8")
+                except subprocess.CalledProcessError:
+                    raise BuscoError(
+                        "Unable to parse metaeuk results. This typically occurs because sequence headers "
+                        "contain pipes ('|'). Metaeuk uses pipes as delimiters in the results files. The "
+                        "additional pipes interfere with BUSCO's ability to accurately parse the results."
+                        "To fix this problem remove any pipes from sequence headers and try again."
+                    )
 
                 # The following line is a relic from when the previous grep search tried to match busco_id instead of
                 # gene details. The find_match method is still needed though to clean up the match, even though it
@@ -648,8 +629,8 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
         hmmer_match_details2 = self.hmmer_runner.parse_hmmer_output(
             hmmer_result2, busco_match2
         )
-        gene_id1 = list(hmmer_match_details1.keys())[0]
-        gene_id2 = list(hmmer_match_details2.keys())[0]
+        gene_id1 = match1["Orig gene ID"]
+        gene_id2 = match2["Orig gene ID"]
         if (
             hmmer_match_details1[gene_id1]["score"]
             > hmmer_match_details2[gene_id2]["score"]

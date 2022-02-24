@@ -10,6 +10,8 @@ import csv
 import subprocess
 from busco.BuscoConfig import BuscoConfigAuto
 from busco.Exceptions import BatchFatalError, BuscoError
+import json
+import pandas as pd
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -38,6 +40,9 @@ class HMMERRunner(BaseRunner):
             self.run_folder, "busco_sequences", "fragmented_busco_sequences"
         )
         self.short_summary_file = os.path.join(self.run_folder, "short_summary.txt")
+        self.short_summary_file_json = os.path.join(
+            self.run_folder, "short_summary.json"
+        )
         self.cutoff_dict = {}
         self.single_copy_buscos = {}
         self.multi_copy_buscos = {}
@@ -306,7 +311,6 @@ class HMMERRunner(BaseRunner):
 
                         # Store bitscore matches for each gene match. If match below cutoff, discard.
                         if bit_score < float(self.cutoff_dict[busco_query]["score"]):
-                            # todo: introduce upper bound - consult to see what a reasonable value would be
                             continue
                         if gene_id not in records:
                             records[gene_id] = {
@@ -411,8 +415,9 @@ class HMMERRunner(BaseRunner):
         for filename in hmmer_results_files:
             busco_query = str(os.path.basename(filename).split(".")[0])
             matched_record = self.parse_hmmer_output(filename, busco_query)
+            filtered_records = self.remove_overlaps(matched_record)
             busco_complete, busco_vlarge, busco_fragment = self._sort_matches(
-                matched_record, busco_query
+                filtered_records, busco_query
             )
 
             # Add all information for this busco_id to the full dictionary
@@ -424,6 +429,73 @@ class HMMERRunner(BaseRunner):
                 self.is_fragment[busco_query].update(busco_fragment)
 
         return
+
+    def remove_overlaps(self, matched_records):
+        seq_ids = []
+        start_coords = []
+        end_coords = []
+        scores = []
+        try:
+            for record in matched_records:
+                seq_id, coords = record.split(":")
+                start_coord, end_coord = coords.split("-")
+                seq_ids.append(seq_id)
+                start_coords.append(start_coord)
+                end_coords.append(end_coord)
+                scores.append(matched_records[record]["score"])
+        except ValueError:  # for protein sequences there is no ":<coords>" suffix, so skip the overlap filtering
+            return matched_records
+
+        records_df = pd.DataFrame(
+            {
+                "Sequence": seq_ids,
+                "Start": start_coords,
+                "Stop": end_coords,
+                "Score": scores,
+            }
+        )
+        results_grouped = records_df.groupby("Sequence")
+        entries_to_remove = []
+        seq_ids = results_grouped.groups.keys()
+        for seq in seq_ids:
+            g1 = results_grouped.get_group(seq)
+            g1_sorted = g1.sort_values(
+                "Start"
+            )  # sort to facilitate a single-pass coordinate check
+            for idx1, row1 in g1_sorted.iterrows():
+                current_record = g1_sorted.loc[idx1]
+                start_val = current_record["Start"]
+                stop_val = current_record["Stop"]
+                current_seqid = "{}:{}-{}".format(
+                    current_record["Sequence"], start_val, stop_val
+                )
+                if (
+                    current_seqid in entries_to_remove
+                ):  # overlaps with removed entries don't count
+                    continue
+
+                matches = g1_sorted[g1_sorted["Start"] > start_val].loc[
+                    g1_sorted["Start"] < stop_val
+                ]  # find entries with a start coordinate between the current exon start and end
+                for idx2 in matches.index.values:
+                    if g1_sorted.loc[idx1]["Score"] >= g1_sorted.loc[idx2]["Score"]:
+                        ind_to_remove = idx2
+                    else:
+                        ind_to_remove = idx1
+                    record_to_remove = g1_sorted.loc[ind_to_remove]
+                    entries_to_remove.append(
+                        "{}:{}-{}".format(
+                            record_to_remove["Sequence"],
+                            record_to_remove["Start"],
+                            record_to_remove["Stop"],
+                        )
+                    )
+
+        filtered_records = {
+            i: matched_records[i] for i in matched_records if i not in entries_to_remove
+        }
+
+        return filtered_records
 
     def _update_used_gene_set(self, busco_dict):
         """
@@ -896,7 +968,6 @@ class HMMERRunner(BaseRunner):
 
                 self._write_output_header(miss_out, missing_list=True)
 
-                # todo: move to calculate busco percentages
                 missing_buscos_lines, missing_buscos = self._list_missing_buscos()
                 output_lines += missing_buscos_lines
 
@@ -927,36 +998,36 @@ class HMMERRunner(BaseRunner):
             "   ",
         )
         self.one_line_summary = "Results:\t{}".format(self.one_line_summary_raw)
+
+        json_summary = self.write_json_summary()
+
         self.hmmer_results_lines.append(self.one_line_summary_raw)
         self.hmmer_results_lines.append(
-            "{}\tComplete BUSCOs (C)\t\t\t{}\n".format(
-                self.single_copy + self.multi_copy, "   "
-            )
+            "{}\tComplete BUSCOs (C)\t\t\t{}\n".format(json_summary["C"], "   ")
         )
         self.hmmer_results_lines.append(
             "{}\tComplete and single-copy BUSCOs (S)\t{}\n".format(
-                self.single_copy, "   "
+                json_summary["S"], "   "
             )
         )
         self.hmmer_results_lines.append(
             "{}\tComplete and duplicated BUSCOs (D)\t{}\n".format(
-                self.multi_copy, "   "
+                json_summary["D"], "   "
             )
         )
         self.hmmer_results_lines.append(
-            "{}\tFragmented BUSCOs (F)\t\t\t{}\n".format(self.only_fragments, "   ")
+            "{}\tFragmented BUSCOs (F)\t\t\t{}\n".format(json_summary["F"], "   ")
         )
         self.hmmer_results_lines.append(
             "{}\tMissing BUSCOs (M)\t\t\t{}\n".format(
-                self.total_buscos
-                - self.single_copy
-                - self.multi_copy
-                - self.only_fragments,
+                json_summary["M"],
                 "   ",
             )
         )
         self.hmmer_results_lines.append(
-            "{}\tTotal BUSCO groups searched\t\t{}\n".format(self.total_buscos, "   ")
+            "{}\tTotal BUSCO groups searched\t\t{}\n".format(
+                json_summary["dataset_total_buscos"], "   "
+            )
         )
 
         if isinstance(self.config, BuscoConfigAuto):
@@ -975,13 +1046,9 @@ class HMMERRunner(BaseRunner):
                 "# BUSCO was run in mode: {}\n".format(self.input_file, self.mode)
             )
             if self.mode == "genome":
-                if self.config.get("busco_run", "domain") in ["prokaryota", "viruses"]:
-                    gene_predictor = "prodigal"
-                elif self.config.getboolean("busco_run", "use_augustus"):
-                    gene_predictor = "augustus"
-                else:
-                    gene_predictor = "metaeuk"
-                summary_file.write("# Gene predictor used: {}\n".format(gene_predictor))
+                summary_file.write(
+                    "# Gene predictor used: {}\n".format(json_summary["gene_predictor"])
+                )
             summary_file.write("\n")
 
             for line in self.hmmer_results_lines:
@@ -1001,6 +1068,38 @@ class HMMERRunner(BaseRunner):
                     summary_file.write("\t{}\n".format(placement_file))
 
         return
+
+    def write_json_summary(self):
+
+        summary = {}
+        summary["one_line_summary"] = self.one_line_summary_raw.strip()
+        summary["C"] = self.single_copy + self.multi_copy
+        summary["S"] = self.single_copy
+        summary["D"] = self.multi_copy
+        summary["F"] = self.only_fragments
+        summary["M"] = (
+            self.total_buscos - self.single_copy - self.multi_copy - self.only_fragments
+        )
+        summary["input_file"] = self.input_file
+        summary["mode"] = self.mode
+
+        if self.mode == "genome":
+            if self.config.get("busco_run", "domain") in ["prokaryota", "viruses"]:
+                gene_predictor = "prodigal"
+            elif self.config.getboolean("busco_run", "use_augustus"):
+                gene_predictor = "augustus"
+            else:
+                gene_predictor = "metaeuk"
+            summary["gene_predictor"] = gene_predictor
+        summary["dataset"] = self.lineage_dataset
+        summary["dataset_creation_date"] = self.dataset_creation_date
+        summary["dataset_number_species"] = self.dataset_nb_species
+        summary["dataset_total_buscos"] = self.dataset_nb_buscos
+
+        with open(self.short_summary_file_json, "w") as summary_file_json:
+            json.dump(summary, summary_file_json)
+
+        return summary
 
     def report_tool_versions(self):
         lines = []
@@ -1048,8 +1147,6 @@ class HMMERRunner(BaseRunner):
                 self.dataset_nb_buscos,
             )
         )
-        # if isinstance(self._config, BuscoConfigMain):  # todo: wait until rerun command properly implemented again
-        #     file_object.write("# To reproduce this run: {}\n#\n".format(self._rerun_cmd))
 
         if no_table_header:
             pass

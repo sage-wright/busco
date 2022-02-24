@@ -95,7 +95,6 @@ class AutoSelectLineage:
             raise NoGenesError
 
         logger.info("{} selected\n".format(os.path.basename(self.best_match_lineage_dataset)))
-        self.config.set("busco_run", "domain_run_name", os.path.basename(self.best_match_lineage_dataset))
         return
 
     def virus_check(self):
@@ -174,10 +173,18 @@ class AutoSelectLineage:
         self.f_percents = [runner.analysis.hmmer_runner.f_percent for runner in runners]
         return
 
-    def get_best_match_lineage(self, runners, use_percent=False):
+    def get_best_match_lineage(self, runners, use_percent=False, mollicutes_pathway=False):
         max_ind = self.evaluate(runners, use_percent)
         self.selected_runner = runners[int(max_ind)]
         self.best_match_lineage_dataset = self.selected_runner.config.get("busco_run", "lineage_dataset")
+        if mollicutes_pathway:
+            self.selected_runner.config.set("busco_run", "domain_run_name", os.path.basename(
+                "bacteria_{}".format(self.dataset_version)))
+        else:
+            self.selected_runner.config.set("busco_run", "domain_run_name", os.path.basename(
+                self.best_match_lineage_dataset))
+        self.selected_runner.config.set("busco_run", "lineage_dataset", self.best_match_lineage_dataset)
+        self.selected_runner.set_parent_dataset()
         runners.pop(int(max_ind))
         self.cleanup_disused_runs(runners)
         return
@@ -188,7 +195,7 @@ class AutoSelectLineage:
                 runner.cleanup()
 
 
-    def get_lineage_dataset(self):  # todo: rethink structure after BuscoPlacer is finalized and protein mode with mollicutes is fixed.
+    def get_lineage_dataset(self):  # todo: rethink structure after BuscoPlacer is finalized
         """
         Run the output of the auto selection through BuscoPlacer to obtain a more precise lineage dataset.
         :return str lineage_dataset: Local path to the optimal lineage dataset.
@@ -229,7 +236,7 @@ class AutoSelectLineage:
     def check_mollicutes(self, use_percent=False):
         runners = self.run_lineages_list(["mollicutes"])
         runners.append(self.selected_runner)
-        self.get_best_match_lineage(runners, use_percent=use_percent)
+        self.get_best_match_lineage(runners, use_percent=use_percent, mollicutes_pathway=True)
         return
 
     def run_busco_placer(self):  # todo: revisit structure of this method after cleaning BuscoPlacer
@@ -253,12 +260,16 @@ class AutoSelectLineage:
             protein_seqs = self.selected_runner.config.get("busco_run", "in")
         out_path = self.config.get("busco_run", "main_out")
         run_folder = os.path.join(out_path, "auto_lineage", self.selected_runner.config.get("busco_run", "lineage_results_dir"))
+
         bp = BuscoPlacer(self.selected_runner.config, run_folder, protein_seqs, self.selected_runner.analysis.hmmer_runner.single_copy_buscos)
         dataset_details, placement_file_versions = bp.define_dataset()
         self.config.placement_files = placement_file_versions  # Necessary to pass these filenames to the final run to be recorded.
         lineage, supporting_markers, placed_markers = dataset_details
-        lineage = "{}_{}".format(lineage, self.config.get("busco_run", "datasets_version"))  # todo: this should probably be done in buscoplacer
         self.best_match_lineage_dataset = lineage  # basename
+        self.selected_runner.config.set("busco_run", "domain_run_name", os.path.basename(
+            self.selected_runner.config.get("busco_run", "lineage_dataset")))
+        self.selected_runner.config.set("busco_run", "lineage_dataset", self.best_match_lineage_dataset)
+        self.selected_runner.set_parent_dataset()
         return
 
     def _run_3_datasets(self, mollicutes_runner=None):
@@ -269,5 +280,6 @@ class AutoSelectLineage:
             datasets = ["mollicutes", "mycoplasmatales", "entomoplasmatales"]
             dataset_runners = []
         dataset_runners += self.run_lineages_list(datasets)
-        self.get_best_match_lineage(dataset_runners)
+        self.get_best_match_lineage(dataset_runners, mollicutes_pathway=True)
+
         return
