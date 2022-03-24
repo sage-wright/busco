@@ -92,7 +92,10 @@ class GenomeAnalysisProkaryotes(GenomeAnalysis):
 
     def reset(self):
         super().reset()
-        self.prodigal_runner.reset()
+        if (
+            self.prodigal_runner
+        ):  # If final run has already been run, then the prodigal_runner object in the final runner object will still be set to None
+            self.prodigal_runner.reset()
 
     @log("***** Run Prodigal on input to predict and extract genes *****", logger)
     def _run_prodigal(self):

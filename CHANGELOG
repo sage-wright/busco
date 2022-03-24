@@ -1,3 +1,8 @@
+5.3.1
+- Issue #510 fixed
+- Issue #542 fixed
+- Bug fixes
+
 5.3.0
 - Introduce JSON summary file
 - Issue #405 fixed

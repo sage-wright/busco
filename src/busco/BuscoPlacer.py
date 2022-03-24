@@ -132,7 +132,7 @@ class BuscoPlacer:
                     root_lineage
                 )
             )
-            dataset = (root_lineage.split("_")[0], None, None)
+            dataset = (root_lineage, None, None)
 
         return dataset, placement_file_versions
 

@@ -287,7 +287,10 @@ class BuscoAnalysis(metaclass=ABCMeta):
         return
 
     def reset(self):
-        self.hmmer_runner.reset()
+        if (
+            self.hmmer_runner
+        ):  # If final run has already been run, then the hmmer_runner object in the final runner object will still be set to None
+            self.hmmer_runner.reset()
 
     @property
     @abstractmethod

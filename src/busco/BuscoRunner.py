@@ -248,11 +248,13 @@ class BatchRunner:
             except BuscoError as be:
                 if "did not recognize any genes" in be.value:
                     type(self).batch_results.append(
-                        "{}\tNo genes found\n".format(os.path.basename(input_file))
+                        "{}\tNo genes found\t\t\t\t\t\t\t\t\t\n".format(
+                            os.path.basename(input_file)
+                        )
                     )
                 else:
                     type(self).batch_results.append(
-                        "{}\tRun failed; check logs\n".format(
+                        "{}\tRun failed; check logs\t\t\t\t\t\t\t\t\t\n".format(
                             os.path.basename(input_file)
                         )
                     )
