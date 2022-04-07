@@ -316,7 +316,7 @@ class BuscoPlacer:
             all_ancestors = all_ancestors.intersection(parents[c])
 
         # go through the ordered list of the deepest linage until you found a common ancestor.
-        for parent in ordered_lineage[::-1]:
+        for parent in ordered_lineage:
             if parent in all_ancestors:
                 return [parent]
 

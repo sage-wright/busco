@@ -328,9 +328,10 @@ class HMMERRunner(BaseRunner):
                         records[gene_id]["env_coords"].append((env_start, env_end))
 
                     except IndexError as e:
-                        raise BuscoError(
-                            e, "Cannot parse HMMER output file {}".format(filename)
+                        logger.error(
+                            "Cannot parse HMMER output file {}".format(filename)
                         )
+                        raise BuscoError(e)
         return records
 
     def _sort_matches(self, matched_record, busco_query):
@@ -883,7 +884,8 @@ class HMMERRunner(BaseRunner):
                             self.cutoff_dict[taxid]["sigma"] = 1
                         self.cutoff_dict[taxid]["length"] = length
                     except IndexError as e:
-                        raise BuscoError(e, "Error parsing the lengths_cutoff file.")
+                        logger.error("Error parsing the lengths_cutoff file.")
+                        raise BuscoError(e)
         except IOError:
             raise BuscoError(
                 "Impossible to read the lengths in {}".format(
@@ -908,7 +910,8 @@ class HMMERRunner(BaseRunner):
                         score = float(line[1])
                         self.cutoff_dict[taxid]["score"] = score
                     except IndexError as e:
-                        raise BuscoError(e, "Error parsing the scores_cutoff file.")
+                        logger.error("Error parsing the scores_cutoff file.")
+                        raise BuscoError(e)
         except IOError:
             raise BuscoError(
                 "Impossible to read the scores in {}".format(scores_cutoff_file)

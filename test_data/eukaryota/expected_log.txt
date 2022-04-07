@@ -1,144 +1,136 @@
-2022-03-24 15:36:16 INFO:	***** Start a BUSCO v5.3.1 analysis, current time: 03/24/2022 15:36:16 *****
-2022-03-24 15:36:16 INFO:	Configuring BUSCO with local environment
-2022-03-24 15:36:16 INFO:	Mode is genome
-2022-03-24 15:36:16 INFO:	Downloading information on latest versions of BUSCO data...
-2022-03-24 15:36:17 WARNING:	Running Auto Lineage Selector as no lineage dataset was specified. This will take a little longer than normal. If you know what lineage dataset you want to use, please specify this in the config file or using the -l (--lineage-dataset) flag in the command line.
-2022-03-24 15:36:17 INFO:	Input file is /home/cegg/berkeley/BUSCO/busco_dev/test_data/eukaryota/genome.fna
-2022-03-24 15:36:17 INFO:	No lineage specified. Running lineage auto selector.
+2022-04-07 11:21:48 INFO:	***** Start a BUSCO v5.3.0 analysis, current time: 04/07/2022 11:21:48 *****
+2022-04-07 11:21:48 INFO:	Configuring BUSCO with local environment
+2022-04-07 11:21:48 INFO:	Mode is genome
+2022-04-07 11:21:48 INFO:	'Force' option selected; overwriting previous results directory
+2022-04-07 11:21:48 INFO:	Downloading information on latest versions of BUSCO data...
+2022-04-07 11:21:48 WARNING:	Running Auto Lineage Selector as no lineage dataset was specified. This will take a little longer than normal. If you know what lineage dataset you want to use, please specify this in the config file or using the -l (--lineage-dataset) flag in the command line.
+2022-04-07 11:21:48 INFO:	Input file is /home/cegg/berkeley/BUSCO/busco_dev/test_data/eukaryota/genome.fna
+2022-04-07 11:21:48 INFO:	No lineage specified. Running lineage auto selector.
 
-2022-03-24 15:36:17 INFO:	***** Starting Auto Select Lineage *****
+2022-04-07 11:21:48 INFO:	***** Starting Auto Select Lineage *****
 	This process runs BUSCO on the generic lineage datasets for the domains archaea, bacteria and eukaryota. Once the optimal domain is selected, BUSCO automatically attempts to find the most appropriate BUSCO dataset to use based on phylogenetic placement.
 	--auto-lineage-euk and --auto-lineage-prok are also available if you know your input assembly is, or is not, an eukaryote. See the user guide for more information.
 	A reminder: Busco evaluations are valid when an appropriate dataset is used, i.e., the dataset belongs to the lineage of the species to test. Because of overlapping markers/spurious matches among domains, busco matches in another domain do not necessarily mean that your genome/proteome contains sequences from this domain. However, a high busco score in multiple domains might help you identify possible contaminations.
-2022-03-24 15:36:17 INFO:	Running BUSCO using lineage dataset archaea_odb10 (prokaryota, 2021-02-23)
-2022-03-24 15:36:17 INFO:	***** Run Prodigal on input to predict and extract genes *****
-2022-03-24 15:36:17 INFO:	Running Prodigal with genetic code 11 in single mode
-2022-03-24 15:36:17 INFO:	Running 1 job(s) on prodigal, starting at 03/24/2022 15:36:17
-2022-03-24 15:36:17 INFO:	[prodigal]	1 of 1 task(s) completed
-2022-03-24 15:36:17 INFO:	Genetic code 11 selected as optimal
-2022-03-24 15:36:17 INFO:	***** Run HMMER on gene sequences *****
-2022-03-24 15:36:17 INFO:	Running 194 job(s) on hmmsearch, starting at 03/24/2022 15:36:17
-2022-03-24 15:36:18 INFO:	[hmmsearch]	20 of 194 task(s) completed
-2022-03-24 15:36:18 INFO:	[hmmsearch]	39 of 194 task(s) completed
-2022-03-24 15:36:18 INFO:	[hmmsearch]	59 of 194 task(s) completed
-2022-03-24 15:36:18 INFO:	[hmmsearch]	78 of 194 task(s) completed
-2022-03-24 15:36:19 INFO:	[hmmsearch]	97 of 194 task(s) completed
-2022-03-24 15:36:19 INFO:	[hmmsearch]	117 of 194 task(s) completed
-2022-03-24 15:36:19 INFO:	[hmmsearch]	136 of 194 task(s) completed
-2022-03-24 15:36:19 INFO:	[hmmsearch]	156 of 194 task(s) completed
-2022-03-24 15:36:19 INFO:	[hmmsearch]	175 of 194 task(s) completed
-2022-03-24 15:36:19 INFO:	[hmmsearch]	194 of 194 task(s) completed
-2022-03-24 15:36:19 INFO:	Results:	C:1.0%[S:1.0%,D:0.0%],F:0.5%,M:98.5%,n:194	   
+2022-04-07 11:21:48 INFO:	Running BUSCO using lineage dataset archaea_odb10 (prokaryota, 2021-02-23)
+2022-04-07 11:21:48 INFO:	***** Run Prodigal on input to predict and extract genes *****
+2022-04-07 11:21:48 INFO:	Running Prodigal with genetic code 11 in single mode
+2022-04-07 11:21:48 INFO:	Running 1 job(s) on prodigal, starting at 04/07/2022 11:21:48
+2022-04-07 11:21:49 INFO:	[prodigal]	1 of 1 task(s) completed
+2022-04-07 11:21:49 INFO:	Genetic code 11 selected as optimal
+2022-04-07 11:21:49 INFO:	***** Run HMMER on gene sequences *****
+2022-04-07 11:21:49 INFO:	Running 194 job(s) on hmmsearch, starting at 04/07/2022 11:21:49
+2022-04-07 11:21:50 INFO:	[hmmsearch]	20 of 194 task(s) completed
+2022-04-07 11:21:50 INFO:	[hmmsearch]	39 of 194 task(s) completed
+2022-04-07 11:21:50 INFO:	[hmmsearch]	59 of 194 task(s) completed
+2022-04-07 11:21:50 INFO:	[hmmsearch]	59 of 194 task(s) completed
+2022-04-07 11:21:50 INFO:	[hmmsearch]	78 of 194 task(s) completed
+2022-04-07 11:21:50 INFO:	[hmmsearch]	97 of 194 task(s) completed
+2022-04-07 11:21:50 INFO:	[hmmsearch]	117 of 194 task(s) completed
+2022-04-07 11:21:50 INFO:	[hmmsearch]	136 of 194 task(s) completed
+2022-04-07 11:21:50 INFO:	[hmmsearch]	156 of 194 task(s) completed
+2022-04-07 11:21:50 INFO:	[hmmsearch]	156 of 194 task(s) completed
+2022-04-07 11:21:50 INFO:	[hmmsearch]	175 of 194 task(s) completed
+2022-04-07 11:21:51 INFO:	[hmmsearch]	194 of 194 task(s) completed
+2022-04-07 11:21:51 INFO:	Results:	C:1.0%[S:1.0%,D:0.0%],F:0.5%,M:98.5%,n:194	   
 
-2022-03-24 15:36:19 INFO:	Running BUSCO using lineage dataset bacteria_odb10 (prokaryota, 2020-03-06)
-2022-03-24 15:36:19 INFO:	***** Run Prodigal on input to predict and extract genes *****
-2022-03-24 15:36:19 INFO:	Genetic code 11 selected as optimal
-2022-03-24 15:36:19 INFO:	***** Run HMMER on gene sequences *****
-2022-03-24 15:36:19 INFO:	Running 124 job(s) on hmmsearch, starting at 03/24/2022 15:36:19
-2022-03-24 15:36:20 INFO:	[hmmsearch]	13 of 124 task(s) completed
-2022-03-24 15:36:20 INFO:	[hmmsearch]	25 of 124 task(s) completed
-2022-03-24 15:36:20 INFO:	[hmmsearch]	38 of 124 task(s) completed
-2022-03-24 15:36:20 INFO:	[hmmsearch]	50 of 124 task(s) completed
-2022-03-24 15:36:20 INFO:	[hmmsearch]	63 of 124 task(s) completed
-2022-03-24 15:36:20 INFO:	[hmmsearch]	75 of 124 task(s) completed
-2022-03-24 15:36:20 INFO:	[hmmsearch]	87 of 124 task(s) completed
-2022-03-24 15:36:20 INFO:	[hmmsearch]	100 of 124 task(s) completed
-2022-03-24 15:36:20 INFO:	[hmmsearch]	112 of 124 task(s) completed
-2022-03-24 15:36:20 INFO:	[hmmsearch]	124 of 124 task(s) completed
-2022-03-24 15:36:21 WARNING:	BUSCO did not find any match. Make sure to check the log files if this is unexpected.
-2022-03-24 15:36:21 INFO:	Results:	C:0.0%[S:0.0%,D:0.0%],F:0.0%,M:100.0%,n:124	   
+2022-04-07 11:21:51 INFO:	Running BUSCO using lineage dataset bacteria_odb10 (prokaryota, 2020-03-06)
+2022-04-07 11:21:51 INFO:	***** Run Prodigal on input to predict and extract genes *****
+2022-04-07 11:21:51 INFO:	Genetic code 11 selected as optimal
+2022-04-07 11:21:51 INFO:	***** Run HMMER on gene sequences *****
+2022-04-07 11:21:51 INFO:	Running 124 job(s) on hmmsearch, starting at 04/07/2022 11:21:51
+2022-04-07 11:21:52 INFO:	[hmmsearch]	13 of 124 task(s) completed
+2022-04-07 11:21:52 INFO:	[hmmsearch]	25 of 124 task(s) completed
+2022-04-07 11:21:52 INFO:	[hmmsearch]	38 of 124 task(s) completed
+2022-04-07 11:21:52 INFO:	[hmmsearch]	50 of 124 task(s) completed
+2022-04-07 11:21:52 INFO:	[hmmsearch]	63 of 124 task(s) completed
+2022-04-07 11:21:52 INFO:	[hmmsearch]	75 of 124 task(s) completed
+2022-04-07 11:21:52 INFO:	[hmmsearch]	87 of 124 task(s) completed
+2022-04-07 11:21:52 INFO:	[hmmsearch]	100 of 124 task(s) completed
+2022-04-07 11:21:52 INFO:	[hmmsearch]	100 of 124 task(s) completed
+2022-04-07 11:21:52 INFO:	[hmmsearch]	112 of 124 task(s) completed
+2022-04-07 11:21:52 INFO:	[hmmsearch]	124 of 124 task(s) completed
+2022-04-07 11:21:53 WARNING:	BUSCO did not find any match. Make sure to check the log files if this is unexpected.
+2022-04-07 11:21:53 INFO:	Results:	C:0.0%[S:0.0%,D:0.0%],F:0.0%,M:100.0%,n:124	   
 
-2022-03-24 15:36:21 INFO:	Running BUSCO using lineage dataset eukaryota_odb10 (eukaryota, 2020-09-10)
-2022-03-24 15:36:21 INFO:	Running 1 job(s) on metaeuk, starting at 03/24/2022 15:36:21
-2022-03-24 15:36:43 INFO:	[metaeuk]	1 of 1 task(s) completed
-2022-03-24 15:36:43 INFO:	***** Run HMMER on gene sequences *****
-2022-03-24 15:36:43 INFO:	Running 255 job(s) on hmmsearch, starting at 03/24/2022 15:36:43
-2022-03-24 15:36:44 INFO:	[hmmsearch]	26 of 255 task(s) completed
-2022-03-24 15:36:45 INFO:	[hmmsearch]	51 of 255 task(s) completed
-2022-03-24 15:36:45 INFO:	[hmmsearch]	77 of 255 task(s) completed
-2022-03-24 15:36:45 INFO:	[hmmsearch]	102 of 255 task(s) completed
-2022-03-24 15:36:45 INFO:	[hmmsearch]	128 of 255 task(s) completed
-2022-03-24 15:36:45 INFO:	[hmmsearch]	153 of 255 task(s) completed
-2022-03-24 15:36:45 INFO:	[hmmsearch]	179 of 255 task(s) completed
-2022-03-24 15:36:45 INFO:	[hmmsearch]	204 of 255 task(s) completed
-2022-03-24 15:36:45 INFO:	[hmmsearch]	230 of 255 task(s) completed
-2022-03-24 15:36:46 INFO:	[hmmsearch]	255 of 255 task(s) completed
-2022-03-24 15:36:46 INFO:	Results:	C:19.2%[S:19.2%,D:0.0%],F:0.8%,M:80.0%,n:255	   
+2022-04-07 11:21:53 INFO:	Running BUSCO using lineage dataset eukaryota_odb10 (eukaryota, 2020-09-10)
+2022-04-07 11:21:53 INFO:	Running 1 job(s) on metaeuk, starting at 04/07/2022 11:21:53
+2022-04-07 11:22:17 INFO:	[metaeuk]	1 of 1 task(s) completed
+2022-04-07 11:22:17 INFO:	***** Run HMMER on gene sequences *****
+2022-04-07 11:22:17 INFO:	Running 255 job(s) on hmmsearch, starting at 04/07/2022 11:22:17
+2022-04-07 11:22:20 INFO:	[hmmsearch]	26 of 255 task(s) completed
+2022-04-07 11:22:20 INFO:	[hmmsearch]	51 of 255 task(s) completed
+2022-04-07 11:22:20 INFO:	[hmmsearch]	51 of 255 task(s) completed
+2022-04-07 11:22:20 INFO:	[hmmsearch]	77 of 255 task(s) completed
+2022-04-07 11:22:20 INFO:	[hmmsearch]	102 of 255 task(s) completed
+2022-04-07 11:22:20 INFO:	[hmmsearch]	128 of 255 task(s) completed
+2022-04-07 11:22:21 INFO:	[hmmsearch]	153 of 255 task(s) completed
+2022-04-07 11:22:21 INFO:	[hmmsearch]	179 of 255 task(s) completed
+2022-04-07 11:22:21 INFO:	[hmmsearch]	204 of 255 task(s) completed
+2022-04-07 11:22:21 INFO:	[hmmsearch]	230 of 255 task(s) completed
+2022-04-07 11:22:21 INFO:	[hmmsearch]	255 of 255 task(s) completed
+2022-04-07 11:22:21 INFO:	Results:	C:19.2%[S:19.2%,D:0.0%],F:0.8%,M:80.0%,n:255	   
 
-2022-03-24 15:36:46 INFO:	Extracting missing and fragmented buscos from the file refseq_db.faa...
-2022-03-24 15:37:00 INFO:	Running 1 job(s) on metaeuk, starting at 03/24/2022 15:37:00
-2022-03-24 15:37:18 INFO:	[metaeuk]	1 of 1 task(s) completed
-2022-03-24 15:37:18 INFO:	***** Run HMMER on gene sequences *****
-2022-03-24 15:37:18 INFO:	Running 206 job(s) on hmmsearch, starting at 03/24/2022 15:37:18
-2022-03-24 15:37:19 INFO:	[hmmsearch]	21 of 206 task(s) completed
-2022-03-24 15:37:19 INFO:	[hmmsearch]	42 of 206 task(s) completed
-2022-03-24 15:37:19 INFO:	[hmmsearch]	62 of 206 task(s) completed
-2022-03-24 15:37:19 INFO:	[hmmsearch]	83 of 206 task(s) completed
-2022-03-24 15:37:20 INFO:	[hmmsearch]	104 of 206 task(s) completed
-2022-03-24 15:37:20 INFO:	[hmmsearch]	124 of 206 task(s) completed
-2022-03-24 15:37:20 INFO:	[hmmsearch]	145 of 206 task(s) completed
-2022-03-24 15:37:20 INFO:	[hmmsearch]	165 of 206 task(s) completed
-2022-03-24 15:37:20 INFO:	[hmmsearch]	186 of 206 task(s) completed
-2022-03-24 15:37:20 INFO:	[hmmsearch]	206 of 206 task(s) completed
-2022-03-24 15:37:21 INFO:	Validating exons and removing overlapping matches
-2022-03-24 15:37:21 INFO:	Results:	C:19.2%[S:19.2%,D:0.0%],F:0.8%,M:80.0%,n:255	   
+2022-04-07 11:22:21 INFO:	Extracting missing and fragmented buscos from the file refseq_db.faa...
+2022-04-07 11:22:36 INFO:	Running 1 job(s) on metaeuk, starting at 04/07/2022 11:22:36
+2022-04-07 11:22:55 INFO:	[metaeuk]	1 of 1 task(s) completed
+2022-04-07 11:22:55 INFO:	***** Run HMMER on gene sequences *****
+2022-04-07 11:22:55 INFO:	Running 206 job(s) on hmmsearch, starting at 04/07/2022 11:22:55
+2022-04-07 11:22:56 INFO:	[hmmsearch]	21 of 206 task(s) completed
+2022-04-07 11:22:56 INFO:	[hmmsearch]	42 of 206 task(s) completed
+2022-04-07 11:22:56 INFO:	[hmmsearch]	62 of 206 task(s) completed
+2022-04-07 11:22:56 INFO:	[hmmsearch]	83 of 206 task(s) completed
+2022-04-07 11:22:56 INFO:	[hmmsearch]	104 of 206 task(s) completed
+2022-04-07 11:22:56 INFO:	[hmmsearch]	124 of 206 task(s) completed
+2022-04-07 11:22:56 INFO:	[hmmsearch]	145 of 206 task(s) completed
+2022-04-07 11:22:56 INFO:	[hmmsearch]	165 of 206 task(s) completed
+2022-04-07 11:22:56 INFO:	[hmmsearch]	186 of 206 task(s) completed
+2022-04-07 11:22:56 INFO:	[hmmsearch]	206 of 206 task(s) completed
+2022-04-07 11:22:57 INFO:	Validating exons and removing overlapping matches
+2022-04-07 11:22:58 INFO:	Results:	C:19.2%[S:19.2%,D:0.0%],F:0.8%,M:80.0%,n:255	   
 
-2022-03-24 15:37:21 INFO:	eukaryota_odb10 selected
+2022-04-07 11:22:58 INFO:	eukaryota_odb10 selected
 
-2022-03-24 15:37:21 INFO:	***** Searching tree for chosen lineage to find best taxonomic match *****
+2022-04-07 11:22:58 INFO:	***** Searching tree for chosen lineage to find best taxonomic match *****
 
-2022-03-24 15:37:21 INFO:	Extract markers...
-2022-03-24 15:37:21 INFO:	Downloading file 'https://busco-data.ezlab.org/v5/data/placement_files/list_of_reference_markers.eukaryota_odb10.2019-12-16.txt.tar.gz'
-2022-03-24 15:37:21 INFO:	Decompressing file '/home/cegg/berkeley/BUSCO/busco_dev/busco_downloads/placement_files/list_of_reference_markers.eukaryota_odb10.2019-12-16.txt.tar.gz'
-2022-03-24 15:37:21 INFO:	Downloading file 'https://busco-data.ezlab.org/v5/data/placement_files/tree.eukaryota_odb10.2019-12-16.nwk.tar.gz'
-2022-03-24 15:37:21 INFO:	Decompressing file '/home/cegg/berkeley/BUSCO/busco_dev/busco_downloads/placement_files/tree.eukaryota_odb10.2019-12-16.nwk.tar.gz'
-2022-03-24 15:37:21 INFO:	Downloading file 'https://busco-data.ezlab.org/v5/data/placement_files/tree_metadata.eukaryota_odb10.2019-12-16.txt.tar.gz'
-2022-03-24 15:37:21 INFO:	Decompressing file '/home/cegg/berkeley/BUSCO/busco_dev/busco_downloads/placement_files/tree_metadata.eukaryota_odb10.2019-12-16.txt.tar.gz'
-2022-03-24 15:37:21 INFO:	Downloading file 'https://busco-data.ezlab.org/v5/data/placement_files/supermatrix.aln.eukaryota_odb10.2019-12-16.faa.tar.gz'
-2022-03-24 15:37:21 INFO:	Decompressing file '/home/cegg/berkeley/BUSCO/busco_dev/busco_downloads/placement_files/supermatrix.aln.eukaryota_odb10.2019-12-16.faa.tar.gz'
-2022-03-24 15:37:22 INFO:	Downloading file 'https://busco-data.ezlab.org/v5/data/placement_files/mapping_taxids-busco_dataset_name.eukaryota_odb10.2019-12-16.txt.tar.gz'
-2022-03-24 15:37:22 INFO:	Decompressing file '/home/cegg/berkeley/BUSCO/busco_dev/busco_downloads/placement_files/mapping_taxids-busco_dataset_name.eukaryota_odb10.2019-12-16.txt.tar.gz'
-2022-03-24 15:37:22 INFO:	Downloading file 'https://busco-data.ezlab.org/v5/data/placement_files/mapping_taxid-lineage.eukaryota_odb10.2019-12-16.txt.tar.gz'
-2022-03-24 15:37:22 INFO:	Decompressing file '/home/cegg/berkeley/BUSCO/busco_dev/busco_downloads/placement_files/mapping_taxid-lineage.eukaryota_odb10.2019-12-16.txt.tar.gz'
-2022-03-24 15:37:22 INFO:	Place the markers on the reference tree...
-2022-03-24 15:37:22 INFO:	Running 1 job(s) on sepp, starting at 03/24/2022 15:37:22
-2022-03-24 15:39:04 INFO:	[sepp]	1 of 1 task(s) completed
-2022-03-24 15:39:04 INFO:	Lineage saccharomycetes is selected, supported by 18 markers out of 19
-2022-03-24 15:39:04 INFO:	Downloading file 'https://busco-data.ezlab.org/v5/data/lineages/saccharomycetes_odb10.2020-08-05.tar.gz'
-2022-03-24 15:39:06 INFO:	Decompressing file '/home/cegg/berkeley/BUSCO/busco_dev/busco_downloads/lineages/saccharomycetes_odb10.tar.gz'
-2022-03-24 15:39:15 INFO:	Running BUSCO using lineage dataset saccharomycetes_odb10 (eukaryota, 2020-08-05)
-2022-03-24 15:39:15 INFO:	Running 1 job(s) on metaeuk, starting at 03/24/2022 15:39:15
-2022-03-24 15:39:20 INFO:	[metaeuk]	1 of 1 task(s) completed
-2022-03-24 15:39:20 INFO:	***** Run HMMER on gene sequences *****
-2022-03-24 15:39:20 INFO:	Running 2137 job(s) on hmmsearch, starting at 03/24/2022 15:39:20
-2022-03-24 15:39:22 INFO:	[hmmsearch]	214 of 2137 task(s) completed
-2022-03-24 15:39:23 INFO:	[hmmsearch]	428 of 2137 task(s) completed
-2022-03-24 15:39:24 INFO:	[hmmsearch]	642 of 2137 task(s) completed
-2022-03-24 15:39:25 INFO:	[hmmsearch]	855 of 2137 task(s) completed
-2022-03-24 15:39:25 INFO:	[hmmsearch]	1069 of 2137 task(s) completed
-2022-03-24 15:39:26 INFO:	[hmmsearch]	1283 of 2137 task(s) completed
-2022-03-24 15:39:27 INFO:	[hmmsearch]	1496 of 2137 task(s) completed
-2022-03-24 15:39:28 INFO:	[hmmsearch]	1710 of 2137 task(s) completed
-2022-03-24 15:39:28 INFO:	[hmmsearch]	1924 of 2137 task(s) completed
-2022-03-24 15:39:30 INFO:	[hmmsearch]	2137 of 2137 task(s) completed
-2022-03-24 15:39:32 INFO:	Extracting missing and fragmented buscos from the file refseq_db.faa...
-2022-03-24 15:39:37 INFO:	Running 1 job(s) on metaeuk, starting at 03/24/2022 15:39:37
-2022-03-24 15:39:43 INFO:	[metaeuk]	1 of 1 task(s) completed
-2022-03-24 15:39:43 INFO:	***** Run HMMER on gene sequences *****
-2022-03-24 15:39:43 INFO:	Running 2093 job(s) on hmmsearch, starting at 03/24/2022 15:39:43
-2022-03-24 15:39:45 INFO:	[hmmsearch]	419 of 2093 task(s) completed
-2022-03-24 15:39:52 INFO:	[hmmsearch]	628 of 2093 task(s) completed
-2022-03-24 15:39:53 INFO:	[hmmsearch]	838 of 2093 task(s) completed
-2022-03-24 15:39:53 INFO:	[hmmsearch]	1047 of 2093 task(s) completed
-2022-03-24 15:39:54 INFO:	[hmmsearch]	1256 of 2093 task(s) completed
-2022-03-24 15:39:55 INFO:	[hmmsearch]	1466 of 2093 task(s) completed
-2022-03-24 15:39:56 INFO:	[hmmsearch]	1675 of 2093 task(s) completed
-2022-03-24 15:39:56 INFO:	[hmmsearch]	1884 of 2093 task(s) completed
-2022-03-24 15:39:57 INFO:	[hmmsearch]	2093 of 2093 task(s) completed
-2022-03-24 15:40:00 INFO:	Validating exons and removing overlapping matches
-2022-03-24 15:40:00 INFO:	Results:	C:2.1%[S:2.1%,D:0.0%],F:0.0%,M:97.9%,n:2137	   
+2022-04-07 11:22:58 INFO:	Extract markers...
+2022-04-07 11:22:58 INFO:	Place the markers on the reference tree...
+2022-04-07 11:22:58 INFO:	Running 1 job(s) on sepp, starting at 04/07/2022 11:22:58
+2022-04-07 11:24:41 INFO:	[sepp]	1 of 1 task(s) completed
+2022-04-07 11:24:41 INFO:	Lineage saccharomycetes is selected, supported by 18 markers out of 19
+2022-04-07 11:24:41 INFO:	Running BUSCO using lineage dataset saccharomycetes_odb10 (eukaryota, 2020-08-05)
+2022-04-07 11:24:41 INFO:	Running 1 job(s) on metaeuk, starting at 04/07/2022 11:24:41
+2022-04-07 11:24:46 INFO:	[metaeuk]	1 of 1 task(s) completed
+2022-04-07 11:24:46 INFO:	***** Run HMMER on gene sequences *****
+2022-04-07 11:24:46 INFO:	Running 2137 job(s) on hmmsearch, starting at 04/07/2022 11:24:46
+2022-04-07 11:24:49 INFO:	[hmmsearch]	214 of 2137 task(s) completed
+2022-04-07 11:24:49 INFO:	[hmmsearch]	428 of 2137 task(s) completed
+2022-04-07 11:24:51 INFO:	[hmmsearch]	642 of 2137 task(s) completed
+2022-04-07 11:24:51 INFO:	[hmmsearch]	855 of 2137 task(s) completed
+2022-04-07 11:24:52 INFO:	[hmmsearch]	1069 of 2137 task(s) completed
+2022-04-07 11:24:53 INFO:	[hmmsearch]	1283 of 2137 task(s) completed
+2022-04-07 11:24:54 INFO:	[hmmsearch]	1496 of 2137 task(s) completed
+2022-04-07 11:24:55 INFO:	[hmmsearch]	1710 of 2137 task(s) completed
+2022-04-07 11:24:56 INFO:	[hmmsearch]	1924 of 2137 task(s) completed
+2022-04-07 11:24:58 INFO:	[hmmsearch]	2137 of 2137 task(s) completed
+2022-04-07 11:25:00 INFO:	Extracting missing and fragmented buscos from the file refseq_db.faa...
+2022-04-07 11:25:05 INFO:	Running 1 job(s) on metaeuk, starting at 04/07/2022 11:25:05
+2022-04-07 11:25:11 INFO:	[metaeuk]	1 of 1 task(s) completed
+2022-04-07 11:25:11 INFO:	***** Run HMMER on gene sequences *****
+2022-04-07 11:25:11 INFO:	Running 2093 job(s) on hmmsearch, starting at 04/07/2022 11:25:11
+2022-04-07 11:25:13 INFO:	[hmmsearch]	210 of 2093 task(s) completed
+2022-04-07 11:25:14 INFO:	[hmmsearch]	419 of 2093 task(s) completed
+2022-04-07 11:25:16 INFO:	[hmmsearch]	628 of 2093 task(s) completed
+2022-04-07 11:25:17 INFO:	[hmmsearch]	838 of 2093 task(s) completed
+2022-04-07 11:25:18 INFO:	[hmmsearch]	1047 of 2093 task(s) completed
+2022-04-07 11:25:19 INFO:	[hmmsearch]	1256 of 2093 task(s) completed
+2022-04-07 11:25:20 INFO:	[hmmsearch]	1466 of 2093 task(s) completed
+2022-04-07 11:25:21 INFO:	[hmmsearch]	1675 of 2093 task(s) completed
+2022-04-07 11:25:22 INFO:	[hmmsearch]	1884 of 2093 task(s) completed
+2022-04-07 11:25:22 INFO:	[hmmsearch]	2093 of 2093 task(s) completed
+2022-04-07 11:25:25 INFO:	Validating exons and removing overlapping matches
+2022-04-07 11:25:25 INFO:	Results:	C:2.1%[S:2.1%,D:0.0%],F:0.0%,M:97.9%,n:2137	   
 
-2022-03-24 15:40:00 INFO:	
+2022-04-07 11:25:25 INFO:	
 
 	--------------------------------------------------
 	|Results from generic domain eukaryota_odb10      |
@@ -163,13 +155,13 @@
 	|2091	Missing BUSCOs (M)                        |
 	|2137	Total BUSCO groups searched               |
 	--------------------------------------------------
-2022-03-24 15:40:00 INFO:	BUSCO analysis done with WARNING(s). Total running time: 223 seconds
+2022-04-07 11:25:25 INFO:	BUSCO analysis done with WARNING(s). Total running time: 217 seconds
 
 ***** Summary of warnings: *****
-2022-03-24 15:36:17 WARNING:busco.run_BUSCO	Running Auto Lineage Selector as no lineage dataset was specified. This will take a little longer than normal. If you know what lineage dataset you want to use, please specify this in the config file or using the -l (--lineage-dataset) flag in the command line.
-2022-03-24 15:36:21 WARNING:busco.busco_tools.hmmer	BUSCO did not find any match. Make sure to check the log files if this is unexpected.
+2022-04-07 11:21:48 WARNING:busco.run_BUSCO	Running Auto Lineage Selector as no lineage dataset was specified. This will take a little longer than normal. If you know what lineage dataset you want to use, please specify this in the config file or using the -l (--lineage-dataset) flag in the command line.
+2022-04-07 11:21:53 WARNING:busco.busco_tools.hmmer	BUSCO did not find any match. Make sure to check the log files if this is unexpected.
 
-2022-03-24 15:40:00 INFO:	Results written in /home/cegg/berkeley/BUSCO/busco_dev/test_eukaryota
-2022-03-24 15:40:00 INFO:	For assistance with interpreting the results, please consult the userguide: https://busco.ezlab.org/busco_userguide.html
+2022-04-07 11:25:25 INFO:	Results written in /home/cegg/berkeley/BUSCO/busco_dev/test_eukaryota
+2022-04-07 11:25:25 INFO:	For assistance with interpreting the results, please consult the userguide: https://busco.ezlab.org/busco_userguide.html
 
-2022-03-24 15:40:00 INFO:	Visit this page https://gitlab.com/ezlab/busco#how-to-cite-busco to see how to cite BUSCO
+2022-04-07 11:25:25 INFO:	Visit this page https://gitlab.com/ezlab/busco#how-to-cite-busco to see how to cite BUSCO
