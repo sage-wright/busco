@@ -4,7 +4,7 @@
 .. module:: run_BUSCO
    :synopsis:
 .. versionadded:: 3.0.0
-.. versionchanged:: 5.1.0
+.. versionchanged:: 5.4.0
 
 BUSCO - Benchmarking Universal Single-Copy Orthologs.
 This is the BUSCO main script.
@@ -35,7 +35,6 @@ from busco.Actions import (
 )
 from busco.ConfigManager import BuscoConfigMain
 
-# from busco.busco_tools.Toolset import ToolException
 import sys
 import time
 
@@ -55,53 +54,20 @@ class BuscoMaster:
         self.config_manager = BuscoConfigManager(self.params)
         self.config = self.config_manager.config_main
 
-    def harmonize_auto_lineage_settings(self):
-        if not self.config.check_lineage_present():
-            if (
-                not self.config.getboolean("busco_run", "auto-lineage")
-                and not self.config.getboolean("busco_run", "auto-lineage-prok")
-                and not self.config.getboolean("busco_run", "auto-lineage-euk")
-            ):
-                logger.warning(
-                    "Running Auto Lineage Selector as no lineage dataset was specified. This will take a "
-                    "little longer than normal. If you know what lineage dataset you want to use, please "
-                    "specify this in the config file or using the -l (--lineage-dataset) flag in the "
-                    "command line."
-                )
-            self.config.set("busco_run", "auto-lineage", "True")
-
-        else:
-            if (
-                self.config.getboolean("busco_run", "auto-lineage")
-                or self.config.getboolean("busco_run", "auto-lineage-prok")
-                or self.config.getboolean("busco_run", "auto-lineage-euk")
-            ):
-                logger.warning(
-                    "You have selected auto-lineage but you have also provided a lineage dataset. "
-                    "BUSCO will proceed with the specified dataset. "
-                    "To run auto-lineage do not specify a dataset."
-                )
-            self.config.set("busco_run", "auto-lineage", "False")
-            self.config.set("busco_run", "auto-lineage-prok", "False")
-            self.config.set("busco_run", "auto-lineage-euk", "False")
-        return
-
     def load_config(self):
         """
         Load a busco config file that will figure out all the params from all sources
         i.e. provided config file, dataset cfg, and user args
         """
-        self.config_manager.load_busco_config_main(sys.argv)
+        self.config_manager.load_busco_config_main()
         self.config = self.config_manager.config_main
 
     def check_batch_mode(self):
         return self.config.getboolean("busco_run", "batch_mode")
 
     def run(self):
-        # Need to add try/except blocks, distinguishing between run fatal and batch fatal
         try:
             self.load_config()
-            self.harmonize_auto_lineage_settings()
             runner = (
                 BatchRunner(self.config_manager)
                 if self.check_batch_mode()
@@ -135,7 +101,8 @@ def _parse_args():
     parser = argparse.ArgumentParser(
         description="Welcome to BUSCO {}: the Benchmarking Universal Single-Copy Ortholog assessment tool.\n"
         "For more detailed usage information, please review the README file provided with "
-        "this distribution and the BUSCO user guide. Visit this page https://gitlab.com/ezlab/busco#how-to-cite-busco to see how to cite BUSCO".format(
+        "this distribution and the BUSCO user guide. "
+        "Visit this page https://gitlab.com/ezlab/busco#how-to-cite-busco to see how to cite BUSCO".format(
             busco.__version__
         ),
         usage="busco -i [SEQUENCE_FILE] -l [LINEAGE] -o [OUTPUT_NAME] -m [MODE] [OTHER OPTIONS]",
@@ -251,6 +218,15 @@ def _parse_args():
     )
 
     optional.add_argument(
+        "--contig_break",
+        dest="contig_break",
+        type=int,
+        required=False,
+        metavar="n",
+        help="Number of contiguous Ns to signify a break between contigs. Default is n=10.",
+    )
+
+    optional.add_argument(
         "--datasets_version",
         dest="datasets_version",
         required=False,
@@ -264,7 +240,8 @@ def _parse_args():
         type=str,
         metavar="dataset",
         action=DirectDownload,
-        help='Download dataset. Possible values are a specific dataset name, "all", "prokaryota", "eukaryota", or "virus". If used together with other command line arguments, make sure to place this last.',
+        help='Download dataset. Possible values are a specific dataset name, "all", "prokaryota", "eukaryota", '
+        'or "virus". If used together with other command line arguments, make sure to place this last.',
     )
 
     optional.add_argument(
@@ -290,7 +267,7 @@ def _parse_args():
         type=float,
         help="E-value cutoff for BLAST searches. "
         "Allowed formats, 0.001 or 1e-03 (Default: {:.0e})".format(
-            BuscoConfigMain.DEFAULT_ARGS_VALUES["evalue"]
+            BuscoConfigMain.BLAST_ARGS["evalue"]
         ),
     )
 
@@ -315,7 +292,7 @@ def _parse_args():
         required=False,
         type=int,
         help="How many candidate regions (contig or transcript) to consider per BUSCO (default: {})".format(
-            str(BuscoConfigMain.DEFAULT_ARGS_VALUES["limit"])
+            str(BuscoConfigMain.BLAST_ARGS["limit"])
         ),
     )
 
@@ -388,6 +365,14 @@ def _parse_args():
     )
 
     optional.add_argument(
+        "--scaffold_composition",
+        dest="scaffold_composition",
+        action="store_true",
+        required=False,
+        help="Writes ACGTN content per scaffold to a file scaffold_composition.txt",
+    )
+
+    optional.add_argument(
         "--tar",
         dest="tar",
         action="store_true",
@@ -429,4 +414,5 @@ def main():
 
 # Entry point
 if __name__ == "__main__":
+    __spec__ = None
     main()

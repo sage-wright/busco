@@ -15,7 +15,7 @@ class ToolException(Exception):
     Module-specific exception
     """
 
-    def __init__(self, value):
+    def __init__(self, value=""):
         self.value = value
 
     def __str__(self):
@@ -31,6 +31,7 @@ class BaseRunner(Tool, metaclass=ABCMeta):
         super().__init__()
         self.run_number = 0
         self.input_file = self.config.get("busco_run", "in")
+        # type(self).summary["versions"]["busco"] = busco.__version__
         self.main_out = self.config.get("busco_run", "main_out")
         self.working_dir = (
             os.path.join(self.main_out, "auto_lineage")
@@ -44,11 +45,14 @@ class BaseRunner(Tool, metaclass=ABCMeta):
         self.lineage_dataset = self.config.get("busco_run", "lineage_dataset")
         self.domain = self.config.get("busco_run", "domain")
 
-        if not self.check_tool_available():
+        try:
+            self.check_tool_available()
+        except ToolException:
             raise ToolException(
                 "{} tool cannot be found. Please check the 'path' and 'command' parameters "
-                "provided in the config file. Do not include the command in the "
-                "path!".format(self.name)
+                "provided in the config file or make sure the tool is available in your working environment.".format(
+                    self.name
+                )
             )
         self.version = self.get_version()
         type(self).tool_versions[self.name] = self.version
@@ -64,6 +68,7 @@ class BaseRunner(Tool, metaclass=ABCMeta):
         self.logfile_path_err = (
             self.logfile_path_out.rpartition("_out.log")[0] + "_err.log"
         )
+        self.add_args = {}
 
     def init_checkpoint_file(self):
         self.checkpoint_file = os.path.join(self.output_folder, ".checkpoint")
@@ -101,18 +106,18 @@ class BaseRunner(Tool, metaclass=ABCMeta):
                     start_search = 0
                     while True:
                         tool_ind = tool_names.index(self.name, start_search)
-                        if str(self.version) != str(tool_versions[tool_ind]):
-                            logger.warning(
-                                "A previous run used {} version {}. "
-                                "The restarted run is using {} version "
-                                "{}".format(
-                                    self.name,
-                                    tool_versions[tool_ind],
-                                    self.name,
-                                    self.version,
-                                )
-                            )
                         if int(tool_run_numbers[tool_ind]) == int(self.run_number):
+                            if str(self.version) != str(tool_versions[tool_ind]):
+                                logger.warning(
+                                    "A previous run used {} version {}. "
+                                    "The restarted run is using {} version "
+                                    "{}".format(
+                                        self.name,
+                                        tool_versions[tool_ind],
+                                        self.name,
+                                        self.version,
+                                    )
+                                )
                             return True
                         elif int(tool_run_numbers[tool_ind]) < int(self.run_number):
                             start_search = tool_ind + 1
@@ -143,6 +148,10 @@ class BaseRunner(Tool, metaclass=ABCMeta):
     @abstractmethod
     def configure_job(self, *args):
         pass
+
+    @abstractmethod
+    def configure_runner(self, *args):
+        self.init_checkpoint_file()
 
     @abstractmethod
     def generate_job_args(self):
@@ -191,14 +200,17 @@ class BaseRunner(Tool, metaclass=ABCMeta):
         try:
             self.get_tool_from_config()
         except ToolException:
-            self.get_tool_from_environment()
+            try:
+                self.get_tool_from_environment()
+            except ToolException:
+                raise
 
         return which(self.cmd) is not None  # True if tool available
 
     def get_tool_from_environment(self):
         which_tool = which(self.cmd)
         if not which_tool:
-            raise ToolException("Tool {} not found".format(self.name))
+            raise ToolException()
 
     def get_tool_from_config(self):
         """
@@ -209,20 +221,12 @@ class BaseRunner(Tool, metaclass=ABCMeta):
         :return:
         """
         if not self.config.has_section(self.name):
-            raise ToolException(
-                "Section for the tool [{}] is not present in the config file".format(
-                    self.name
-                )
-            )
+            raise ToolException()
 
         if not self.config.has_option(self.name, "path") or not self.config.get(
             self.name, "path"
         ):
-            raise ToolException(
-                "Key 'path' in the section [{}] is not present in the config file".format(
-                    self.name
-                )
-            )
+            raise ToolException()
 
         if self.config.has_option(self.name, "command"):
             executable = self.config.get(self.name, "command")

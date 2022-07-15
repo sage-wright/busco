@@ -82,6 +82,7 @@ class AugustusRunner(BaseRunner):
         super().__init__()
         self._output_folder = os.path.join(self.run_folder, "augustus_output")
         self.tmp_dir = os.path.join(self._output_folder, "tmp")
+        self.pred_genes_dir = None
         self.pred_genes_dir_initial = os.path.join(
             self._output_folder, "predicted_genes_initial_run"
         )
@@ -106,12 +107,16 @@ class AugustusRunner(BaseRunner):
         self.any_gene_found = False
         self.param_keys = []
         self.param_values = []
+        self.output_sequences = []
+        self.seqs_path = None
+        self.coords = None
+        self.sequences_aa = None
+        self.sequences_nt = None
 
         self.create_dirs([self._output_folder, self.extracted_prot_dir, self.gff_dir])
 
-        self.init_checkpoint_file()
-
     def configure_runner(self, seqs_path, coords, sequences_aa, sequences_nt):
+        super().configure_runner()
         self.run_number += 1
 
         # Placed here to allow reconfiguration for rerun
@@ -631,10 +636,10 @@ class GFF2GBRunner(BaseRunner):
         self.gff_folder = os.path.join(self._output_folder, "gff")
         self.gb_folder = os.path.join(self._output_folder, "gb")
         self.create_dirs([self.gff_folder, self.gb_folder])
-
-        self.init_checkpoint_file()
+        self.single_copy_buscos = None
 
     def configure_runner(self, single_copy_buscos):
+        super().configure_runner()
         self.run_number += 1
         self.single_copy_buscos = single_copy_buscos
 
@@ -686,13 +691,15 @@ class NewSpeciesRunner(BaseRunner):
         super().__init__()
         self._output_folder = os.path.join(self.run_folder, "augustus_output")
         self.new_species_name = "BUSCO_{}".format(os.path.basename(self.main_out))
-        self.init_checkpoint_file()
         self.run_number += 1
 
     def run(self):
         super().run()
         self.total = 1
         self.run_jobs()
+
+    def configure_runner(self, *args):
+        super().configure_runner(args)
 
     def reset(self):
         super().reset()
@@ -733,10 +740,10 @@ class ETrainingRunner(BaseRunner):
         self._gb_folder = os.path.join(self._output_folder, "gb")
         self.augustus_config_path = self.config.get("busco_run", "augustus_config_path")
         self._training_file = os.path.join(self._output_folder, "training_set.db")
-
-        self.init_checkpoint_file()
+        self.new_species_name = None
 
     def configure_runner(self, new_species_name):
+        super().configure_runner()
         self.run_number += 1
         self.new_species_name = new_species_name
         self._merge_gb_files()
@@ -805,12 +812,11 @@ class OptimizeAugustusRunner(BaseRunner):
         self.new_species_name = None
 
     def configure_runner(self, output_folder, new_species_name):
+        super().configure_runner()
         self.run_number += 1
         self._output_folder = output_folder
         self.training_set_db = os.path.join(self._output_folder, "training_set.db")
         self.new_species_name = new_species_name
-
-        self.init_checkpoint_file()
 
     def configure_job(self, *args):
         optimize_augustus_pl_job = self.create_job()

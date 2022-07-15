@@ -4,7 +4,7 @@
 .. module:: TranscriptomeAnalysis
    :synopsis:TranscriptomeAnalysis implements genome analysis specifics
 .. versionadded:: 3.0.0
-.. versionchanged:: 5.0.0
+.. versionchanged:: 5.4.0
 
 Copyright (c) 2016-2022, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
@@ -55,6 +55,7 @@ class TranscriptomeAnalysisProkaryotes(
         self.all_sequences = defaultdict(lambda: defaultdict(dict))
 
         self.sequences_aa = {}
+        self.sequences_nt = {}
         self.complete_seqs_nt = {}
         self.complete_seqs_aa = {}
 
@@ -143,8 +144,8 @@ class TranscriptomeAnalysisProkaryotes(
     def six_frame_translation(record):
         """
         Gets the sixframe translation for the provided sequence
-        :param seq: the sequence to be translated
-        :type seq: str
+        :param record: the sequence record to be translated
+        :type record: SeqRecord
         :return: the six translated sequences
         :rtype: list
         """

@@ -4,14 +4,14 @@
 .. module:: BuscoAnalysis
    :synopsis: BuscoAnalysis implements general BUSCO analysis specifics
 .. versionadded:: 3.0.0
-.. versionchanged:: 5.0.0
+.. versionchanged:: 5.4.0
 
 Copyright (c) 2016-2022, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 """
 
 from abc import ABCMeta, abstractmethod
-from busco.BuscoConfig import BuscoConfig, BuscoConfigAuto
+from busco.BuscoConfig import BaseConfig, BuscoConfigAuto
 from busco.busco_tools.hmmer import HMMERRunner
 import os
 from busco.BuscoLogger import BuscoLogger
@@ -118,7 +118,8 @@ class BuscoAnalysis(metaclass=ABCMeta):
             "{}.tar.gz".format(self.hmmer_runner.output_folder)
         ):
             raise BuscoError(
-                "Restart mode incompatible with a previously compressed (--tar) run. Please decompress the HMMER results folder and try again."
+                "Restart mode incompatible with a previously compressed (--tar) run. Please decompress the HMMER "
+                "results folder and try again."
             )
         elif len(os.listdir(self.hmmer_runner.results_dir)) > 0:
             raise BuscoError(
@@ -135,6 +136,7 @@ class BuscoAnalysis(metaclass=ABCMeta):
         self.hmmer_runner.consolidate_busco_lists()
         output = self.hmmer_runner.create_output_content()
         self.hmmer_runner.write_hmmer_results(output)
+        self.hmmer_runner.record_results()
         self.hmmer_runner.produce_hmmer_summary()
         return
 
@@ -149,7 +151,6 @@ class BuscoAnalysis(metaclass=ABCMeta):
         Check the input dataset for hmm profiles, both files and folder are available
         Note: score and length cutoffs are checked when read by hmmer_runner: see _load_scores and _load_lengths
         Note: dataset.cfg file is not mandatory for offline mode
-        # todo: implement a check for dataset.cfg file if not using offline mode
 
         :raises BuscoError: if the dataset is missing files or folders
         """
@@ -198,7 +199,7 @@ class BuscoAnalysis(metaclass=ABCMeta):
                         self._check_fasta_header(line)
                         self._check_seq_uniqueness(line)
         except UnicodeDecodeError as ude:
-            raise BuscoError(ude.msg)
+            raise BuscoError(ude.__str__())
         return
 
     def _check_seq_uniqueness(self, line):
@@ -217,7 +218,7 @@ class BuscoAnalysis(metaclass=ABCMeta):
         :type header: str
         :raises BuscoError: if a problematic character is found
         """
-        for char in BuscoConfig.FORBIDDEN_HEADER_CHARS:
+        for char in BaseConfig.FORBIDDEN_HEADER_CHARS:
             if char in header:
                 raise BuscoError(
                     'The character "%s" is present in the fasta header %s, '
@@ -225,7 +226,7 @@ class BuscoAnalysis(metaclass=ABCMeta):
                     "input file." % (char, header.strip())
                 )
 
-        for char in BuscoConfig.FORBIDDEN_HEADER_CHARS_BEFORE_SPLIT:
+        for char in BaseConfig.FORBIDDEN_HEADER_CHARS_BEFORE_SPLIT:
             if char in header.split()[0]:
                 raise BuscoError(
                     'The character "%s" is present in the fasta header %s, '
@@ -289,7 +290,8 @@ class BuscoAnalysis(metaclass=ABCMeta):
     def reset(self):
         if (
             self.hmmer_runner
-        ):  # If final run has already been run, then the hmmer_runner object in the final runner object will still be set to None
+        ):  # If final run has already been run, then the hmmer_runner object in the final runner object will still
+            # be set to None
             self.hmmer_runner.reset()
 
     @property

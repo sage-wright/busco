@@ -5,7 +5,7 @@
    :synopsis: the interface to OS enables to run executables / scripts
    in external processes
 .. versionadded:: 3.0.0
-.. versionchanged:: 4.0.0
+.. versionchanged:: 5.4.0
 
 Copyright (c) 2016-2022, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
@@ -88,18 +88,6 @@ class Job(Process):
             cnt.value += 1
 
 
-class ToolException(Exception):
-    """
-    Module-specific exception
-    """
-
-    def __init__(self, value):
-        self.value = value
-
-    def __str__(self):
-        return self.value
-
-
 class Tool(metaclass=ABCMeta):
     """
     Collection of utility methods used by all tools
@@ -110,14 +98,11 @@ class Tool(metaclass=ABCMeta):
     def __init__(self):
         """
         Initialize job list for a tool
-        :param name: the name of the tool to execute
-        :type name: str
-        :param config: initialized instance of ConfigParser
-        :type config: configparser.ConfigParser
         """
         if self.name == "augustus":
             self.kwargs = {"augustus_out": True}
-            self.timeout = 3600  # Possibly no longer necessary from 5.2.0 with the new logging system in place, but no harm to leave it here
+            self.timeout = 3600  # Possibly no longer necessary from 5.2.0 with the new logging system in place,
+            # but no harm to leave it here
         else:
             self.kwargs = {}
             self.timeout = None
@@ -130,7 +115,7 @@ class Tool(metaclass=ABCMeta):
         self.cwd = os.getcwd()
 
     @abstractmethod
-    def configure_job(self):
+    def configure_job(self, *args):
         pass
 
     @abstractmethod
@@ -205,7 +190,8 @@ class Tool(metaclass=ABCMeta):
     def run_job(self, args):
         args = (
             (args,) if isinstance(args, str) else tuple(args or (args,))
-        )  # Ensure args are tuples that can be unpacked. If no args, args=None, which is falsy, and this evaluates to (None,)
+        )  # Ensure args are tuples that can be unpacked. If no args, args=None, which is falsy,
+        # and this evaluates to (None,)
         job = self.configure_job(*args)
         job.run()
         self.nb_done = cnt.value

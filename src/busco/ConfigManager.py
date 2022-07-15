@@ -4,7 +4,7 @@
 .. module:: ConfigManager
    :synopsis: manage setup for BUSCO run configuration
 .. versionadded:: 3.0.0
-.. versionchanged:: 5.0.0
+.. versionchanged:: 5.4.0
 
 Copyright (c) 2016-2022, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
@@ -50,7 +50,7 @@ class BuscoConfigManager:
         return self.config_file
 
     @log("Configuring BUSCO with {}", logger, attr_name="config_file")
-    def load_busco_config_main(self, *args):
+    def load_busco_config_main(self):
         self.config_main = BuscoConfigMain(self.config_file, self.params)
         self.config_main.configure()
         self.config_main.validate()

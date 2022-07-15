@@ -173,16 +173,31 @@ class MetaeukRunner(BaseRunner):
         self.pred_protein_seqs_modified = None
         self.incomplete_buscos = None
         self.sequences_aa = {}
-        self.init_checkpoint_file()
+        self.sequences_nt = {}
 
         self.pred_protein_files = []
         self.pred_protein_mod_files = []
+        self.codon_files = []
+        self.codon_file_modified = None
+        self.codon_mod_files = []
         self.headers_files = []
+        self.gff_file = None
+        self.gff_files = []
         self.combined_pred_protein_seqs = os.path.join(
             self._output_folder, "combined_pred_proteins.fas"
         )
+        self.combined_nucleotides_seqs = os.path.join(
+            self._output_folder, "combined_nucl_seqs.fas"
+        )
+        self.refseq_db_rerun = None
+        self._output_basename = None
+        self.refseq_db = None
+        self.min_exon_aa = None
+        self.max_overlap = None
+        self.min_intron = None
 
     def configure_runner(self, incomplete_buscos=None):
+        super().configure_runner()
         self.run_number += 1
         self.incomplete_buscos = incomplete_buscos
 
@@ -220,15 +235,23 @@ class MetaeukRunner(BaseRunner):
 
         self.headers_file = "{}.headersMap.tsv".format(self._output_basename)
         self.headers_files.append(self.headers_file)
+        self.gff_file = "{}.gff".format(self._output_basename)
+        self.gff_files.append(self.gff_file)
         self.codon_file = "{}.codon.fas".format(self._output_basename)
+        self.codon_files.append(self.codon_file)
+        self.codon_file_modified = ".modified.codon.fas".join(
+            self.codon_file.rsplit(".codon.fas", 1)
+        )
         self.pred_protein_seqs = "{}.fas".format(self._output_basename)
         self.pred_protein_files.append(self.pred_protein_seqs)
         self.pred_protein_seqs_modified = ".modified.fas".join(
             self.pred_protein_seqs.rsplit(".fas", 1)
         )
         self.pred_protein_mod_files.append(self.pred_protein_seqs_modified)
+        self.codon_mod_files.append(self.codon_file_modified)
 
-    def decompress_refseq_file(self, gzip_file):
+    @staticmethod
+    def decompress_refseq_file(gzip_file):
         unzipped_filename = gzip_file.split(".gz")[0]
         if not os.path.exists(unzipped_filename):
             with gzip.open(gzip_file, "rb") as compressed_file:
@@ -251,9 +274,15 @@ class MetaeukRunner(BaseRunner):
                 with open(run_result, "r") as f:
                     shutil.copyfileobj(f, combined_output)
 
+        with open(self.combined_nucleotides_seqs, "w") as combined_output_nucl:
+            for run_result_codons in self.codon_mod_files:
+                with open(run_result_codons, "r") as f:
+                    shutil.copyfileobj(f, combined_output_nucl)
+
         return
 
-    def records_to_df(self, records):
+    @staticmethod
+    def records_to_df(records):
         results = pd.DataFrame.from_records(
             records,
             columns=[
@@ -338,6 +367,12 @@ class MetaeukRunner(BaseRunner):
         pass
 
     def configure_job(self, *args):
+        self.logfile_path_out = self.logfile_path_out.replace(
+            "metaeuk_out.log", "metaeuk_run{}_out.log".format(self.run_number)
+        )
+        self.logfile_path_err = self.logfile_path_err.replace(
+            "metaeuk_err.log", "metaeuk_run{}_err.log".format(self.run_number)
+        )
 
         metaeuk_job = self.create_job()
         metaeuk_job.add_parameter("easy-predict")
@@ -359,14 +394,16 @@ class MetaeukRunner(BaseRunner):
         metaeuk_job.add_parameter(str(self.min_intron))
         metaeuk_job.add_parameter("--overlap")
         metaeuk_job.add_parameter(str(self.overlap))
-        if self.run_number > 1 and self.s_set == False:
+        if self.run_number > 1 and not self.s_set:
             metaeuk_job.add_parameter("-s")
             metaeuk_job.add_parameter("6")
+        elif self.run_number == 1 and not self.s_set:
+            metaeuk_job.add_parameter("-s")
+            metaeuk_job.add_parameter("4.5")
         for k, key in enumerate(self.param_keys):
             dashes = "-" if len(key) == 1 else "--"
             metaeuk_job.add_parameter("{}{}".format(dashes, key))
             metaeuk_job.add_parameter("{}".format(str(self.param_values[k])))
-
         return metaeuk_job
 
     def generate_job_args(self):
@@ -389,6 +426,8 @@ class MetaeukRunner(BaseRunner):
                 "Additional parameters for Metaeuk are {}: ".format(self.extra_params)
             )
             self.param_keys, self.param_values = self.parse_parameters()
+        else:
+            self.param_keys = self.param_values = []
 
         # self.cwd = self._output_folder
         self.total = 1
@@ -514,7 +553,7 @@ class MetaeukRunner(BaseRunner):
         C_acc = header_parts[1]
         strand = header_parts[2]
         bitscore = float(header_parts[3])
-        eval = float(header_parts[4])
+        evalue = float(header_parts[4])
         num_exons = int(header_parts[5])
         low_coord = int(header_parts[6])
         high_coord = int(header_parts[7])
@@ -561,7 +600,7 @@ class MetaeukRunner(BaseRunner):
             "C_acc": C_acc,
             "S": strand,
             "bitscore": bitscore,
-            "e-value": eval,
+            "e-value": evalue,
             "num_exons": num_exons,
             "low_coord": low_coord,
             "high_coord": high_coord,
@@ -575,17 +614,26 @@ class MetaeukRunner(BaseRunner):
         }
         return details
 
-    def edit_protein_file(self):
-        all_records = []
+    def edit_result_headers(self):
+        all_records_faa = []
+        all_records_fna = []
         all_headers = []
         try:
+            with open(self.codon_file, "rU") as f:
+                for record in SeqIO.parse(f, "fasta"):
+                    header_details = self.parse_header(record.id)
+                    record.id = header_details["gene_id"]
+                    record.name = header_details["gene_id"]
+                    record.description = header_details["gene_id"]
+                    all_records_fna.append(record)
+
             with open(self.pred_protein_seqs, "rU") as f:
                 for record in SeqIO.parse(f, "fasta"):
                     header_details = self.parse_header(record.id)
                     record.id = header_details["gene_id"]
                     record.name = header_details["gene_id"]
                     record.description = header_details["gene_id"]
-                    all_records.append(record)
+                    all_records_faa.append(record)
 
                     header_df_info = (
                         header_details["T_acc"].split("_")[0],
@@ -600,7 +648,7 @@ class MetaeukRunner(BaseRunner):
                     all_headers.append(header_df_info)
 
         except FileNotFoundError:
-            raise NoGenesError("Metaeuk")
+            raise NoRerunFile
 
         if all_headers:
             matches_df = self.records_to_df(all_headers)
@@ -616,14 +664,22 @@ class MetaeukRunner(BaseRunner):
                         ind_to_remove = match1.name
                     inds_to_remove.append(ind_to_remove)
 
-            filtered_records = [
-                i for j, i in enumerate(all_records) if j not in inds_to_remove
+            filtered_records_faa = [
+                i for j, i in enumerate(all_records_faa) if j not in inds_to_remove
             ]
-            for record in filtered_records:
+            filtered_records_fna = [
+                i for j, i in enumerate(all_records_fna) if j not in inds_to_remove
+            ]
+            for record in filtered_records_faa:
                 self.sequences_aa[record.id] = record
 
+            for record in filtered_records_fna:
+                self.sequences_nt[record.id] = record
+
             with open(self.pred_protein_seqs_modified, "w") as f_mod:
-                SeqIO.write(filtered_records, f_mod, "fasta")
+                SeqIO.write(filtered_records_faa, f_mod, "fasta")
+            with open(self.codon_file_modified, "w") as g_mod:
+                SeqIO.write(filtered_records_fna, g_mod, "fasta")
 
     def get_gene_details(self):
         self.gene_details = defaultdict(list)
@@ -649,6 +705,64 @@ class MetaeukRunner(BaseRunner):
                 raise BuscoError("*headersMap.tsv file could not be parsed.")
         except FileNotFoundError:
             raise NoRerunFile
+
+    def write_gff_files(self, sc_folder, mc_folder, frag_folder):
+        with open(self.gff_file, "r") as gf:
+            lines = gf.readlines()
+
+        id_pattern = re.compile(r".*Target_ID=(.*?)[_;]")
+        current_busco = ""
+        f = None
+
+        sc_busco_ids = set([s.split(".f")[0] for s in os.listdir(sc_folder)])
+        mc_busco_ids = set([s.split(".f")[0] for s in os.listdir(mc_folder)])
+        frag_busco_ids = set([s.split(".f")[0] for s in os.listdir(frag_folder)])
+        unused_busco_ids = set()
+        used_busco_ids = (
+            set()
+        )  # Needed to track which BUSCOs are used on the rerun vs initial run
+
+        for line in lines:
+            m = id_pattern.match(line)
+            if m:
+                busco_id = m.group(1)
+                if busco_id in unused_busco_ids:
+                    continue
+                elif busco_id in sc_busco_ids:
+                    output_folder = sc_folder
+                elif busco_id in mc_busco_ids:
+                    output_folder = mc_folder
+                elif busco_id in frag_busco_ids:
+                    output_folder = frag_folder
+                else:
+                    unused_busco_ids.add(busco_id)
+                    continue
+
+                if busco_id != current_busco:
+                    if f:
+                        if not f.closed:
+                            f.close()
+                    gff_filename = "{}.gff".format(
+                        os.path.join(output_folder, busco_id)
+                    )
+
+                    if busco_id not in used_busco_ids and os.path.exists(
+                        gff_filename
+                    ):  # don't overwrite the result from the rerun with the inital run GFF file
+                        unused_busco_ids.add(busco_id)
+                        current_busco = busco_id
+                        continue
+
+                    else:
+                        f = open(gff_filename, "a")
+                        # I avoided using a context manager for the file IO to avoid multiple file open/close
+                        # operations and keep a single pass through the large GFF file. Efficiency!
+                        current_busco = busco_id
+                        used_busco_ids.add(busco_id)
+                f.write(line)
+        if f:
+            if not f.closed:
+                f.close()
 
     def reset(self):
         super().reset()

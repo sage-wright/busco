@@ -15,13 +15,15 @@ from busco.BuscoConfig import BuscoConfigMain
 from busco.busco_tools.base import NoGenesError, BaseRunner
 from busco.BuscoLogger import LogDecorator as log
 from configparser import NoOptionError
-from busco.busco_tools.Toolset import ToolException
+from busco.busco_tools.base import ToolException
+import busco
 import os
 import sys
 import shutil
 import time
 import traceback
 from collections import defaultdict
+import json
 
 
 logger = BuscoLogger.get_logger(__name__)
@@ -30,6 +32,12 @@ logger = BuscoLogger.get_logger(__name__)
 class SingleRunner:
 
     all_runners = []
+    summary = {
+        "parameters": {},
+        "lineage_dataset": {},
+        "versions": {},
+        "results": {},
+    }
 
     def __init__(self, config_manager):
         self.start_time = time.time()
@@ -54,6 +62,7 @@ class SingleRunner:
         self.lineage_dataset = self.config.get(
             "busco_run", "lineage_dataset"
         )  # full path
+        self.config.load_dataset(self.lineage_dataset)
 
         return
 
@@ -76,11 +85,20 @@ class SingleRunner:
             asl.reset()
         return lineage_dataset, runner, parent_domain
 
+    def compile_summary(self):
+        for option in self.config.items("busco_run"):
+            type(self).summary["parameters"][option[0]] = option[1]
+
+        type(self).summary["versions"] = self.runner.analysis.hmmer_runner.tool_versions
+        type(self).summary["versions"]["busco"] = busco.__version__
+
+        type(self).summary["results"] = self.runner.all_results
+
     @staticmethod
     def log_error(err):
         logger.error(err)
         logger.debug(err, exc_info=True)
-        logger.error("BUSCO analysis failed !")
+        logger.error("BUSCO analysis failed!")
         logger.error(
             "Check the logs, read the user guide (https://busco.ezlab.org/busco_userguide.html), "
             "and check the BUSCO issue board on https://gitlab.com/ezlab/busco/issues\n"
@@ -96,7 +114,6 @@ class SingleRunner:
     def run(self):
         try:
             self.get_lineage()
-            self.config.load_dataset(self.lineage_dataset)
 
             lineage_basename = os.path.basename(
                 self.config.get("busco_run", "lineage_dataset")
@@ -118,11 +135,14 @@ class SingleRunner:
                         )
                         and os.path.exists(lineage_results_folder)
                     )
+                    or (self.config.get("busco_run", "domain") == "viruses")
                 )
             ):
-                # It is possible that the  lineages ("mollicutes", "mycoplasmatales", "entomoplasmatales") were arrived at either by the Prodigal genetic code shortcut
-                # or by BuscoPlacer. If the former, the run will have already been completed. If the latter it still needs
-                # to be done.
+                # It is possible that the  lineages ("mollicutes", "mycoplasmatales", "entomoplasmatales") were
+                # arrived at either by the Prodigal genetic code shortcut or by BuscoPlacer. If the former, the run
+                # will have already been completed. If the latter it still needs to be done.
+                # If the auto-lineage selected dataset is from the virus pipeline, the run has also already been
+                # completed.
 
                 self.runner = AnalysisRunner(self.config)
 
@@ -140,6 +160,7 @@ class SingleRunner:
 
             if self.config.getboolean("busco_run", "tar"):
                 self.compress_folders()
+            self.compile_summary()
             self.runner.finish(time.time() - self.start_time)
 
         except BuscoError:
@@ -148,15 +169,14 @@ class SingleRunner:
             raise
 
         except ToolException as e:
-            logger.error(e)
-            raise BatchFatalError(e)
+            raise BatchFatalError(e.value)
 
         except KeyboardInterrupt:
             raise BatchFatalError(
                 "A signal was sent to kill the process. \nBUSCO analysis failed !"
             )
 
-        except BaseException as e:
+        except BaseException:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             logger.critical(
                 "Unhandled exception occurred:\n{}\n".format(
@@ -165,7 +185,7 @@ class SingleRunner:
                     )
                 )
             )
-            raise BatchFatalError(e)
+            raise BatchFatalError(str(exc_value))
 
     def compress_folders(self):
         for runner in type(self).all_runners:
@@ -240,7 +260,7 @@ class BatchRunner:
                 type(self).batch_results.append(run_summary)
 
             except NoOptionError as noe:
-                raise BatchFatalError(noe)
+                raise BatchFatalError(noe.message)
 
             except BatchFatalError:
                 raise
@@ -248,13 +268,13 @@ class BatchRunner:
             except BuscoError as be:
                 if "did not recognize any genes" in be.value:
                     type(self).batch_results.append(
-                        "{}\tNo genes found\t\t\t\t\t\t\t\t\t\n".format(
+                        "{}\tNo genes found\t\t\t\t\t\t\t\t\t\t\t\t\t\n".format(
                             os.path.basename(input_file)
                         )
                     )
                 else:
                     type(self).batch_results.append(
-                        "{}\tRun failed; check logs\t\t\t\t\t\t\t\t\t\n".format(
+                        "{}\tRun failed; check logs\t\t\t\t\t\t\t\t\t\t\t\t\t\n".format(
                             os.path.basename(input_file)
                         )
                     )
@@ -268,7 +288,7 @@ class BatchRunner:
         try:
             self.write_batch_summary()
         except NoOptionError as noe:
-            raise BatchFatalError(noe)
+            raise BatchFatalError(noe.message)
 
     def write_batch_summary(self):
         summary_file = os.path.join(
@@ -279,13 +299,24 @@ class BatchRunner:
         # for inp, res in type(self).batch_results.items():
         #     if
         with open(summary_file, "w") as f:
+            if "genome" in self.config.get("busco_run", "mode"):
+                metrics_header = (
+                    "\tScaffold N50\tContigs N50\tPercent gaps\tNumber of scaffolds"
+                )
+            else:
+                metrics_header = ""
             if self.config.getboolean("busco_run", "auto-lineage"):
                 f.write(
-                    "Input_file\tDataset\tComplete\tSingle\tDuplicated\tFragmented\tMissing\tn_markers\tScores_archaea_odb10\tScores_bacteria_odb10\tScores_eukaryota_odb10\n"
+                    "Input_file\tDataset\tComplete\tSingle\tDuplicated\tFragmented\tMissing\tn_markers\t"
+                    "Scores_archaea_odb10\tScores_bacteria_odb10\tScores_eukaryota_odb10{}\n".format(
+                        metrics_header
+                    )
                 )
             else:
                 f.write(
-                    "Input_file\tDataset\tComplete\tSingle\tDuplicated\tFragmented\tMissing\tn_markers\n"
+                    "Input_file\tDataset\tComplete\tSingle\tDuplicated\tFragmented\tMissing\tn_markers{}\n".format(
+                        metrics_header
+                    )
                 )
             for line in type(self).batch_results:
                 f.write(line)
@@ -313,8 +344,12 @@ class AnalysisRunner:
         setattr(BaseRunner, "config", config)
         setattr(BuscoAnalysis, "config", config)
 
+        self.input_file = self.config.get("busco_run", "in")
         self.mode = self.config.get("busco_run", "mode")
         self.domain = self.config.get("busco_run", "domain")
+        self.lineage_basename = os.path.basename(
+            self.config.get("busco_run", "lineage_dataset")
+        )
 
         if self.mode == "genome":
             if self.domain in ["prokaryota", "viruses"]:
@@ -333,13 +368,26 @@ class AnalysisRunner:
             elif self.domain == "eukaryota":
                 self.mode = "euk_tran"
             elif self.domain == "viruses":
-                self.mode = "prok_genome"  # Suggested by Mose - Prodigal may perform better on viruses than BLAST + HMMER.
+                self.mode = "prok_genome"  # Suggested by Mose - Prodigal may perform better on viruses
+                # than BLAST + HMMER.
             else:
                 raise BatchFatalError("Unrecognized mode {}".format(self.mode))
         analysis_type = type(self).mode_dict[self.mode]
         self.analysis = analysis_type()
+        self.summary = {
+            "parameters": {},
+            "lineage_dataset": {},
+            "versions": {},
+            "results": {},
+        }
         self.prok_fail_count = (
             0  # Needed to check if both bacteria and archaea return no genes.
+        )
+        self.short_summary_file = os.path.join(
+            self.analysis.run_folder, "short_summary.txt"
+        )
+        self.short_summary_file_json = os.path.join(
+            self.analysis.run_folder, "short_summary.json"
         )
         self.cleaned_up = False
 
@@ -349,39 +397,80 @@ class AnalysisRunner:
         cls.results_datasets = []
         cls.all_results = defaultdict(dict)
 
-    def save_results(self):
-        lineage_basename = os.path.basename(
-            self.config.get("busco_run", "lineage_dataset")
-        )
+    def save_results(self, exception_raised=False):
+
         if not self.config.getboolean("busco_run", "auto-lineage"):
-            type(self).selected_dataset = lineage_basename
-        self.final_results[
-            lineage_basename
-        ] = self.analysis.hmmer_runner.hmmer_results_lines
-        self.all_results[lineage_basename][
-            "one_line_summary"
-        ] = self.analysis.hmmer_runner.one_line_summary_raw
-        self.all_results[lineage_basename][
-            "Complete"
-        ] = self.analysis.hmmer_runner.complete_percent
-        self.all_results[lineage_basename][
-            "Single copy"
-        ] = self.analysis.hmmer_runner.s_percent
-        self.all_results[lineage_basename][
-            "Multi copy"
-        ] = self.analysis.hmmer_runner.d_percent
-        self.all_results[lineage_basename][
-            "Fragmented"
-        ] = self.analysis.hmmer_runner.f_percent
-        self.all_results[lineage_basename][
-            "Missing"
-        ] = self.analysis.hmmer_runner.missing_percent
-        self.all_results[lineage_basename][
-            "n_markers"
-        ] = self.analysis.hmmer_runner.total_buscos
-        self.all_results[lineage_basename]["domain"] = self.analysis.domain
-        self.save_parent_dataset(lineage_basename)
-        self.results_datasets.append(os.path.basename(lineage_basename))
+            type(self).selected_dataset = self.lineage_basename
+        try:
+            self.final_results[
+                self.lineage_basename
+            ] = self.analysis.hmmer_runner.hmmer_results_lines
+            self.all_results[self.lineage_basename][
+                "one_line_summary"
+            ] = self.analysis.hmmer_runner.one_line_summary_raw.strip()
+            self.all_results[self.lineage_basename][
+                "Complete"
+            ] = self.analysis.hmmer_runner.complete_percent
+            self.all_results[self.lineage_basename][
+                "Single copy"
+            ] = self.analysis.hmmer_runner.s_percent
+            self.all_results[self.lineage_basename][
+                "Multi copy"
+            ] = self.analysis.hmmer_runner.d_percent
+            self.all_results[self.lineage_basename][
+                "Fragmented"
+            ] = self.analysis.hmmer_runner.f_percent
+            self.all_results[self.lineage_basename][
+                "Missing"
+            ] = self.analysis.hmmer_runner.missing_percent
+            self.all_results[self.lineage_basename][
+                "n_markers"
+            ] = self.analysis.hmmer_runner.total_buscos
+            self.all_results[self.lineage_basename]["domain"] = self.analysis.domain
+            if "genome" in self.mode:
+                self.all_results[self.lineage_basename].update(
+                    self.analysis.bbtools_runner.metrics
+                )
+            self.save_parent_dataset(self.lineage_basename)
+            self.results_datasets.append(os.path.basename(self.lineage_basename))
+            self.compile_summary()
+            self.write_summary_files()
+        except (AttributeError, TypeError):
+            if exception_raised:
+                pass
+            else:
+                raise BuscoError("Something went wrong. Results not recorded.")
+
+    def compile_summary(self):
+        for option in self.config.items("busco_run"):
+            if option[0] in [
+                "creation_date",
+                "name",
+                "number_of_buscos",
+                "number_of_species",
+            ]:
+                self.summary["lineage_dataset"][option[0]] = option[1]
+            else:
+                self.summary["parameters"][option[0]] = option[1]
+        if "genome" in self.mode:
+            if self.config.get("busco_run", "domain") in ["prokaryota", "viruses"]:
+                gene_predictor = "prodigal"
+            elif self.config.getboolean("busco_run", "use_augustus"):
+                gene_predictor = "augustus"
+            else:
+                gene_predictor = "metaeuk"
+            self.summary["parameters"]["gene_predictor"] = gene_predictor
+
+        self.summary["versions"] = self.analysis.hmmer_runner.tool_versions
+        self.summary["versions"]["busco"] = busco.__version__
+
+        self.summary["results"] = type(self).all_results[self.lineage_basename]
+        if (
+            self.config.getboolean("busco_run", "auto-lineage")
+            and isinstance(self.config, BuscoConfigMain)
+            and hasattr(self.config, "placement_files")
+        ):
+            self.summary["placement_file_versions"] = self.config.placement_files
 
     def save_parent_dataset(self, lineage_basename):
         try:
@@ -416,6 +505,7 @@ class AnalysisRunner:
         self.save_parent_dataset(lineage_dataset)
 
     def run_analysis(self, callback=(lambda *args: None)):
+        exception_raised = True
         try:
             self.analysis.run_analysis()
             s_buscos = self.analysis.hmmer_runner.single_copy
@@ -457,14 +547,78 @@ class AnalysisRunner:
         except (BuscoError, BatchFatalError):
             self.cleanup()
             raise
+        else:
+            exception_raised = False
 
         finally:
-            self.save_results()
+            self.save_results(exception_raised)
         return callback(s_buscos, d_buscos, f_buscos, s_percent, d_percent, f_percent)
 
     def cleanup(self):
         self.analysis.cleanup()
         self.cleaned_up = True
+
+    def report_tool_versions(self):
+        lines = ["\nDependencies and versions:"]
+        for key, value in self.analysis.hmmer_runner.tool_versions.items():
+            lines.append("\t{}: {}".format(key, value))
+        return lines
+
+    def write_summary_files(self):
+        self.write_txt_summary()
+        self.write_json_summary()
+
+    def write_json_summary(self):
+
+        with open(self.short_summary_file_json, "w") as summary_file_json:
+            json.dump(self.summary, summary_file_json, indent=4)
+
+        return
+
+    def write_txt_summary(self):
+        with open(self.short_summary_file, "w") as summary_file:
+
+            self.analysis.hmmer_runner.write_output_header(
+                summary_file, no_table_header=True
+            )
+            summary_file.write(
+                "# Summarized benchmarking in BUSCO notation for file {}\n"
+                "# BUSCO was run in mode: {}\n".format(self.input_file, self.mode)
+            )
+            if "genome" in self.mode:
+                summary_file.write(
+                    "# Gene predictor used: {}\n".format(
+                        self.summary["parameters"]["gene_predictor"]
+                    )
+                )
+            summary_file.write("\n")
+
+            for line in self.analysis.hmmer_runner.hmmer_results_lines:
+                summary_file.write("\t{}".format(line))
+
+            if "genome" in self.mode:
+                summary_file.write("\nAssembly Statistics:\n")
+                for key, val in self.analysis.bbtools_runner.metrics.items():
+                    if "N50" in key:
+                        if int(val) > 1000000:
+                            val = "{} MB".format(int(val) // 1000000)
+                        elif int(val) > 1000:
+                            val = "{} KB".format(int(val) // 1000)
+                    summary_file.write("\t{}\t{}\n".format(val, key))
+                summary_file.write("\n")
+
+            tool_versions_lines = self.report_tool_versions()
+            for line in tool_versions_lines:
+                summary_file.write(line + "\n")
+
+            if (
+                self.config.getboolean("busco_run", "auto-lineage")
+                and isinstance(self.config, BuscoConfigMain)
+                and hasattr(self.config, "placement_files")
+            ):
+                summary_file.write("\nPlacement file versions:\n")
+                for placement_file in self.config.placement_files:
+                    summary_file.write("\t{}\n".format(placement_file))
 
     def format_results(self):
         framed_output = []
@@ -512,6 +666,17 @@ class AnalysisRunner:
         missing = type(self).all_results[dataset]["Missing"]
         n_markers = type(self).all_results[dataset]["n_markers"]
 
+        if "genome" in self.mode:
+            scaffold_n50 = self.analysis.bbtools_runner.metrics["Scaffold N50"]
+            contigs_n50 = self.analysis.bbtools_runner.metrics["Contigs N50"]
+            percent_gaps = self.analysis.bbtools_runner.metrics["Percent gaps"]
+            num_scaffolds = self.analysis.bbtools_runner.metrics["Number of scaffolds"]
+        else:
+            scaffold_n50 = ""
+            contigs_n50 = ""
+            percent_gaps = ""
+            num_scaffolds = ""
+
         if self.config.getboolean("busco_run", "auto-lineage"):
             try:
                 scores_arch = (
@@ -533,11 +698,14 @@ class AnalysisRunner:
                 )
             except KeyError:
                 scores_euk = "Not run"
+
+            parent_lineage_scores = "\t{}\t{}\t{}".format(
+                scores_arch, scores_bact, scores_euk
+            )
         else:
-            scores_arch = ""
-            scores_bact = ""
-            scores_euk = ""
-        summary_line = "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(
+            parent_lineage_scores = ""
+
+        summary_line = "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}{}\t{}\t{}\t{}\t{}\n".format(
             input_file,
             dataset,
             complete,
@@ -546,9 +714,11 @@ class AnalysisRunner:
             fragmented,
             missing,
             n_markers,
-            scores_arch,
-            scores_bact,
-            scores_euk,
+            parent_lineage_scores,
+            scaffold_n50,
+            contigs_n50,
+            percent_gaps,
+            num_scaffolds,
         )
         return summary_line
 
@@ -622,7 +792,8 @@ class AnalysisRunner:
         )
         return one_line_summary
 
-    def copy_summary_file(self, from_dir, main_dir, domain_dir, tag, ext):
+    @staticmethod
+    def copy_summary_file(from_dir, main_dir, domain_dir, tag, ext):
         shutil.copyfile(
             os.path.join(from_dir, "short_summary.{}".format(ext)),
             os.path.join(

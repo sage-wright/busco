@@ -9,7 +9,7 @@ import numpy as np
 logger = BuscoLogger.get_logger(__name__)
 
 
-class NoGenesError(BuscoError):
+class EmptyResultsError(BuscoError):
 
     def __init__(self):
         super().__init__("No genes were recognized by BUSCO. Please check the content of your input file.")
@@ -28,8 +28,8 @@ class AutoSelectLineage:
          "This process runs BUSCO on the generic lineage datasets for the domains archaea, bacteria and eukaryota. "
          "Once the optimal domain is selected, BUSCO automatically attempts to find the most appropriate BUSCO dataset "
          "to use based on phylogenetic placement.\n\t"
-         "--auto-lineage-euk and --auto-lineage-prok are also available if you know your input assembly is, or is not, an"
-         " eukaryote. See the user guide for more information.\n\tA reminder: Busco evaluations are valid when an "
+         "--auto-lineage-euk and --auto-lineage-prok are also available if you know your input assembly is, or is not, "
+         "an eukaryote. See the user guide for more information.\n\tA reminder: Busco evaluations are valid when an "
          "appropriate dataset is used, i.e., the dataset belongs to the lineage of the species to test. "
          "Because of overlapping markers/spurious matches among domains, busco matches in another domain do not "
          "necessarily mean that your genome/proteome contains sequences from this domain. "
@@ -54,6 +54,7 @@ class AutoSelectLineage:
         self.best_match_lineage_dataset = None
         self.current_lineage = None
         self.virus_pipeline = False
+        self.selected_runner = None
 
     def record_results(self, s_buscos, d_buscos, f_buscos, s_percent, d_percent, f_percent):
         """
@@ -62,6 +63,9 @@ class AutoSelectLineage:
         :param float s_buscos: Number of Single copy BUSCOs present in data
         :param float d_buscos: Number of Double copy BUSCOs present in data
         :param float f_buscos: Number of Fragmented BUSCOs present in data
+        :param float s_percent: Percentage of Single copy BUSCOs present in data
+        :param float d_percent: Percentage of Double copy BUSCOs present in data
+        :param float f_percent: Percentage of Fragmented BUSCOs present in data
         :return: None
         """
         self.s_buscos.append(s_buscos)
@@ -92,7 +96,7 @@ class AutoSelectLineage:
         if (len(self.selected_runner.analysis.hmmer_runner.single_copy_buscos) ==
                 len(self.selected_runner.analysis.hmmer_runner.multi_copy_buscos) ==
                 len(self.selected_runner.analysis.hmmer_runner.fragmented_buscos) == 0):
-            raise NoGenesError
+            raise EmptyResultsError
 
         logger.info("{} selected\n".format(os.path.basename(self.best_match_lineage_dataset)))
         return
@@ -111,7 +115,6 @@ class AutoSelectLineage:
         self.run_lineages_list(lineages_to_check)
         return
 
-
     def run_lineages_list(self, lineages_list):
         root_runners = []
         for l in lineages_list:
@@ -123,7 +126,8 @@ class AutoSelectLineage:
             type(self).runners.append(busco_run)  # Save all root runs so they can be recalled if chosen
         return root_runners
 
-    def get_max_ind(self, arr):
+    @staticmethod
+    def get_max_ind(arr):
         """
         Return maximum ind(s) of array. If max value appears twice, two indices are returned.
         :param arr:
@@ -146,9 +150,11 @@ class AutoSelectLineage:
         """
         self.collate_results(runners)
 
-        max_ind = self.get_max_ind(np.array(self.s_percents) + np.array(self.d_percents)) if use_percent else self.get_max_ind(np.array(self.s_buscos) + np.array(self.d_buscos))
+        max_ind = self.get_max_ind(np.array(self.s_percents) + np.array(self.d_percents)) if use_percent \
+            else self.get_max_ind(np.array(self.s_buscos) + np.array(self.d_buscos))
         if len(max_ind) > 1:
-            max_ind2 = self.get_max_ind(np.array(self.f_percents)[max_ind]) if use_percent else self.get_max_ind(np.array(self.f_buscos)[max_ind])
+            max_ind2 = self.get_max_ind(np.array(self.f_percents)[max_ind]) if use_percent \
+                else self.get_max_ind(np.array(self.f_buscos)[max_ind])
             max_ind = max_ind[max_ind2]
             if len(max_ind) > 1:
                 if ((self.s_buscos[max_ind[0]] == 0.0)
@@ -159,7 +165,8 @@ class AutoSelectLineage:
                     max_ind3 = self.get_max_ind(np.array(self.s_percents)[max_ind])
                     max_ind = max_ind[max_ind3]
                     if len(max_ind) > 1:
-                        logger.warning("Two lineage runs scored exactly the same. Proceeding with the first.")  # I don't expect this error message will ever be used.
+                        logger.warning("Two lineage runs scored exactly the same. Proceeding with the first.")
+                        # I don't expect this error message will ever be used.
                         max_ind = max_ind[0]
 
         return int(max_ind)
@@ -189,13 +196,13 @@ class AutoSelectLineage:
         self.cleanup_disused_runs(runners)
         return
 
-    def cleanup_disused_runs(self, disused_runners):
+    @staticmethod
+    def cleanup_disused_runs(disused_runners):
         for runner in disused_runners:
             if not runner.cleaned_up:
                 runner.cleanup()
 
-
-    def get_lineage_dataset(self):  # todo: rethink structure after BuscoPlacer is finalized
+    def get_lineage_dataset(self):
         """
         Run the output of the auto selection through BuscoPlacer to obtain a more precise lineage dataset.
         :return str lineage_dataset: Local path to the optimal lineage dataset.
@@ -211,7 +218,8 @@ class AutoSelectLineage:
             use_percent = self.selected_runner.mode == "proteins"
             self.check_mollicutes(use_percent)
             if os.path.basename(self.selected_runner.config.get("busco_run", "lineage_dataset")).startswith("bacteria"):
-                logger.info("Bacteria domain is a better match than the mollicutes subclade. Continuing to tree placement.")
+                logger.info("Bacteria domain is a better match than the mollicutes subclade. "
+                            "Continuing to tree placement.")
                 self.run_busco_placer()
             else:
                 logger.info("Mollicutes dataset is a better match for your data. Testing subclades...")
@@ -239,7 +247,7 @@ class AutoSelectLineage:
         self.get_best_match_lineage(runners, use_percent=use_percent, mollicutes_pathway=True)
         return
 
-    def run_busco_placer(self):  # todo: revisit structure of this method after cleaning BuscoPlacer
+    def run_busco_placer(self):
         if "genome" in self.selected_runner.mode:
             if self.selected_runner.domain == "prokaryota":
                 protein_seqs = self.selected_runner.analysis.prodigal_runner.output_faa
@@ -259,11 +267,14 @@ class AutoSelectLineage:
         else:
             protein_seqs = self.selected_runner.config.get("busco_run", "in")
         out_path = self.config.get("busco_run", "main_out")
-        run_folder = os.path.join(out_path, "auto_lineage", self.selected_runner.config.get("busco_run", "lineage_results_dir"))
+        run_folder = os.path.join(out_path, "auto_lineage",
+                                  self.selected_runner.config.get("busco_run", "lineage_results_dir"))
 
-        bp = BuscoPlacer(self.selected_runner.config, run_folder, protein_seqs, self.selected_runner.analysis.hmmer_runner.single_copy_buscos)
+        bp = BuscoPlacer(self.selected_runner.config, run_folder, protein_seqs,
+                         self.selected_runner.analysis.hmmer_runner.single_copy_buscos)
         dataset_details, placement_file_versions = bp.define_dataset()
-        self.config.placement_files = placement_file_versions  # Necessary to pass these filenames to the final run to be recorded.
+        self.config.placement_files = placement_file_versions
+        # Necessary to pass these filenames to the final run to be recorded.
         lineage, supporting_markers, placed_markers = dataset_details
         self.best_match_lineage_dataset = lineage  # basename
         self.selected_runner.config.set("busco_run", "domain_run_name", os.path.basename(

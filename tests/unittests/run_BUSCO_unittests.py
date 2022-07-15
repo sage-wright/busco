@@ -90,6 +90,7 @@ class TestParams(unittest.TestCase):
             "auto-lineage-euk": False,
             "auto-lineage-prok": False,
             "config_file": None,
+            "contig_break": None,
             "cpu": None,
             "evalue": None,
             "force": False,
@@ -117,6 +118,7 @@ class TestParams(unittest.TestCase):
             "update-data": False,
             "version": "==SUPPRESS==",
             "tar": False,
+            "scaffold_composition": False,
         }
         self.assertDictEqual(params, correct_parse)
 
@@ -148,6 +150,7 @@ class TestParams(unittest.TestCase):
             "auto-lineage-euk": False,
             "auto-lineage-prok": False,
             "config_file": None,
+            "contig_break": None,
             "cpu": cpus,
             "evalue": evalue,
             "force": True,
@@ -162,6 +165,7 @@ class TestParams(unittest.TestCase):
             "out_path": None,
             "quiet": True,
             "restart": True,
+            "scaffold_composition": False,
             "metaeuk_parameters": None,
             "metaeuk_rerun_parameters": None,
             "use_augustus": False,
@@ -186,6 +190,7 @@ class TestParams(unittest.TestCase):
         cpus = 10
         evalue = 0.1
         limit = 1
+        contig_break = 5
         augustus_parameters = "augustus_parameters"
         augustus_species = "augustus_species"
         config = "config"
@@ -207,6 +212,7 @@ class TestParams(unittest.TestCase):
             "--augustus_parameters": augustus_parameters,
             "--augustus_species": augustus_species,
             "--config": config,
+            "--contig_break": contig_break,
             "--out_path": out_path,
             "--download_path": download_path,
             "--datasets_version": datasets_version,
@@ -226,6 +232,7 @@ class TestParams(unittest.TestCase):
             "--update-data",
             "--offline",
             "--tar",
+            "--scaffold_composition",
         ]
         command_str = " ".join(
             [" ".join([key, str(value)]) for key, value in arg_values.items()]
@@ -246,6 +253,7 @@ class TestParams(unittest.TestCase):
             "auto-lineage-euk": True,
             "auto-lineage-prok": True,
             "config_file": config,
+            "contig_break": contig_break,
             "cpu": cpus,
             "evalue": evalue,
             "force": True,
@@ -265,6 +273,7 @@ class TestParams(unittest.TestCase):
             "update-data": True,
             "version": "==SUPPRESS==",
             "tar": True,
+            "scaffold_composition": True,
         }
         self.assertDictEqual(params, correct_parse)
 
@@ -318,47 +327,6 @@ class TestMaster(unittest.TestCase):
         self.maxDiff = None
         self.params = {}
         pass
-
-    @patch("busco.run_BUSCO.logger.info")
-    def test_log_warning_if_neither_lineage_nor_autolineage_specified(self, *args):
-        bm = run_BUSCO.BuscoMaster(self.params)
-        bm.config = Mock()
-        bm.config.check_lineage_present.return_value = False
-        bm.config.getboolean.side_effect = [False, False, False]
-        with self.assertLogs(run_BUSCO.logger, "WARNING"):
-            bm.harmonize_auto_lineage_settings()
-
-    @patch("busco.run_BUSCO.logger.info")
-    def test_config_updated_if_no_lineage(self, *args):
-        bm = run_BUSCO.BuscoMaster(self.params)
-        bm.config = Mock()
-        bm.config.check_lineage_present.return_value = False
-        calls = [call("busco_run", "auto-lineage", "True")]
-        bm.harmonize_auto_lineage_settings()
-        bm.config.set.assert_has_calls(calls, any_order=True)
-
-    @patch("busco.run_BUSCO.logger.info")
-    def test_config_updated_if_lineage_present(self, *args):
-        bm = run_BUSCO.BuscoMaster(self.params)
-        bm.config = Mock()
-        bm.config.check_lineage_present.return_value = True
-        bm.config.getboolean.side_effect = [False, False, False]
-        calls = [
-            call("busco_run", "auto-lineage", "False"),
-            call("busco_run", "auto-lineage-prok", "False"),
-            call("busco_run", "auto-lineage-euk", "False"),
-        ]
-        bm.harmonize_auto_lineage_settings()
-        bm.config.set.assert_has_calls(calls, any_order=True)
-
-    @patch("busco.run_BUSCO.logger.info")
-    def test_log_warning_if_both_lineage_and_autolineage_specified(self, *args):
-        bm = run_BUSCO.BuscoMaster(self.params)
-        bm.config = Mock()
-        bm.config.check_lineage_present.return_value = True
-        bm.config.getboolean.return_value = True
-        with self.assertLogs(run_BUSCO.logger, "WARNING"):
-            bm.harmonize_auto_lineage_settings()
 
     def tearDown(self):
         pass

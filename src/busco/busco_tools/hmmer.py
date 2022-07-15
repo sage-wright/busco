@@ -1,17 +1,16 @@
 from busco.busco_tools.base import BaseRunner
 import os
 from collections import defaultdict
-import busco
 from busco.BuscoLogger import BuscoLogger
 from busco.BuscoLogger import LogDecorator as log
-from busco.BuscoConfig import BuscoConfig, BuscoConfigMain
+from busco.BuscoConfig import BaseConfig
 from Bio import SeqIO
 import csv
 import subprocess
 from busco.BuscoConfig import BuscoConfigAuto
 from busco.Exceptions import BatchFatalError, BuscoError
-import json
 import pandas as pd
+import busco
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -39,10 +38,7 @@ class HMMERRunner(BaseRunner):
         self.fragmented_sequences_folder = os.path.join(
             self.run_folder, "busco_sequences", "fragmented_busco_sequences"
         )
-        self.short_summary_file = os.path.join(self.run_folder, "short_summary.txt")
-        self.short_summary_file_json = os.path.join(
-            self.run_folder, "short_summary.json"
-        )
+
         self.cutoff_dict = {}
         self.single_copy_buscos = {}
         self.multi_copy_buscos = {}
@@ -96,10 +92,11 @@ class HMMERRunner(BaseRunner):
         self.missing_percent = 0
 
         self.hmmer_results_lines = None
-
-        self.init_checkpoint_file()
+        self._already_used_genes = None
+        self.missing_buscos = None
 
     def configure_runner(self, input_sequences, busco_ids, mode, gene_details):
+        super().configure_runner()
         self.run_number += 1
         self.input_sequences = input_sequences
         self.busco_ids = busco_ids
@@ -230,10 +227,10 @@ class HMMERRunner(BaseRunner):
         :raises BatchFatalError: if a Tool version is not supported
         """
         # check hmm version
-        if not self.version >= BuscoConfig.HMMER_VERSION:
+        if not self.version >= BaseConfig.HMMER_VERSION:
             raise BatchFatalError(
                 "HMMer version detected is not supported, please use HMMer v.{} +".format(
-                    BuscoConfig.HMMER_VERSION
+                    BaseConfig.HMMER_VERSION
                 )
             )
         return
@@ -338,9 +335,9 @@ class HMMERRunner(BaseRunner):
         """
         The HMMER gene matches are sorted into "complete", "v_large" and "fragmented" matches based on a comparison
         with the cutoff value specified in the dataset cutoff_scores file
-        :param matched_lengths: dict of (gene_id, total_matched_length) pairs
+        :param matched_record: dict of (gene_id, total_matched_length) pairs
         :param busco_query: BUSCO identifier
-        :type matched_lengths: dict
+        :type matched_record: dict
         :type busco_query: str
         :return: busco_complete, busco_vlarge, busco_fragment - three dictionaries of the form
         {gene_id: [{"bitscore": float, "length": int}, {...}, ...], ...}
@@ -395,19 +392,12 @@ class HMMERRunner(BaseRunner):
                 ]
             )
         elif self.run_number == 2:
-            hmmer_initial_run_files = [
-                os.path.join(self.initial_results_dir, f)
-                for f in os.listdir(self.initial_results_dir)
-                if not f.startswith(".")
-            ]
             hmmer_rerun_files = [
                 os.path.join(self.rerun_results_dir, f)
                 for f in os.listdir(self.rerun_results_dir)
                 if not f.startswith(".")
             ]
-            hmmer_results_files = sorted(
-                hmmer_rerun_files
-            )  # sorted(hmmer_initial_run_files + hmmer_rerun_files)
+            hmmer_results_files = sorted(hmmer_rerun_files)
         else:
             raise ValueError(
                 "HMMER should not be run more than twice in the same Run instance."
@@ -431,7 +421,8 @@ class HMMERRunner(BaseRunner):
 
         return
 
-    def remove_overlaps(self, matched_records):
+    @staticmethod
+    def remove_overlaps(matched_records):
         seq_ids = []
         start_coords = []
         end_coords = []
@@ -963,13 +954,13 @@ class HMMERRunner(BaseRunner):
 
         with open(os.path.join(self.run_folder, "full_table.tsv"), "w") as f_out:
 
-            self._write_output_header(f_out)
+            self.write_output_header(f_out)
 
             with open(
                 os.path.join(self.run_folder, "missing_busco_list.tsv"), "w"
             ) as miss_out:
 
-                self._write_output_header(miss_out, missing_list=True)
+                self.write_output_header(miss_out, missing_list=True)
 
                 missing_buscos_lines, missing_buscos = self._list_missing_buscos()
                 output_lines += missing_buscos_lines
@@ -988,48 +979,39 @@ class HMMERRunner(BaseRunner):
         return sorted_lines
 
     def produce_hmmer_summary(self):
-        self._get_busco_percentages()
 
         self.hmmer_results_lines.append("***** Results: *****\n\n")
-        self.one_line_summary_raw = "C:{}%[S:{}%,D:{}%],F:{}%,M:{}%,n:{}\t{}\n".format(
-            self.complete_percent,
-            self.s_percent,
-            self.d_percent,
-            self.f_percent,
-            self.missing_percent,
-            self.total_buscos,
-            "   ",
-        )
-        self.one_line_summary = "Results:\t{}".format(self.one_line_summary_raw)
-
-        json_summary = self.write_json_summary()
-
         self.hmmer_results_lines.append(self.one_line_summary_raw)
         self.hmmer_results_lines.append(
-            "{}\tComplete BUSCOs (C)\t\t\t{}\n".format(json_summary["C"], "   ")
+            "{}\tComplete BUSCOs (C)\t\t\t{}\n".format(
+                self.single_copy + self.multi_copy, "   "
+            )
         )
         self.hmmer_results_lines.append(
             "{}\tComplete and single-copy BUSCOs (S)\t{}\n".format(
-                json_summary["S"], "   "
+                self.single_copy, "   "
             )
         )
         self.hmmer_results_lines.append(
             "{}\tComplete and duplicated BUSCOs (D)\t{}\n".format(
-                json_summary["D"], "   "
+                self.multi_copy, "   "
             )
         )
         self.hmmer_results_lines.append(
-            "{}\tFragmented BUSCOs (F)\t\t\t{}\n".format(json_summary["F"], "   ")
+            "{}\tFragmented BUSCOs (F)\t\t\t{}\n".format(self.only_fragments, "   ")
         )
         self.hmmer_results_lines.append(
             "{}\tMissing BUSCOs (M)\t\t\t{}\n".format(
-                json_summary["M"],
+                self.total_buscos
+                - self.single_copy
+                - self.multi_copy
+                - self.only_fragments,
                 "   ",
             )
         )
         self.hmmer_results_lines.append(
             "{}\tTotal BUSCO groups searched\t\t{}\n".format(
-                json_summary["dataset_total_buscos"], "   "
+                self.dataset_nb_buscos, "   "
             )
         )
 
@@ -1041,75 +1023,48 @@ class HMMERRunner(BaseRunner):
         else:
             self._log_one_line_hmmer_summary()
 
-        with open(self.short_summary_file, "w") as summary_file:
-
-            self._write_output_header(summary_file, no_table_header=True)
-            summary_file.write(
-                "# Summarized benchmarking in BUSCO notation for file {}\n"
-                "# BUSCO was run in mode: {}\n".format(self.input_file, self.mode)
-            )
-            if self.mode == "genome":
-                summary_file.write(
-                    "# Gene predictor used: {}\n".format(json_summary["gene_predictor"])
-                )
-            summary_file.write("\n")
-
-            for line in self.hmmer_results_lines:
-                summary_file.write("\t{}".format(line))
-
-            tool_versions_lines = self.report_tool_versions()
-            for line in tool_versions_lines:
-                summary_file.write(line + "\n")
-
-            if (
-                self.config.getboolean("busco_run", "auto-lineage")
-                and isinstance(self.config, BuscoConfigMain)
-                and hasattr(self.config, "placement_files")
-            ):
-                summary_file.write("\nPlacement file versions:\n")
-                for placement_file in self.config.placement_files:
-                    summary_file.write("\t{}\n".format(placement_file))
-
         return
 
-    def write_json_summary(self):
-
-        summary = {}
-        summary["one_line_summary"] = self.one_line_summary_raw.strip()
-        summary["C"] = self.single_copy + self.multi_copy
-        summary["S"] = self.single_copy
-        summary["D"] = self.multi_copy
-        summary["F"] = self.only_fragments
-        summary["M"] = (
-            self.total_buscos - self.single_copy - self.multi_copy - self.only_fragments
+    def record_results(self):
+        self._get_busco_percentages()
+        self.one_line_summary_raw = "C:{}%[S:{}%,D:{}%],F:{}%,M:{}%,n:{}\t{}\n".format(
+            self.complete_percent,
+            self.s_percent,
+            self.d_percent,
+            self.f_percent,
+            self.missing_percent,
+            self.total_buscos,
+            "   ",
         )
-        summary["input_file"] = self.input_file
-        summary["mode"] = self.mode
-
-        if self.mode == "genome":
-            if self.config.get("busco_run", "domain") in ["prokaryota", "viruses"]:
-                gene_predictor = "prodigal"
-            elif self.config.getboolean("busco_run", "use_augustus"):
-                gene_predictor = "augustus"
-            else:
-                gene_predictor = "metaeuk"
-            summary["gene_predictor"] = gene_predictor
-        summary["dataset"] = self.lineage_dataset
-        summary["dataset_creation_date"] = self.dataset_creation_date
-        summary["dataset_number_species"] = self.dataset_nb_species
-        summary["dataset_total_buscos"] = self.dataset_nb_buscos
-
-        with open(self.short_summary_file_json, "w") as summary_file_json:
-            json.dump(summary, summary_file_json)
-
-        return summary
-
-    def report_tool_versions(self):
-        lines = []
-        lines.append("\nDependencies and versions:")
-        for key, value in type(self).tool_versions.items():
-            lines.append("\t{}: {}".format(key, value))
-        return lines
+        self.one_line_summary = "Results:\t{}".format(self.one_line_summary_raw)
+        # type(self).summary["results"][
+        #     "one_line_summary"
+        # ] = self.one_line_summary_raw.strip()
+        # type(self).summary["results"]["C"] = self.single_copy + self.multi_copy
+        # type(self).summary["results"]["S"] = self.single_copy
+        # type(self).summary["results"]["D"] = self.multi_copy
+        # type(self).summary["results"]["F"] = self.only_fragments
+        # type(self).summary["results"]["M"] = (
+        #     self.total_buscos - self.single_copy - self.multi_copy - self.only_fragments
+        # )
+        # type(self).summary["parameters"]["mode"] = self.mode
+        #
+        # if self.mode == "genome":
+        #     if self.config.get("busco_run", "domain") in ["prokaryota", "viruses"]:
+        #         gene_predictor = "prodigal"
+        #     elif self.config.getboolean("busco_run", "use_augustus"):
+        #         gene_predictor = "augustus"
+        #     else:
+        #         gene_predictor = "metaeuk"
+        #     type(self).summary["parameters"]["gene_predictor"] = gene_predictor
+        # type(self).summary["lineage_dataset"]["name"] = self.lineage_dataset
+        # type(self).summary["lineage_dataset"][
+        #     "creation_date"
+        # ] = self.dataset_creation_date
+        # type(self).summary["lineage_dataset"][
+        #     "number_species"
+        # ] = self.dataset_nb_species
+        # type(self).summary["lineage_dataset"]["total_buscos"] = self.dataset_nb_buscos
 
     @log("{}", logger, attr_name="hmmer_results_lines", apply="join", on_func_exit=True)
     def _produce_full_hmmer_summary(self):
@@ -1130,13 +1085,17 @@ class HMMERRunner(BaseRunner):
     def _log_one_line_hmmer_summary(self):
         return
 
-    def _write_output_header(
+    def write_output_header(
         self, file_object, missing_list=False, no_table_header=False
     ):
         """
         Write a standardized file header containing information on the BUSCO run.
         :param file_object: Opened file object ready for writing
         :type file_object: file
+        :param missing_list: Add list of missing BUSCOs
+        :type missing_list: bool
+        :param no_table_header: Include table header
+        :type no_table_header: bool
         :return:
         """
         file_object.write(

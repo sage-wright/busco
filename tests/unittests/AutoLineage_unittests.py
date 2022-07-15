@@ -271,9 +271,27 @@ class TestAutoLineage(unittest.TestCase):
         mock_config1 = Mock()
         mock_config2 = Mock()
         mock_config3 = Mock()
-        mock_config1.get.side_effect = ["tran", None, "test1"]
-        mock_config2.get.side_effect = ["tran", None, "test2"]
-        mock_config3.get.side_effect = ["tran", None, "test3"]
+        mock_config1.get.side_effect = [
+            "test_input1",
+            "prok_tran",
+            "prokaryota",
+            "test_lineage1",
+            "test_lineage1",
+        ]
+        mock_config2.get.side_effect = [
+            "test_input2",
+            "prok_tran",
+            "prokaryota",
+            "test_lineage2",
+            "test_lineage2",
+        ]
+        mock_config3.get.side_effect = [
+            "test_input3",
+            "euk_tran",
+            "eukaryota",
+            "test_lineage3",
+            "test_lineage3",
+        ]
 
         mock_analysis1 = Mock()
         mock_analysis2 = Mock()
@@ -290,6 +308,9 @@ class TestAutoLineage(unittest.TestCase):
             mock_analysis2,
             mock_analysis3,
         ]
+        mock_analysis1.return_value.run_folder = ""
+        mock_analysis2.return_value.run_folder = ""
+        mock_analysis3.return_value.run_folder = ""
 
         runner1 = BuscoRunner.AnalysisRunner(mock_config1)
         runner2 = BuscoRunner.AnalysisRunner(mock_config2)
@@ -297,7 +318,7 @@ class TestAutoLineage(unittest.TestCase):
 
         asl = AutoLineage.AutoSelectLineage(mock_config_manager.config_main)
         asl.get_best_match_lineage([runner1, runner2, runner3])
-        self.assertEqual(asl.best_match_lineage_dataset, "test2")
+        self.assertEqual(asl.best_match_lineage_dataset, "test_lineage2")
         self.assertEqual(asl.selected_runner, runner2)
         mock_cleanup.assert_called_with([runner1, runner3])
 

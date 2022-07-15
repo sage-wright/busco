@@ -118,7 +118,8 @@ class DirectDownload(argparse.Action):
                 else:
                     raise KeyError
             except KeyError:
-                "{} is not a recognized option".format(item)
+                type(self).logger.error("{} is not a recognized option".format(item))
+                files_to_get = []
 
         filetypes = [bdm.version_files.loc[f]["type"] for f in files_to_get]
         for f, filename in enumerate(files_to_get):
@@ -154,7 +155,7 @@ class CleanVersionAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         version = self.version
         if version is None:
-            version = parser.version
+            version = "unknown"
         formatter = parser._get_formatter()
         formatter.add_text(version)
         parser._print_message(formatter.format_help(), sys.stdout)

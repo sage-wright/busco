@@ -22,11 +22,15 @@ class SEPPRunner(BaseRunner):
         self.datasets_version = self.config.get("busco_run", "datasets_version")
         self.create_dirs([self._output_folder, self.placement_folder, self._tmp_folder])
 
-        self.init_checkpoint_file()
+        self.tree_nwk_file = None
+        self.tree_metadata_file = None
+        self.supermatrix_file = None
+        self.downloader = None
 
     def configure_runner(
         self, tree_nwk_file, tree_metadata_file, supermatrix_file, downloader
     ):
+        super().configure_runner()
         self.run_number += 1
         self.tree_nwk_file = tree_nwk_file
         self.tree_metadata_file = tree_metadata_file

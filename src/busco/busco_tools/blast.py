@@ -23,8 +23,10 @@ class MKBLASTRunner(BaseRunner):
         self.output_db = os.path.join(self.db_path, os.path.basename(self.input_file))
         self.create_dirs(self.db_path)
         self.total = 1
-        self.init_checkpoint_file()
         self.run_number += 1
+
+    def configure_runner(self, *args):
+        super().configure_runner(args)
 
     @log("Creating BLAST database with input file", logger)
     def configure_job(self, *args):
@@ -87,11 +89,23 @@ class TBLASTNRunner(BaseRunner):
         self.region_limit = self.config.getint("busco_run", "limit")
         self.flank = self._define_flank()
 
-        self.init_checkpoint_file()
+        self.blast_db = None
+        self.missing_and_frag_only = None
+        self.ancestral_variants = None
+        self.incomplete_buscos = None
+
+        self.ancestral_sfx = None
+        self.ancestral_file = None
+        self.query_file = None
+        self.output_suffix = None
+        self.rerun_query_file = None
+        self.blast_filename = None
+        self.coords_filename = None
 
     def configure_runner(
         self, blast_db, missing_and_frag_only, ancestral_variants, incomplete_buscos
     ):
+        super().configure_runner()
         self.run_number += 1
         self.blast_db = blast_db
         self.missing_and_frag_only = missing_and_frag_only

@@ -4,7 +4,7 @@
 .. module:: GenomeAnalysis
    :synopsis: GenomeAnalysis implements genome analysis specifics
 .. versionadded:: 3.0.0
-.. versionchanged:: 5.0.0
+.. versionchanged:: 5.4.0
 
 Copyright (c) 2016-2022, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
@@ -14,6 +14,7 @@ from busco.analysis.BuscoAnalysis import BuscoAnalysis
 from busco.analysis.Analysis import NucleotideAnalysis, BLASTAnalysis
 from busco.busco_tools.prodigal import ProdigalRunner
 from busco.busco_tools.metaeuk import MetaeukRunner
+from busco.busco_tools.bbtools import BBToolsRunner
 from busco.busco_tools.augustus import (
     AugustusRunner,
     GFF2GBRunner,
@@ -28,6 +29,7 @@ from abc import ABCMeta, abstractmethod
 from configparser import NoOptionError
 import time
 import os
+import glob
 import pandas as pd
 from collections import defaultdict
 import subprocess
@@ -42,10 +44,14 @@ class GenomeAnalysis(NucleotideAnalysis, BuscoAnalysis, metaclass=ABCMeta):
 
     def __init__(self):
         super().__init__()
+        self.bbtools_runner = None
 
     @abstractmethod
     def run_analysis(self):
         super().run_analysis()
+        if "genome" in self.config.get("busco_run", "mode"):
+            # This avoids the child class euk_tran mode running bbtools
+            self._run_bbtools()
 
     def init_tools(self):
         """
@@ -53,6 +59,18 @@ class GenomeAnalysis(NucleotideAnalysis, BuscoAnalysis, metaclass=ABCMeta):
         :return:
         """
         super().init_tools()
+        if "genome" in self.config.get("busco_run", "mode"):
+            # This avoids the child class euk_tran mode running bbtools
+            self.bbtools_runner = BBToolsRunner()
+
+    def _run_bbtools(self):
+        self.bbtools_runner.configure_runner()
+        if self.bbtools_runner.check_previous_completed_run():
+            logger.info("Skipping BBTools run as already run")
+        else:
+            self.bbtools_runner.run()
+        if len(self.bbtools_runner.metrics) == 0:
+            self.bbtools_runner.parse_output()
 
     def reset(self):
         super().reset()
@@ -94,7 +112,8 @@ class GenomeAnalysisProkaryotes(GenomeAnalysis):
         super().reset()
         if (
             self.prodigal_runner
-        ):  # If final run has already been run, then the prodigal_runner object in the final runner object will still be set to None
+        ):  # If final run has already been run, then the prodigal_runner object in the final runner object will
+            # still be set to None
             self.prodigal_runner.reset()
 
     @log("***** Run Prodigal on input to predict and extract genes *****", logger)
@@ -103,6 +122,7 @@ class GenomeAnalysisProkaryotes(GenomeAnalysis):
         Run Prodigal on input file to detect genes.
         :return:
         """
+        self.prodigal_runner.configure_runner()
         if self.restart and self.prodigal_runner.check_previous_completed_run():
             logger.info("Skipping Prodigal run as it has already completed")
             self.prodigal_runner.run(restart=self.restart)
@@ -204,7 +224,7 @@ class GenomeAnalysisEukaryotesAugustus(BLASTAnalysis, GenomeAnalysisEukaryotes):
             self.config.set(
                 "busco_run", "augustus_species", self._target_species_initial
             )  # Reset parameter for batch mode
-        except OSError:
+        except (OSError, AttributeError):
             pass
         super().cleanup()
 
@@ -322,6 +342,7 @@ class GenomeAnalysisEukaryotesAugustus(BLASTAnalysis, GenomeAnalysisEukaryotes):
     )
     def _run_new_species(self):
         """Create new species config file from template"""
+        self.new_species_runner.configure_runner()
         if self.restart and self.new_species_runner.check_previous_completed_run():
             logger.info("Skipping new species creation as it has already been done")
         else:
@@ -368,6 +389,7 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                 self._run_metaeuk(incomplete_buscos)
                 self.gene_details.update(self.metaeuk_runner.gene_details)
                 self.sequences_aa.update(self.metaeuk_runner.sequences_aa)
+                self.sequences_nt.update(self.metaeuk_runner.sequences_nt)
                 self.run_hmmer(
                     self.metaeuk_runner.pred_protein_seqs_modified,
                     busco_ids=incomplete_buscos,
@@ -381,9 +403,7 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                 if i == 1:
                     logger.info("Metaeuk rerun did not find any genes")
                 else:
-                    raise BuscoError(
-                        "Metaeuk did not find any genes in the input file."
-                    )
+                    raise NoGenesError("Metaeuk")
 
         try:
             self.metaeuk_runner.combine_run_results()
@@ -394,7 +414,28 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
             self.metaeuk_runner.combined_pred_protein_seqs = (
                 self.metaeuk_runner.pred_protein_mod_files[0]
             )
-        self.hmmer_runner.write_buscos_to_file(self.sequences_aa)
+            self.metaeuk_runner.combined_nucleotides_seqs = (
+                self.metaeuk_runner.codon_mod_files[0]
+            )
+        self.hmmer_runner.write_buscos_to_file(self.sequences_aa, self.sequences_nt)
+        self.write_gff_files()
+
+    def write_gff_files(self):
+        busco_seqs_folders = [
+            self.hmmer_runner.single_copy_sequences_folder,
+            self.hmmer_runner.multi_copy_sequences_folder,
+            self.hmmer_runner.fragmented_sequences_folder,
+        ]
+        for folder in busco_seqs_folders:
+            existing_gff_files = glob.glob(os.path.join(folder, "*.gff"))
+            for f in existing_gff_files:
+                os.remove(f)
+
+        for gff_file in self.metaeuk_runner.gff_files[
+            ::-1
+        ]:  # Write GFF results to file, starting with the rerun results and then using the initial results
+            self.metaeuk_runner.gff_file = gff_file
+            self.metaeuk_runner.write_gff_files(*busco_seqs_folders)
 
     def _run_metaeuk(self, incomplete_buscos):
         self.metaeuk_runner.configure_runner(incomplete_buscos)
@@ -405,7 +446,7 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
             self.config.set("busco_run", "restart", str(self.restart))
             self.metaeuk_runner.run()
 
-        self.metaeuk_runner.edit_protein_file()
+        self.metaeuk_runner.edit_result_headers()
         self.metaeuk_runner.get_gene_details()  # The gene details contain the overlaps that were removed when editing
         # the protein file, but it doesn't matter, as it is just a look-up
         # dictionary
@@ -544,7 +585,6 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                 for idx, row in busco_gene_group.iterrows():
                     low_coord = row["Start"]
                     high_coord = row["Stop"]
-                    score = row["Score"]
                     seq = row["Sequence"]
                     if min_coord:
                         min_coord = min(min_coord, low_coord)
@@ -566,6 +606,9 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                     }
                 ]
                 self.sequences_aa[new_gene_match] = self.metaeuk_runner.sequences_aa[
+                    gene_match
+                ]
+                self.sequences_nt[new_gene_match] = self.metaeuk_runner.sequences_nt[
                     gene_match
                 ]
         return hmmer_result_dict_new, matched_genes_new

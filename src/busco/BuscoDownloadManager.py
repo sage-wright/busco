@@ -4,7 +4,7 @@
 .. module:: BuscoDownloadManager
    :synopsis: BuscoDownloadManager manage the version and download the most recent file
 .. versionadded:: 4.0.0
-.. versionchanged:: 4.0.0
+.. versionchanged:: 5.4.0
 
 Copyright (c) 2016-2022, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
@@ -49,47 +49,59 @@ class BuscoDownloadManager:
         self.local_download_path = config.get("busco_run", "download_path")
         self._create_main_download_dir()
         if not type(self).version_files is not None and not self.offline:
-            self._load_versions()
+            try:
+                self._obtain_versions_file()
+            except BatchFatalError as bfe:
+                self.download_base_url = "https://busco-data2.ezlab.org/v5/data/"
+                logger.info(
+                    "{}. Retrying with backup url {}".format(
+                        bfe.value, self.download_base_url
+                    )
+                )
+                self._obtain_versions_file()
 
     def _create_main_download_dir(self):
         if not os.path.exists(self.local_download_path):
             # exist_ok=True to allow for multiple parallel BUSCO runs each trying to create this folder simultaneously
             os.makedirs(self.local_download_path, exist_ok=True)
 
-    def _load_versions(self):
-        try:
-            versions_file = self._obtain_versions_file()
-            type(self).version_files = pd.read_csv(
-                versions_file,
-                sep="\t",
-                names=["dataset", "date", "hash", "domain", "type"],
-                index_col="dataset",
-            )
-        except URLError as e:
-            if self.offline:
-                logger.warning(
-                    "Unable to verify BUSCO datasets because of offline mode"
-                )
-            else:
-                raise BatchFatalError(e)
-        except FileNotFoundError:
-            logger.warning(
-                "Unable to find file_versions.tsv. This may be due to an internet access problem. "
-                "Attempting to continue in offline mode."
-            )
-            self.offline = True
-
-        return
-
     @log("Downloading information on latest versions of BUSCO data...", logger)
     def _obtain_versions_file(self):
         remote_filepath = os.path.join(self.download_base_url, "file_versions.tsv")
         local_filepath = os.path.join(self.local_download_path, "file_versions.tsv")
-        try:
-            urllib.request.urlretrieve(remote_filepath, local_filepath)
-        except URLError:
-            raise BatchFatalError("Cannot reach {}".format(remote_filepath))
-        return local_filepath
+
+        for tsleep in [10, 100, None]:
+            try:
+                urllib.request.urlretrieve(remote_filepath, local_filepath)
+                type(self).version_files = pd.read_csv(
+                    local_filepath,
+                    sep="\t",
+                    names=["dataset", "date", "hash", "domain", "type"],
+                    index_col="dataset",
+                )
+            except ValueError:
+                raise BatchFatalError(
+                    "Invalid URL. Cannot reach {}. Please provide a valid URL for --base_download_url".format(
+                        remote_filepath
+                    )
+                )
+            except URLError:
+                if self.offline:
+                    logger.warning(
+                        "Unable to verify BUSCO datasets because of offline mode"
+                    )
+                    break
+                elif tsleep:
+                    logger.info(
+                        "Download connection problem. Retrying in {} seconds".format(
+                            tsleep
+                        )
+                    )
+                    time.sleep(tsleep)
+                else:
+                    raise BatchFatalError("Cannot reach {}".format(remote_filepath))
+
+        return
 
     def _create_category_dir(self, category):
         # if the category folder does not exist, create it
@@ -210,19 +222,34 @@ class BuscoDownloadManager:
             )
             if present and category == "lineages":
                 self._rename_old_version(local_filepath)
-            download_success = self._download_file(
-                remote_filepath, local_filepath + compression_extension, hash
-            )
-            if download_success:
-                local_filepath = self._decompress_file(
-                    local_filepath + compression_extension
+
+            for tsleep in [10, 100, None]:
+                download_success = self._download_file(
+                    remote_filepath, local_filepath + compression_extension, hash
                 )
-                if present:
-                    logger.warning(
-                        "The file or folder {} was updated automatically.".format(
-                            data_basename
-                        )
+                if download_success:
+                    local_filepath = self._decompress_file(
+                        local_filepath + compression_extension
                     )
+                    if present:
+                        logger.warning(
+                            "The file or folder {} was updated automatically.".format(
+                                data_basename
+                            )
+                        )
+                    break
+                else:
+                    if tsleep:
+                        logger.info(
+                            "Download connection problem. Retrying in {} seconds".format(
+                                tsleep
+                            )
+                        )
+                        time.sleep(tsleep)
+            else:
+                raise BuscoError(
+                    "File download unsuccessful. Check the download url or consider running in offline mode"
+                )
         elif not up_to_date:
             logger.warning(
                 "The file or folder {} is not the last available version. "

@@ -3,7 +3,6 @@ import os
 import re
 from collections import defaultdict
 from busco.BuscoLogger import BuscoLogger
-from busco.BuscoLogger import LogDecorator as log
 from Bio import SeqIO
 import shutil
 import numpy as np
@@ -36,7 +35,7 @@ class ProdigalRunner(BaseRunner):
         # bacteria/archaea=11; Entomoplasmatales,Mycoplasmatales=4
         try:
             self._genetic_code = self.config.get(
-                "prodigal", "prodigal_genetic_code"
+                "busco_run", "prodigal_genetic_code"
             ).split(",")
         except NoOptionError:
             self._genetic_code = ["11"]
@@ -44,7 +43,7 @@ class ProdigalRunner(BaseRunner):
         # Set the ambiguous coding density range
         try:
             self._cd_upper = (
-                float(self.config.get("prodigal", "ambiguous_cd_range_upper"))
+                float(self.config.get("busco_run", "ambiguous_cd_range_upper"))
                 if len(self._genetic_code) > 1
                 else 0
             )
@@ -67,8 +66,11 @@ class ProdigalRunner(BaseRunner):
         self._input_length = self._get_genome_length()
         self._run_mode = ["single", "meta"] if self._input_length > 100000 else ["meta"]
 
-        self.init_checkpoint_file()
         self.run_number += 1
+        self.good_run_found = None
+
+    def configure_runner(self):
+        super().configure_runner()
 
     @property
     def output_folder(self):
@@ -204,7 +206,8 @@ class ProdigalRunner(BaseRunner):
     def write_checkpoint_file(self):
         super().write_checkpoint_file(
             additional_args=[("GC", self.current_gc)]
-        )  # The GC saved in the checkpoint file is used on restart to determine if all the GCs required have already been run
+        )  # The GC saved in the checkpoint file is used on restart to determine if all the GCs required have
+        # already been run
 
     def check_previous_completed_run(self):
         """
@@ -215,11 +218,19 @@ class ProdigalRunner(BaseRunner):
         """
         completed = super().check_previous_completed_run(additional_args=["GC"])
         if completed:
-            gcs_completed = self.add_args["GC"]
+            higher_priority_runs = []
             for g in self._genetic_code:
+                gcs_completed = self.add_args["GC"]
                 if g not in gcs_completed:
-                    self.check_completed_runs(gcs_completed)
-                    return self.good_run_found
+                    gcs_completed = [
+                        x for x in gcs_completed if x in higher_priority_runs
+                    ]
+                    if len(gcs_completed) > 0:
+                        self.check_completed_runs(gcs_completed)
+                        return self.good_run_found
+                    else:
+                        return False
+                higher_priority_runs.append(g)
         return completed
 
     def check_completed_runs(self, gc_list):

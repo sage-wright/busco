@@ -6,7 +6,7 @@
    :synopsis: BuscoPlacer implements methods required for automatically selecting the appropriate dataset
    to be used during BUSCO analysis
 .. versionadded:: 4.0.0
-.. versionchanged:: 5.2.1
+.. versionchanged:: 5.4.0
 
 Copyright (c) 2016-2022, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
@@ -339,10 +339,6 @@ class BuscoPlacer:
     def _extract_marker_sequences(self):
         """
         This function extracts all single copy BUSCO genes from a protein run folder
-        :param run_folder: a BUSCO protein run folder
-        :type: str
-        :param protein_sequences: protein fasta used as input for the BUSCO run corresponding to the folder
-        :type: str
         """
 
         with open(self.ref_markers_file, "r") as f:

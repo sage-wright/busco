@@ -75,6 +75,7 @@ class ProteinAnalysis:
         "W",
         "R",
         "G",
+        "*",
     ]
     NUCL_LETTERS = ["A", "C", "T", "G", "N"]
 
@@ -123,6 +124,7 @@ class BLASTAnalysis(metaclass=ABCMeta):
         self.tblastn_runner.reset()
 
     def _run_mkblast(self):
+        self.mkblast_runner.configure_runner()
         if self.restart and self.mkblast_runner.check_previous_completed_run():
             logger.info(
                 "Skipping makeblastdb as BLAST DB already exists at {}".format(

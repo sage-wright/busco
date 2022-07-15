@@ -4,7 +4,7 @@
 .. module:: BuscoLogger
    :synopsis: base logger customization for the analysis pipeline
 .. versionadded:: 3.0.0
-.. versionchanged:: 4.0.0
+.. versionchanged:: 5.4.0
 
 This is a logger for the pipeline that extends the default Python logger class
 
@@ -144,6 +144,8 @@ class BuscoLogger(logging.getLoggerClass()):
     warn_output = io.StringIO()
     ppid = str(os.getppid())
     pid = str(os.getpid())
+    quiet = False
+    quiet_msg_logged = False
 
     def __init__(self, name):
         """
@@ -201,6 +203,19 @@ class BuscoLogger(logging.getLoggerClass()):
 
     def __call__(self):
         pass
+
+    def _log(self, *args, **kwargs):
+        if type(self).quiet:
+            if not type(self).quiet_msg_logged:
+                super()._log(
+                    20,
+                    "Quiet mode selected. All subsequent INFO log messages to stdout suppressed. "
+                    "Detailed log still available in logs/busco.log",
+                    [],
+                )
+                type(self).quiet_msg_logged = True
+            self.removeHandler(self._out_hdlr)
+        super()._log(*args, **kwargs)
 
     @classmethod
     def reset(cls):
