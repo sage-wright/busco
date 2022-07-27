@@ -110,6 +110,7 @@ class GenomeAnalysisProkaryotes(GenomeAnalysis):
 
     def reset(self):
         super().reset()
+        self.bbtools_runner.reset()
         if (
             self.prodigal_runner
         ):  # If final run has already been run, then the prodigal_runner object in the final runner object will

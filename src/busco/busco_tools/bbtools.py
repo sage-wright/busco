@@ -45,12 +45,21 @@ class BBToolsRunner(BaseRunner):
         pass
 
     def get_version(self):
-        bbtools_version = subprocess.check_output(
-            [self.cmd, "--version"], stderr=subprocess.STDOUT, shell=False
-        )
-        lines = bbtools_version.decode("utf-8").split("\n")
-        version = lines[0].split("BBMap version ")[1]
-        return version
+        try:
+            bbtools_version = subprocess.check_output(
+                [self.cmd, "--version"], stderr=subprocess.STDOUT, shell=False
+            )
+            lines = bbtools_version.decode("utf-8").split("\n")
+        except subprocess.CalledProcessError as cpe:
+            if cpe.output.decode("utf-8").startswith("BBMap version"):
+                lines = cpe.output.decode("utf-8").split("\n")
+            else:
+                raise
+
+        for line in lines:
+            if line.startswith("BBMap version"):
+                version = line.split("BBMap version ")[1]
+                return version
 
     def generate_job_args(self):
         yield
@@ -59,8 +68,10 @@ class BBToolsRunner(BaseRunner):
     def output_folder(self):
         return self._output_folder
 
-    def reset(self):
+    @classmethod
+    def reset(cls):
         super().reset()
+        cls.metrics = {}
 
     def run(self):
         super().run()

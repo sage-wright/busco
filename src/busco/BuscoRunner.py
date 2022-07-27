@@ -671,11 +671,11 @@ class AnalysisRunner:
             contigs_n50 = self.analysis.bbtools_runner.metrics["Contigs N50"]
             percent_gaps = self.analysis.bbtools_runner.metrics["Percent gaps"]
             num_scaffolds = self.analysis.bbtools_runner.metrics["Number of scaffolds"]
+            metrics_scores = "\t{}\t{}\t{}\t{}".format(
+                scaffold_n50, contigs_n50, percent_gaps, num_scaffolds
+            )
         else:
-            scaffold_n50 = ""
-            contigs_n50 = ""
-            percent_gaps = ""
-            num_scaffolds = ""
+            metrics_scores = ""
 
         if self.config.getboolean("busco_run", "auto-lineage"):
             try:
@@ -705,7 +705,7 @@ class AnalysisRunner:
         else:
             parent_lineage_scores = ""
 
-        summary_line = "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}{}\t{}\t{}\t{}\t{}\n".format(
+        summary_line = "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}{}{}\n".format(
             input_file,
             dataset,
             complete,
@@ -715,10 +715,7 @@ class AnalysisRunner:
             missing,
             n_markers,
             parent_lineage_scores,
-            scaffold_n50,
-            contigs_n50,
-            percent_gaps,
-            num_scaffolds,
+            metrics_scores,
         )
         return summary_line
 
