@@ -1,3 +1,6 @@
+5.4.2
+- Fix batch summary statistics reporting bug in eukaryote pipeline
+
 5.4.1
 - Fix batch summary statistics reporting
 - Fix compatibility with newer versions of BBMap
@@ -8,7 +11,7 @@
 - Create GFF files and Nucleotide files for Metaeuk pipeline (Issues #268, #374, #449, #496)
 - Reattempt connection to server in case of failure; also implemented a backup URL
 - Fix quiet mode logging
-- Bug fixes (including Issue #331, #488, #556, #575)
+- Bug fixes (including Issue #488, #509, #556, #575)
 
 5.3.2
 - Issue #544 fixed

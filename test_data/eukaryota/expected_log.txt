@@ -1,4 +1,4 @@
-2022-07-15 15:22:14 INFO:	***** Start a BUSCO v5.4.1 analysis, current time: 07/15/2022 15:22:14 *****
+2022-07-15 15:22:14 INFO:	***** Start a BUSCO v5.4.2 analysis, current time: 07/15/2022 15:22:14 *****
 2022-07-15 15:22:14 INFO:	Configuring BUSCO with local environment
 2022-07-15 15:22:14 WARNING:	Running Auto Lineage Selector as no lineage dataset was specified. This will take a little longer than normal. If you know what lineage dataset you want to use, please specify this in the config file or using the -l (--lineage-dataset) flag in the command line.
 2022-07-15 15:22:14 INFO:	Mode is genome
