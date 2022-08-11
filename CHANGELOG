@@ -1,3 +1,6 @@
+5.4.3
+- Fix bug in augustus --long pipeline (Issue #586)
+
 5.4.2
 - Fix batch summary statistics reporting bug in eukaryote pipeline
 

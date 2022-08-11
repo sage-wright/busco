@@ -812,9 +812,9 @@ class OptimizeAugustusRunner(BaseRunner):
         self.new_species_name = None
 
     def configure_runner(self, output_folder, new_species_name):
+        self._output_folder = output_folder
         super().configure_runner()
         self.run_number += 1
-        self._output_folder = output_folder
         self.training_set_db = os.path.join(self._output_folder, "training_set.db")
         self.new_species_name = new_species_name
 

@@ -707,8 +707,14 @@ class MetaeukRunner(BaseRunner):
             raise NoRerunFile
 
     def write_gff_files(self, sc_folder, mc_folder, frag_folder):
-        with open(self.gff_file, "r") as gf:
-            lines = gf.readlines()
+        try:
+            with open(self.gff_file, "r") as gf:
+                lines = gf.readlines()
+        except FileNotFoundError:
+            logger.warning(
+                "Metaeuk did not create a GFF file. Please use Metaeuk version 5-34c21f2 or higher for GFF results."
+            )
+            return
 
         id_pattern = re.compile(r".*Target_ID=(.*?)[_;]")
         current_busco = ""
