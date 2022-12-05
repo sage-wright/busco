@@ -240,7 +240,7 @@ class TBLASTNRunner(BaseRunner):
 
         matched_seqs = []
         busco_ids_retrieved = set()
-        with open(self.ancestral_file, "rU") as anc_file:
+        with open(self.ancestral_file, "r") as anc_file:
 
             for record in SeqIO.parse(anc_file, "fasta"):
                 if any(record.id.startswith(b) for b in self.incomplete_buscos):
@@ -539,7 +539,7 @@ class TBLASTNRunner(BaseRunner):
                 contig_names.append(contig)
 
         # Write sequences that match contig ids
-        with open(self.input_file, "rU") as f:
+        with open(self.input_file, "r") as f:
             for record in SeqIO.parse(f, "fasta"):
                 if record.id in list(set(contig_names)):
                     with open(

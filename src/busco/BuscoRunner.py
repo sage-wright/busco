@@ -31,7 +31,7 @@ logger = BuscoLogger.get_logger(__name__)
 
 class SingleRunner:
 
-    all_runners = []
+    all_runners = set()
     summary = {
         "parameters": {},
         "lineage_dataset": {},
@@ -81,7 +81,7 @@ class SingleRunner:
             runner = asl.selected_runner
             parent_domain = runner.config.get("busco_run", "domain_run_name")
         finally:
-            type(self).all_runners.extend(asl.runners)
+            type(self).all_runners.update(asl.runners)
             asl.reset()
         return lineage_dataset, runner, parent_domain
 
@@ -108,7 +108,7 @@ class SingleRunner:
         for runner in type(self).all_runners:
             runner.reset()
             runner.analysis.reset()
-        type(self).all_runners = []
+        type(self).all_runners = set()
 
     @log("Input file is {}", logger, attr_name="input_file")
     def run(self):
@@ -146,7 +146,7 @@ class SingleRunner:
 
                 self.runner = AnalysisRunner(self.config)
 
-            type(self).all_runners.append(self.runner)
+            type(self).all_runners.add(self.runner)
 
             if os.path.exists(lineage_results_folder):
                 new_dest = os.path.join(
@@ -165,7 +165,7 @@ class SingleRunner:
 
         except BuscoError:
             if self.runner is not None:
-                type(self).all_runners.append(self.runner)
+                type(self).all_runners.add(self.runner)
             raise
 
         except ToolException as e:

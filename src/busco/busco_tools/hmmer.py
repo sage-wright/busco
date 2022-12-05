@@ -11,6 +11,7 @@ from busco.BuscoConfig import BuscoConfigAuto
 from busco.Exceptions import BatchFatalError, BuscoError
 import pandas as pd
 import busco
+from multiprocessing import Pool
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -235,27 +236,6 @@ class HMMERRunner(BaseRunner):
             )
         return
 
-    def process_output(self):
-        self.is_complete = defaultdict(
-            lambda: defaultdict(list), self.is_complete
-        )  # dict of a dict of lists of dicts
-        self.is_fragment = defaultdict(lambda: defaultdict(list), self.is_fragment)
-        self.is_very_large = defaultdict(lambda: defaultdict(list), self.is_very_large)
-        self.matched_genes_complete = defaultdict(list, self.matched_genes_complete)
-        self.matched_genes_vlarge = defaultdict(list, self.matched_genes_vlarge)
-        self.matched_genes_fragment = defaultdict(list, self.matched_genes_fragment)
-
-        self._load_matched_genes()
-
-        self.is_complete = dict(self.is_complete)
-        self.is_fragment = dict(self.is_fragment)
-        self.is_very_large = dict(self.is_very_large)
-        self.matched_genes_complete = dict(self.matched_genes_complete)
-        self.matched_genes_vlarge = dict(self.matched_genes_vlarge)
-        self.matched_genes_fragment = dict(self.matched_genes_fragment)
-
-        return
-
     @staticmethod
     def _get_matched_lengths(nested_dict):
         """
@@ -346,6 +326,9 @@ class HMMERRunner(BaseRunner):
         busco_complete = defaultdict(list)
         busco_vlarge = defaultdict(list)
         busco_fragment = defaultdict(list)
+        matched_genes_complete = defaultdict(list)
+        matched_genes_vlarge = defaultdict(list)
+        matched_genes_fragment = defaultdict(list)
 
         # Determine whether matched gene represents a complete, very_large or fragment of a BUSCO
         for gene_id, record in matched_record.items():
@@ -360,24 +343,31 @@ class HMMERRunner(BaseRunner):
             # gene match can only be either complete, v_large or fragment
             if -2 <= zeta <= 2:
                 busco_type = busco_complete
-                match_type = self.matched_genes_complete
+                match_type = matched_genes_complete
             elif zeta < -2:
                 busco_type = busco_vlarge
-                match_type = self.matched_genes_vlarge
+                match_type = matched_genes_vlarge
             else:
                 busco_type = busco_fragment
-                match_type = self.matched_genes_fragment
+                match_type = matched_genes_fragment
 
             # Add information about match to dict
             busco_type[gene_id].append(
-                dict({"bitscore": record["score"], "length": size, "frame": frame})
+                dict({"bitscore": record["score"], "length": size, "frame": frame, "orig gene ID": gene_id})
             )
             # Reference which busco_queries are associated with each gene match
             match_type[gene_id].append(busco_query)
 
-        return busco_complete, busco_vlarge, busco_fragment
+        return (
+            busco_complete,
+            busco_vlarge,
+            busco_fragment,
+            matched_genes_complete,
+            matched_genes_vlarge,
+            matched_genes_fragment,
+        )
 
-    def _load_matched_genes(self):
+    def process_output(self):
         """
         Load all gene matches from HMMER output and sort into dictionaries depending on match quality
         (complete, v_large, fragment).
@@ -403,13 +393,30 @@ class HMMERRunner(BaseRunner):
                 "HMMER should not be run more than twice in the same Run instance."
             )
 
-        for filename in hmmer_results_files:
-            busco_query = str(os.path.basename(filename).split(".")[0])
-            matched_record = self.parse_hmmer_output(filename, busco_query)
-            filtered_records = self.remove_overlaps(matched_record)
-            busco_complete, busco_vlarge, busco_fragment = self._sort_matches(
-                filtered_records, busco_query
+        with Pool(self.cpus) as job_pool:
+            hmmer_records = job_pool.map(
+                self.load_results_from_file, hmmer_results_files
             )
+
+        self.is_complete = defaultdict(
+            lambda: defaultdict(list), self.is_complete
+        )  # dict of a dict of lists of dicts
+        self.is_fragment = defaultdict(lambda: defaultdict(list), self.is_fragment)
+        self.is_very_large = defaultdict(lambda: defaultdict(list), self.is_very_large)
+        self.matched_genes_complete = defaultdict(list, self.matched_genes_complete)
+        self.matched_genes_vlarge = defaultdict(list, self.matched_genes_vlarge)
+        self.matched_genes_fragment = defaultdict(list, self.matched_genes_fragment)
+
+        for records in hmmer_records:
+            (
+                busco_query,
+                busco_complete,
+                busco_vlarge,
+                busco_fragment,
+                matched_genes_complete,
+                matched_genes_vlarge,
+                matched_genes_fragment,
+            ) = records
 
             # Add all information for this busco_id to the full dictionary
             if len(busco_complete) > 0:
@@ -419,7 +426,57 @@ class HMMERRunner(BaseRunner):
             if len(busco_fragment) > 0:
                 self.is_fragment[busco_query].update(busco_fragment)
 
+            for i in range(3):
+                matched_genes_dict_small = [
+                    matched_genes_complete,
+                    matched_genes_vlarge,
+                    matched_genes_fragment,
+                ][i]
+                matched_genes_dict_large = [
+                    self.matched_genes_complete,
+                    self.matched_genes_vlarge,
+                    self.matched_genes_fragment,
+                ][i]
+                for gene_id in matched_genes_dict_small:
+                    if gene_id in matched_genes_dict_large:
+                        matched_genes_dict_large[gene_id].extend(
+                            matched_genes_dict_small[gene_id]
+                        )
+                    else:
+                        matched_genes_dict_large[gene_id] = matched_genes_dict_small[
+                            gene_id
+                        ]
+
+        self.is_complete = dict(self.is_complete)
+        self.is_fragment = dict(self.is_fragment)
+        self.is_very_large = dict(self.is_very_large)
+        self.matched_genes_complete = dict(self.matched_genes_complete)
+        self.matched_genes_vlarge = dict(self.matched_genes_vlarge)
+        self.matched_genes_fragment = dict(self.matched_genes_fragment)
+
         return
+
+    def load_results_from_file(self, filename):
+        busco_query = str(os.path.basename(filename).split(".")[0])
+        matched_record = self.parse_hmmer_output(filename, busco_query)
+        filtered_records = self.remove_overlaps(matched_record)
+        (
+            busco_complete,
+            busco_vlarge,
+            busco_fragment,
+            matched_genes_complete,
+            matched_genes_vlarge,
+            matched_genes_fragment,
+        ) = self._sort_matches(filtered_records, busco_query)
+        return (
+            busco_query,
+            busco_complete,
+            busco_vlarge,
+            busco_fragment,
+            matched_genes_complete,
+            matched_genes_vlarge,
+            matched_genes_fragment,
+        )
 
     @staticmethod
     def remove_overlaps(matched_records):
@@ -1037,34 +1094,6 @@ class HMMERRunner(BaseRunner):
             "   ",
         )
         self.one_line_summary = "Results:\t{}".format(self.one_line_summary_raw)
-        # type(self).summary["results"][
-        #     "one_line_summary"
-        # ] = self.one_line_summary_raw.strip()
-        # type(self).summary["results"]["C"] = self.single_copy + self.multi_copy
-        # type(self).summary["results"]["S"] = self.single_copy
-        # type(self).summary["results"]["D"] = self.multi_copy
-        # type(self).summary["results"]["F"] = self.only_fragments
-        # type(self).summary["results"]["M"] = (
-        #     self.total_buscos - self.single_copy - self.multi_copy - self.only_fragments
-        # )
-        # type(self).summary["parameters"]["mode"] = self.mode
-        #
-        # if self.mode == "genome":
-        #     if self.config.get("busco_run", "domain") in ["prokaryota", "viruses"]:
-        #         gene_predictor = "prodigal"
-        #     elif self.config.getboolean("busco_run", "use_augustus"):
-        #         gene_predictor = "augustus"
-        #     else:
-        #         gene_predictor = "metaeuk"
-        #     type(self).summary["parameters"]["gene_predictor"] = gene_predictor
-        # type(self).summary["lineage_dataset"]["name"] = self.lineage_dataset
-        # type(self).summary["lineage_dataset"][
-        #     "creation_date"
-        # ] = self.dataset_creation_date
-        # type(self).summary["lineage_dataset"][
-        #     "number_species"
-        # ] = self.dataset_nb_species
-        # type(self).summary["lineage_dataset"]["total_buscos"] = self.dataset_nb_buscos
 
     @log("{}", logger, attr_name="hmmer_results_lines", apply="join", on_func_exit=True)
     def _produce_full_hmmer_summary(self):

@@ -454,26 +454,27 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
         # dictionary
 
     def validate_output(self):
-        if len(self.metaeuk_runner.headers_files) < 2:
-            return
+        """Need to run this for both initial and rerun because it is possible that metaeuk matches overlap"""
+
         hmmer_results = self.hmmer_runner.merge_dicts()
 
         if len(hmmer_results) > 0:
-            exon_records = self.get_exon_records(hmmer_results)
+            exon_records = self.get_exon_records(
+                hmmer_results, self.hmmer_runner.run_number
+            )
             df = self.exons_to_df(exon_records)
             overlaps = self.find_overlaps(df)
-            if overlaps:
-                inds_to_remove = self.handle_overlaps(overlaps, df)
-                inds_to_remove = list(set(inds_to_remove))
-                df.drop(inds_to_remove, inplace=True)
+            if len(overlaps) > 0:
+                discarded_exon_lengths = self.handle_overlaps(overlaps, df)
+                # df.drop(inds_to_remove, inplace=True)
                 complete, matched_genes_complete = self.reconstruct_hmmer_results(
-                    df, self.hmmer_runner.is_complete
+                    df, discarded_exon_lengths, self.hmmer_runner.is_complete
                 )
                 v_large, matched_genes_v_large = self.reconstruct_hmmer_results(
-                    df, self.hmmer_runner.is_very_large
+                    df, discarded_exon_lengths, self.hmmer_runner.is_very_large
                 )
                 fragmented, matched_genes_fragmented = self.reconstruct_hmmer_results(
-                    df, self.hmmer_runner.is_fragment
+                    df, discarded_exon_lengths, self.hmmer_runner.is_fragment
                 )
 
                 # Update hmmer runner with new dictionaries
@@ -487,16 +488,17 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
         return
 
     def get_exon_records(
-        self, busco_dict
+        self, busco_dict, run_number
     ):  # Placed in the GenomeAnalysis module because it draws on both hmmer_runner and metaeuk_runner methods
 
         initial_run_results = self.metaeuk_runner.headers_files[0]
-        rerun_results = self.metaeuk_runner.headers_files[1]
+        if run_number == 2:
+            rerun_results = self.metaeuk_runner.headers_files[1]
 
         exon_records = []
         for busco_id, gene_match in busco_dict.items():
             for gene_id, details in gene_match.items():
-                sequence, coords = gene_id.rsplit(":", 1)
+                sequence, coords = details[0]["orig gene ID"].rsplit(":", 1)
                 gene_start, gene_end = coords.split("-")
                 strand = self.gene_details[gene_id][0]["strand"]
                 score = details[0]["bitscore"]
@@ -504,10 +506,11 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                 # Need to determine run using HMMER results instead of metaeuk results. This is because exons can be
                 # matched identically to different BUSCO IDs, both on the same and on different runs. The presence of a
                 # match in the metaeuk rerun results does not indicate that the HMMER match in question is associated
-                # .with that metaeuk match
+                # with that metaeuk match
                 run_found = (
                     "2"
-                    if os.path.exists(
+                    if run_number == 2
+                    and os.path.exists(
                         os.path.join(
                             self.hmmer_runner.rerun_results_dir,
                             "{}.out".format(busco_id),
@@ -556,7 +559,13 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                     low_coords, high_coords = self.metaeuk_runner.extract_exon_coords(
                         good_match
                     )
+                    if low_coords[0] > high_coords[0]:  # for negative strand exons the order is reversed
+                        low_coords, high_coords = high_coords, low_coords
+                    trimmed_low = int(gene_id.split(":")[-1].split("-")[0])
+                    trimmed_high = int(gene_id.split(":")[-1].split("-")[1])
                     for i, entry in enumerate(low_coords):
+                        if int(entry) < trimmed_low or int(entry) > trimmed_high:  # don't include exons that were previously removed due to overlaps
+                            continue
                         record = (
                             busco_id,
                             sequence,
@@ -570,8 +579,9 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                         exon_records.append(record)
         return exon_records
 
-    def reconstruct_hmmer_results(self, df, hmmer_result_dict):
+    def reconstruct_hmmer_results(self, df, discarded_exon_lengths, hmmer_result_dict):
         busco_groups = df.groupby(["Busco id"])
+        inds_to_remove = set(discarded_exon_lengths.keys())
         hmmer_result_dict_new = defaultdict(dict)
         matched_genes_new = defaultdict(list)
         for busco_id, matches in hmmer_result_dict.items():
@@ -583,37 +593,80 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
             for gene_match, busco_gene_group in busco_gene_groups:
                 if gene_match not in matches:
                     continue
-                min_coord = None
-                for idx, row in busco_gene_group.iterrows():
-                    low_coord = row["Start"]
-                    high_coord = row["Stop"]
-                    seq = row["Sequence"]
-                    if min_coord:
-                        min_coord = min(min_coord, low_coord)
-                        max_coord = max(max_coord, high_coord)
-                    else:
-                        min_coord = low_coord
-                        max_coord = high_coord
+                new_gene_start = gene_match.split(":")[-1].split("-")[
+                    0
+                ]  # these two lines are not really used - they just initialize values that will be changed
+                new_gene_stop = gene_match.split(":")[-1].split("-")[1]
+                start_trim = 0
+                end_trim = 0
+                group_indices = set(busco_gene_group.index)
+                intersection = group_indices.intersection(inds_to_remove)
+                if len(intersection) > 0:
+                    if intersection == group_indices:
+                        continue  # remove entire gene - don't add to new dict
+                    ordered_exons = busco_gene_group.sort_values(by="Start").reset_index()
+                    new_indices = ordered_exons.index
+                    seq = ordered_exons.loc[0]["Sequence"]
+
+                    for idx in new_indices:
+                        old_index = ordered_exons.loc[idx]["index"]
+                        if old_index in intersection:
+                            start_trim += discarded_exon_lengths[old_index]
+                        else:
+                            new_gene_start = df.loc[old_index]["Start"]
+                            break
+                    for idx in new_indices[::-1]:
+                        old_index = ordered_exons.loc[idx]["index"]
+                        if old_index in intersection:
+                            end_trim += discarded_exon_lengths[old_index]
+                        else:
+                            new_gene_stop = df.loc[old_index]["Stop"]
+                            break
+                    new_gene_match = "{}:{}-{}".format(
+                        seq, new_gene_start, new_gene_stop
+                    )
+                else:
+                    new_gene_match = gene_match
 
                 details = matches[gene_match]
                 df_strand = busco_gene_group["Strand"].iloc[0]
-                new_gene_match = "{}:{}-{}".format(seq, min_coord, max_coord)
                 hmmer_result_dict_new[busco_id].update({new_gene_match: details})
                 matched_genes_new[new_gene_match].append(busco_id)
                 self.gene_details[new_gene_match] = [
                     {
-                        "gene_start": min_coord,
-                        "gene_end": max_coord,
+                        "gene_start": new_gene_start,
+                        "gene_end": new_gene_stop,
                         "strand": df_strand,
                     }
                 ]
-                self.sequences_aa[new_gene_match] = self.metaeuk_runner.sequences_aa[
-                    gene_match
-                ]
-                self.sequences_nt[new_gene_match] = self.metaeuk_runner.sequences_nt[
-                    gene_match
-                ]
+                if new_gene_match != gene_match:
+                    trimmed_sequence_aa, trimmed_sequence_nt = self.trim_sequence(
+                        gene_match, start_trim, end_trim
+                    )
+                else:
+                    try:
+                        trimmed_sequence_aa = self.metaeuk_runner.sequences_aa[gene_match]
+                        trimmed_sequence_nt = self.metaeuk_runner.sequences_nt[gene_match]
+                    except KeyError:  # happens on the second run if the first run trimmed the sequence already
+                        trimmed_sequence_aa = self.sequences_aa[gene_match]
+                        trimmed_sequence_nt = self.sequences_nt[gene_match]
+                self.sequences_aa[new_gene_match] = trimmed_sequence_aa
+                self.sequences_nt[new_gene_match] = trimmed_sequence_nt
         return hmmer_result_dict_new, matched_genes_new
+
+    def trim_sequence(self, old_gene_match, start_trim, end_trim):
+        old_sequence_aa = self.metaeuk_runner.sequences_aa[old_gene_match]
+        old_sequence_nt = self.metaeuk_runner.sequences_nt[old_gene_match]
+
+        new_sequence_nt = old_sequence_nt[start_trim : len(old_sequence_nt) - end_trim]
+        if start_trim % 3 != 0 and end_trim % 3 != 0:
+            raise BuscoError(
+                "Problem reconstructing amino acid sequence after extracting exons"
+            )
+        new_sequence_aa = old_sequence_aa[
+            int(start_trim / 3) : len(old_sequence_aa) - int(end_trim / 3)
+        ]
+        return new_sequence_aa, new_sequence_nt
 
     def exons_to_df(self, records):
         if self._mode == "genome":
@@ -624,41 +677,53 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
         df["Stop"] = df["Stop"].astype(int)
         df["Score"] = df["Score"].astype(float)
         df["Run found"] = df["Run found"].astype(int)
-        df.loc[df["Strand"] == "-", ["Start", "Stop"]] = df.loc[
-            df["Strand"] == "-", ["Stop", "Start"]
-        ].values  # reverse coordinates on negative strand
         return df
 
     def find_overlaps(self, df):
-        overlaps = self.metaeuk_runner.test_for_overlaps(df)
-        busco_overlaps = []
-        for overlap in overlaps:
-            match1 = df.loc[overlap[0]]
-            match2 = df.loc[overlap[1]]
-            if (match1["Busco id"] != match2["Busco id"]) and (
-                match1["Start"] % 3 == match2["Start"] % 3
-            ):
-                # check the overlaps are for two different BUSCOs and check overlaps are in the same reading frame
-                busco_overlaps.append(overlap)
-        return busco_overlaps
+        overlaps = self.metaeuk_runner.test_for_overlaps(df, sort=True)
+        logger.info("{} candidate overlapping regions found".format(len(overlaps)))
+        logger.info("{} exons in total".format(len(df)))
+        return overlaps
 
     def handle_overlaps(self, overlaps, df):
-        indices_to_remove = []
-        for overlap_inds in overlaps:
-            bad_inds = self.handle_diff_busco_overlap(overlap_inds, df)
-            indices_to_remove.extend(bad_inds)
-        return indices_to_remove
+        discarded_exon_lengths = {}
+        # Consider three gene matches, A, B and C, with decreasing scores respectively.
+        # If A overlaps B and B overlaps C but A does not overlap C then the order they are treated affects the outcome.
+        for n, overlap_inds in enumerate(overlaps):
+            if (
+                overlap_inds[0] in discarded_exon_lengths
+                or overlap_inds[1] in discarded_exon_lengths
+            ):
+                continue
+            else:
+                # logger.info("Overlap {}:".format(n))
+                bad_inds = self.handle_diff_busco_overlap(overlap_inds, df)
+                for idx in bad_inds:
+                    discarded_exon_lengths[idx] = (
+                        abs(df.iloc[idx]["Stop"] - df.iloc[idx]["Start"]) + 1
+                    )
+        return discarded_exon_lengths
 
     def handle_diff_busco_overlap(self, overlap_inds, df):
         match1 = df.loc[overlap_inds[0]]
         match2 = df.loc[overlap_inds[1]]
         seq = match1["Sequence"]
         busco_match1 = match1["Busco id"]
+        gene_match1 = match1["Orig gene ID"]
         run_match1 = match1["Run found"]
         busco_match2 = match2["Busco id"]
+        gene_match2 = match2["Orig gene ID"]
         run_match2 = match2["Run found"]
-        exons1 = df.loc[(df["Busco id"] == busco_match1) & (df["Sequence"] == seq)]
-        exons2 = df.loc[(df["Busco id"] == busco_match2) & (df["Sequence"] == seq)]
+        exons1 = df.loc[
+            (df["Busco id"] == busco_match1)
+            & (df["Sequence"] == seq)
+            & (df["Orig gene ID"] == gene_match1)
+        ]
+        exons2 = df.loc[
+            (df["Busco id"] == busco_match2)
+            & (df["Sequence"] == seq)
+            & (df["Orig gene ID"] == gene_match2)
+        ]
         hmmer_run_folder1 = (
             self.hmmer_runner.initial_results_dir
             if run_match1 == 1
@@ -730,7 +795,8 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
         # Check if secondary match uses priority match exons
         used_exons = pd.concat([priority_used_exons, secondary_used_exons])
         overlaps = self.metaeuk_runner.test_for_overlaps(used_exons)
-        if overlaps:
+
+        if len(overlaps) > 0:
             # Remove secondary match
             indices_to_remove = secondary_exons.index
             return indices_to_remove
@@ -761,19 +827,28 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
             return indices_to_remove
 
         overlaps = self.metaeuk_runner.test_for_overlaps(exons_to_check)
-        if overlaps:
+        if len(overlaps) > 0:
             for overlap in overlaps:
+                if overlap[0] in indices_to_remove or overlap[1] in indices_to_remove:
+                    continue
                 match1 = exons_to_check.loc[overlap[0]]
-                index_to_remove = (
-                    overlap[0]
-                    if secondary_exons.iloc[0]["Busco id"] == match1["Busco id"]
-                    else overlap[1]
-                )
-                indices_to_remove.append(index_to_remove)
+                if secondary_exons is not None:
+                    index_to_remove = (
+                        overlap[0]
+                        if secondary_exons.iloc[0]["Busco id"] == match1["Busco id"]
+                        else overlap[1]
+                    )  # It is possible that secondary_exons is None so need to check before using iloc
+                else:
+                    match2 = exons_to_check.loc[overlap[1]]
+                    index_to_remove = (
+                        overlap[0] if match1["Score"] < match2["Score"] else overlap[1]
+                    )
+
+                exons_to_remove = secondary_exons if index_to_remove in secondary_exons.index else priority_exons
+                indices_to_remove.extend(list(exons_to_remove.index))
         return indices_to_remove
 
-    @staticmethod
-    def find_unused_exons(env_coords, exons):
+    def find_unused_exons(self, env_coords, exons):
         remaining_hmm_region = 0
         unused_exons = []
         used_exons = []
@@ -815,6 +890,37 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                 used_exons.append(entry)
             else:
                 unused_exons.append(entry)
+        used_exons, unused_exons = self.adjust_exon_categories(used_exons, unused_exons)
+        return used_exons, unused_exons
+
+    @staticmethod
+    def adjust_exon_categories(used_exons, unused_exons):
+        """
+        Ensure there are no unused exons sandwiched between used exons
+        :param used_exons:
+        :param unused_exons:
+        :return:
+        """
+
+        used_exons_start = [x["Start"] for x in used_exons]
+        used_exons_end = [x["Stop"] for x in used_exons]
+        start = min(used_exons_start)
+        stop = max(used_exons_end)
+        exons_to_remove = set()
+        unused_indices = [exon["index"] for exon in unused_exons]
+        for exon in unused_exons:
+            if not exon["index"] in exons_to_remove and (
+                (exon["Start"] >= start and exon["Start"] < stop)
+                or (exon["Stop"] > start and exon["Stop"] < stop)
+            ):
+                # find exons that either start or stop within the "used" range
+                used_exons.append(exon)
+                exons_to_remove.add(exon["index"])
+        for idx in list(exons_to_remove):
+            idx2 = unused_indices.index(idx)
+            unused_exons.pop(idx2)
+            unused_indices.pop(idx2)
+
         return used_exons, unused_exons
 
     def cleanup(self):

@@ -1,3 +1,9 @@
+5.4.4
+- Fix bug in tar option (Issue #591)
+- Fix edge case bug in overlap handling (Issue #592)
+- Fix overlap adjustment algorithm and trim reported sequences
+- Fix file open mode (Issue #622)
+
 5.4.3
 - Fix bug in augustus --long pipeline (Issue #586)
 

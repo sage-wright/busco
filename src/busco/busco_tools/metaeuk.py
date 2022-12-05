@@ -11,6 +11,8 @@ import pandas as pd
 import numpy as np
 import re
 from busco.Exceptions import BuscoError
+from multiprocessing import Pool
+from itertools import repeat, chain
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -301,29 +303,70 @@ class MetaeukRunner(BaseRunner):
         return results
 
     @staticmethod
-    def detect_overlap(match1_details, match2_details):
-        return (
-            match1_details["Strand"] == match2_details["Strand"]
-        )  # check overlaps are on the same strand
+    def detect_overlap(results_grouped, seq):
+        overlap_inds = []
+        handled_inds = set()
+        g1 = results_grouped.get_group(seq)
+        g1_sorted = g1.sort_values(
+            "Start"
+        )  # sort to facilitate a single-pass coordinate check
+        for idx1, row1 in g1_sorted.iterrows():
+            start_val = g1_sorted.loc[idx1]["Start"]
+            stop_val = g1_sorted.loc[idx1]["Stop"]
+            matches = g1_sorted[g1_sorted["Start"] >= start_val].loc[
+                g1_sorted["Start"] < stop_val
+            ]  # find entries with a start coordinate between the current exon start and end
+            for idx2 in matches.index.values:
+                if idx2 in handled_inds:
+                    continue
+                match1_details = g1_sorted.loc[idx1]
+                match2_details = g1_sorted.loc[idx2]
+                if idx2 == idx1:  # don't consider overlaps with self
+                    continue
+                elif (
+                    (
+                        (
+                            match1_details["Orig gene ID"] is None  # needed for header-editing step
+                            or match1_details["Orig gene ID"]
+                            != match2_details["Orig gene ID"]
+                        )  # for efficiency skip overlaps that are
+                        # actually the same gene matching multiple BUSCOs, as this will be dealt with in the
+                        # filtering step later
+                    )
+                    and (
+                        match1_details["Strand"]
+                        == match2_details[
+                            "Strand"
+                        ]  # check overlaps are on the same strand
+                    )
+                    and (
+                        match1_details["Start"] % 3
+                        == match2_details["Start"]
+                        % 3  # check overlaps are in the same reading frame
+                    )
+                ):
+                    overlap_inds.append((idx1, idx2))
+            handled_inds.add(idx1)
+        return overlap_inds
 
-    def test_for_overlaps(self, record_df):
+    def test_for_overlaps(self, record_df, sort=False):
         results_grouped = record_df.groupby("Sequence")
-        overlaps = []
-        seq_ids = results_grouped.groups.keys()
-        for seq in seq_ids:
-            g1 = results_grouped.get_group(seq)
-            g1_sorted = g1.sort_values(
-                "Start"
-            )  # sort to facilitate a single-pass coordinate check
-            for idx1, row1 in g1_sorted.iterrows():
-                start_val = g1_sorted.loc[idx1]["Start"]
-                stop_val = g1_sorted.loc[idx1]["Stop"]
-                matches = g1_sorted[g1_sorted["Start"] > start_val].loc[
-                    g1_sorted["Start"] < stop_val
-                ]  # find entries with a start coordinate between the current exon start and end
-                for idx2 in matches.index.values:
-                    if self.detect_overlap(g1_sorted.loc[idx1], g1_sorted.loc[idx2]):
-                        overlaps.append((idx1, idx2))
+        seq_ids = list(results_grouped.groups.keys())
+        with Pool(self.cpus) as job_pool:
+            overlaps = job_pool.starmap(
+                self.detect_overlap, zip(repeat(results_grouped), seq_ids)
+            )
+
+        overlaps = list(chain.from_iterable(overlaps))
+
+        if sort:
+            max_bitscores = []
+            for overlap in overlaps:
+                match1 = record_df.loc[overlap[0]]
+                match2 = record_df.loc[overlap[1]]
+                max_bitscores.append(max(match1["Score"], match2["Score"]))
+            sort_order = np.argsort(max_bitscores)[::-1]  # descending sort
+            overlaps = np.array(overlaps)[sort_order]
 
         return overlaps
 
@@ -443,7 +486,7 @@ class MetaeukRunner(BaseRunner):
 
         matched_seqs = []
         busco_ids_retrieved = set()
-        with open(self.refseq_db, "rU") as refseq_file:
+        with open(self.refseq_db, "r") as refseq_file:
 
             for record in SeqIO.parse(refseq_file, "fasta"):
                 if any(record.id.startswith(b) for b in self.incomplete_buscos):
@@ -619,7 +662,7 @@ class MetaeukRunner(BaseRunner):
         all_records_fna = []
         all_headers = []
         try:
-            with open(self.codon_file, "rU") as f:
+            with open(self.codon_file, "r") as f:
                 for record in SeqIO.parse(f, "fasta"):
                     header_details = self.parse_header(record.id)
                     record.id = header_details["gene_id"]
@@ -627,7 +670,7 @@ class MetaeukRunner(BaseRunner):
                     record.description = header_details["gene_id"]
                     all_records_fna.append(record)
 
-            with open(self.pred_protein_seqs, "rU") as f:
+            with open(self.pred_protein_seqs, "r") as f:
                 for record in SeqIO.parse(f, "fasta"):
                     header_details = self.parse_header(record.id)
                     record.id = header_details["gene_id"]
@@ -652,12 +695,14 @@ class MetaeukRunner(BaseRunner):
 
         if all_headers:
             matches_df = self.records_to_df(all_headers)
-            overlaps = self.test_for_overlaps(matches_df)
+            overlaps = self.test_for_overlaps(matches_df, sort=True)
             inds_to_remove = []
             for overlap in overlaps:
                 match1 = matches_df.loc[overlap[0]]
                 match2 = matches_df.loc[overlap[1]]
-                if match1["Busco id"] == match2["Busco id"]:
+                if match1.name in inds_to_remove or match2.name in inds_to_remove:
+                    continue
+                elif match1["Busco id"] == match2["Busco id"]:
                     if float(match1["Score"]) > float(match2["Score"]):
                         ind_to_remove = match2.name
                     else:

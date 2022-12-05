@@ -267,7 +267,7 @@ class ProdigalRunner(BaseRunner):
             self.logfile_path_err,
         ) = self.get_output_filenames()
 
-        with open(output_filename_fna, "rU") as f:
+        with open(output_filename_fna, "r") as f:
             for record in SeqIO.parse(f, "fasta"):
                 gene_name = record.id
                 self.sequences_nt[gene_name] = record
@@ -279,7 +279,7 @@ class ProdigalRunner(BaseRunner):
                     {"gene_start": gene_start, "gene_end": gene_end, "strand": strand}
                 )
 
-        with open(output_filename_faa, "rU") as f:
+        with open(output_filename_faa, "r") as f:
             for record in SeqIO.parse(f, "fasta"):
                 self.sequences_aa[record.id] = record
 
