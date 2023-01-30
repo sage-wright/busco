@@ -6,7 +6,7 @@
 .. versionadded:: 3.0.0
 .. versionchanged:: 5.4.0
 
-Copyright (c) 2016-2022, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2023, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 """
 

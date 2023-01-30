@@ -8,7 +8,7 @@
 
 This is a logger for the pipeline that extends the default Python logger class
 
-Copyright (c) 2016-2022, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2023, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 
 """

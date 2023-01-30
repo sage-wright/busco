@@ -2,6 +2,7 @@
 
 
 if __name__ == "__main__":
+    __spec__ = None
     try:
         from busco import run_BUSCO
     except ImportError as err:

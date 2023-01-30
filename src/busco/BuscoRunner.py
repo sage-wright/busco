@@ -759,7 +759,7 @@ class AnalysisRunner:
                         auto_lineage_line = "\nConsider using the auto-lineage mode to select a more specific lineage."
                         final_output_results.append(auto_lineage_line)
                     with open(
-                        self.analysis.hmmer_runner.short_summary_file, "a"
+                        self.short_summary_file, "a"
                     ) as short_summary_file:
                         short_summary_file.write(positive_parasitic_line)
 

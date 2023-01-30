@@ -43,5 +43,5 @@ BUSCO applications from quality assessments to gene prediction and phylogenomics
 
 BUSCO: assessing genome assembly and annotation completeness with single-copy orthologs. Felipe A. Simão, Robert M. Waterhouse, Panagiotis Ioannidis, Evgenia V. Kriventseva, and Evgeny M. Zdobnov Bioinformatics, published online June 9, 2015 doi: 10.1093/bioinformatics/btv351
 
-Copyright (c) 2016-2022, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2023, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.

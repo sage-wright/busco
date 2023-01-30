@@ -6,7 +6,7 @@
 .. versionadded:: 3.0.0
 .. versionchanged:: 5.4.0
 
-Copyright (c) 2016-2022, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2023, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 
 """
@@ -372,6 +372,7 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
         super().__init__()
         self.metaeuk_runner = None
         self.gene_details = {}
+        self.gene_update_mapping = {}
 
     def init_tools(self):
         super().init_tools()
@@ -574,7 +575,7 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                             strand,
                             score,
                             run_found,
-                            gene_id,
+                            details[0]["orig gene ID"],
                         )
                         exon_records.append(record)
         return exon_records
@@ -592,7 +593,10 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
             busco_gene_groups = busco_group.groupby("Orig gene ID")
             for gene_match, busco_gene_group in busco_gene_groups:
                 if gene_match not in matches:
-                    continue
+                    if gene_match not in self.gene_update_mapping:
+                        continue
+                    else:
+                        gene_match = self.gene_update_mapping[gene_match]
                 new_gene_start = gene_match.split(":")[-1].split("-")[
                     0
                 ]  # these two lines are not really used - they just initialize values that will be changed
@@ -643,6 +647,7 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                     trimmed_sequence_aa, trimmed_sequence_nt = self.trim_sequence(
                         gene_match, start_trim, end_trim
                     )
+                    self.gene_update_mapping[gene_match] = new_gene_match
                 else:
                     try:
                         trimmed_sequence_aa = self.metaeuk_runner.sequences_aa[gene_match]
@@ -761,6 +766,7 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
             secondary_exons = exons1
             priority_gene_id = gene_id2
             secondary_gene_id = gene_id1
+
         priority_env_coords = iter(priority_match[priority_gene_id]["env_coords"])
         secondary_env_coords = iter(secondary_match[secondary_gene_id]["env_coords"])
         priority_used_exons, priority_unused_exons = self.find_unused_exons(

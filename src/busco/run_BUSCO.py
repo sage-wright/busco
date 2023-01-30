@@ -13,7 +13,7 @@ To get help, ``busco -h``. See also the user guide.
 
 And visit our website `<http://busco.ezlab.org/>`_
 
-Copyright (c) 2016-2022, Evgeny Zdobnov (ez@ezlab.org)
+Copyright (c) 2016-2023, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
 
 """
