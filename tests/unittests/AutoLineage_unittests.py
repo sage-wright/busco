@@ -273,25 +273,23 @@ class TestAutoLineage(unittest.TestCase):
         mock_config3 = Mock()
         mock_config1.get.side_effect = [
             "test_input1",
-            "prok_tran",
-            "prokaryota",
             "test_lineage1",
             "test_lineage1",
         ]
         mock_config2.get.side_effect = [
             "test_input2",
-            "prok_tran",
-            "prokaryota",
             "test_lineage2",
             "test_lineage2",
         ]
         mock_config3.get.side_effect = [
             "test_input3",
-            "euk_tran",
-            "eukaryota",
             "test_lineage3",
             "test_lineage3",
         ]
+
+        mock_config1.update_mode.side_effect = [("prok_tran", "prokaryota")]
+        mock_config2.update_mode.side_effect = [("prok_tran", "prokaryota")]
+        mock_config3.update_mode.side_effect = [("prok_tran", "eukaryota")]
 
         mock_analysis1 = Mock()
         mock_analysis2 = Mock()

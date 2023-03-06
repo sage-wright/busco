@@ -206,30 +206,29 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
     def update_mode(self):
         mode = self.get("busco_run", "mode")
         domain = self.get("busco_run", "domain")
-        if mode == "genome":
+        if "genome" in mode:
             if domain in ["prokaryota", "viruses"]:
-                self.set("busco_run", "mode", "prok_genome")
+                mode = "prok_genome"
             elif domain == "eukaryota":
                 if self.getboolean("busco_run", "use_augustus"):
-                    self.set("busco_run", "mode", "euk_genome_aug")
+                    mode = "euk_genome_aug"
                 else:
-                    self.set("busco_run", "mode", "euk_genome_met")
+                    mode = "euk_genome_met"
             else:
-                raise BatchFatalError(
-                    "Unrecognized mode {}".format(self.get("busco_run", "mode"))
-                )
+                raise BatchFatalError("Unrecognized mode {}".format(mode))
 
         elif mode == "transcriptome":
             if domain == "prokaryota":
-                self.set("busco_run", "mode", "prok_tran")
+                mode = "prok_tran"
             elif domain == "eukaryota":
-                self.set("busco_run", "mode", "euk_tran")
+                mode = "euk_tran"
             elif domain == "viruses":
-                self.set(
-                    "busco_run", "mode", "prok_genome"
-                )  # Suggested by Mose - Prodigal may perform better on viruses than BLAST + HMMER.
+                mode = "prok_genome"  # Suggested by Mose - Prodigal may perform better on viruses
+                # than BLAST + HMMER.
             else:
                 raise BatchFatalError("Unrecognized mode {}".format(mode))
+
+        return mode, domain
 
     def add_mode_specific_parameters(self):
         mode = self.get("busco_run", "mode")
@@ -283,7 +282,9 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
                     "domain"
                 ]  # Necessary to set domain kw first to enable augustus and prodigal arguments to be handled properly
                 self.set("busco_run", "domain", domain)
-                self.update_mode()
+                mode, domain = self.update_mode()
+                self.set("busco_run", "mode", mode)
+                self.set("busco_run", "domain", domain)
                 del dataset_kwargs["domain"]
                 for key, value in dataset_kwargs.items():
                     if key == "species":
@@ -335,6 +336,18 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         """
         if not os.path.exists(main_out):
             os.makedirs(main_out)
+
+    def reset(self):
+        options_to_reset = ["domain_run_name", "ambiguous_cd_range_lower", "ambiguous_cd_range_upper", "creation_date",
+                            "domain", "in", "lineage_results_dir", "name", "number_of_buscos",
+                            "number_of_species", "main_out", "prodigal_genetic_code"]
+        for option in options_to_reset:
+            try:
+                self.remove_option("busco_run", option)
+            except NoOptionError:
+                continue
+        if self.getboolean("busco_run", "auto-lineage"):
+            self.remove_option("busco_run", "lineage_dataset")
 
     def set_results_dirname(self, lineage):
         self.set(

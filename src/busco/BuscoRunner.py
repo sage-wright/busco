@@ -107,6 +107,7 @@ class SingleRunner:
     def reset(self):
         for runner in type(self).all_runners:
             runner.reset()
+            runner.config.reset()
             runner.analysis.reset()
         type(self).all_runners = set()
 
@@ -160,7 +161,10 @@ class SingleRunner:
 
             if self.config.getboolean("busco_run", "tar"):
                 self.compress_folders()
-            self.compile_summary()
+            try:
+                self.compile_summary()
+            except AttributeError:
+                raise BatchFatalError("BUSCO encountered a problem. This is possibly caused by restarting a previously completed run with different parameters.")
             self.runner.finish(time.time() - self.start_time)
 
         except BuscoError:
@@ -268,14 +272,14 @@ class BatchRunner:
             except BuscoError as be:
                 if "did not recognize any genes" in be.value:
                     type(self).batch_results.append(
-                        "{}\tNo genes found\t\t\t\t\t\t\t\t\t\t\t\t\t\n".format(
-                            os.path.basename(input_file)
+                        "{}\tNo genes found\t\t\t\t\t\t\t\t\t\t{}\n".format(
+                            os.path.basename(input_file), "\t\t\t"*int(single_run.config.getboolean("busco_run", "auto-lineage"))
                         )
                     )
                 else:
                     type(self).batch_results.append(
-                        "{}\tRun failed; check logs\t\t\t\t\t\t\t\t\t\t\t\t\t\n".format(
-                            os.path.basename(input_file)
+                        "{}\tRun failed; check logs\t\t\t\t\t\t\t\t\t\t{}\n".format(
+                            os.path.basename(input_file), "\t\t\t"*int(single_run.config.getboolean("busco_run", "auto-lineage"))
                         )
                     )
                 logger.error(be.value)
@@ -345,33 +349,11 @@ class AnalysisRunner:
         setattr(BuscoAnalysis, "config", config)
 
         self.input_file = self.config.get("busco_run", "in")
-        self.mode = self.config.get("busco_run", "mode")
-        self.domain = self.config.get("busco_run", "domain")
+        self.mode, self.domain = self.config.update_mode()
         self.lineage_basename = os.path.basename(
             self.config.get("busco_run", "lineage_dataset")
         )
 
-        if self.mode == "genome":
-            if self.domain in ["prokaryota", "viruses"]:
-                self.mode = "prok_genome"
-            elif self.domain == "eukaryota":
-                if self.config.getboolean("busco_run", "use_augustus"):
-                    self.mode = "euk_genome_aug"
-                else:
-                    self.mode = "euk_genome_met"
-            else:
-                raise BatchFatalError("Unrecognized mode {}".format(self.mode))
-
-        elif self.mode == "transcriptome":
-            if self.domain == "prokaryota":
-                self.mode = "prok_tran"
-            elif self.domain == "eukaryota":
-                self.mode = "euk_tran"
-            elif self.domain == "viruses":
-                self.mode = "prok_genome"  # Suggested by Mose - Prodigal may perform better on viruses
-                # than BLAST + HMMER.
-            else:
-                raise BatchFatalError("Unrecognized mode {}".format(self.mode))
         analysis_type = type(self).mode_dict[self.mode]
         self.analysis = analysis_type()
         self.summary = {

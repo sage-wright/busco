@@ -372,7 +372,7 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
         super().__init__()
         self.metaeuk_runner = None
         self.gene_details = {}
-        self.gene_update_mapping = {}
+        self.gene_update_mapping = defaultdict(dict)
 
     def init_tools(self):
         super().init_tools()
@@ -560,12 +560,16 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                     low_coords, high_coords = self.metaeuk_runner.extract_exon_coords(
                         good_match
                     )
-                    if low_coords[0] > high_coords[0]:  # for negative strand exons the order is reversed
+                    if (
+                        low_coords[0] > high_coords[0]
+                    ):  # for negative strand exons the order is reversed
                         low_coords, high_coords = high_coords, low_coords
                     trimmed_low = int(gene_id.split(":")[-1].split("-")[0])
                     trimmed_high = int(gene_id.split(":")[-1].split("-")[1])
                     for i, entry in enumerate(low_coords):
-                        if int(entry) < trimmed_low or int(entry) > trimmed_high:  # don't include exons that were previously removed due to overlaps
+                        if (
+                            int(entry) < trimmed_low or int(entry) > trimmed_high
+                        ):  # don't include exons that were previously removed due to overlaps
                             continue
                         record = (
                             busco_id,
@@ -593,10 +597,12 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
             busco_gene_groups = busco_group.groupby("Orig gene ID")
             for gene_match, busco_gene_group in busco_gene_groups:
                 if gene_match not in matches:
-                    if gene_match not in self.gene_update_mapping:
+                    if busco_id not in self.gene_update_mapping:
+                        continue
+                    elif gene_match not in self.gene_update_mapping[busco_id]:
                         continue
                     else:
-                        gene_match = self.gene_update_mapping[gene_match]
+                        gene_match = self.gene_update_mapping[busco_id][gene_match]
                 new_gene_start = gene_match.split(":")[-1].split("-")[
                     0
                 ]  # these two lines are not really used - they just initialize values that will be changed
@@ -608,7 +614,9 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                 if len(intersection) > 0:
                     if intersection == group_indices:
                         continue  # remove entire gene - don't add to new dict
-                    ordered_exons = busco_gene_group.sort_values(by="Start").reset_index()
+                    ordered_exons = busco_gene_group.sort_values(
+                        by="Start"
+                    ).reset_index()
                     new_indices = ordered_exons.index
                     seq = ordered_exons.loc[0]["Sequence"]
 
@@ -647,11 +655,15 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                     trimmed_sequence_aa, trimmed_sequence_nt = self.trim_sequence(
                         gene_match, start_trim, end_trim
                     )
-                    self.gene_update_mapping[gene_match] = new_gene_match
+                    self.gene_update_mapping[busco_id][gene_match] = new_gene_match
                 else:
                     try:
-                        trimmed_sequence_aa = self.metaeuk_runner.sequences_aa[gene_match]
-                        trimmed_sequence_nt = self.metaeuk_runner.sequences_nt[gene_match]
+                        trimmed_sequence_aa = self.metaeuk_runner.sequences_aa[
+                            gene_match
+                        ]
+                        trimmed_sequence_nt = self.metaeuk_runner.sequences_nt[
+                            gene_match
+                        ]
                     except KeyError:  # happens on the second run if the first run trimmed the sequence already
                         trimmed_sequence_aa = self.sequences_aa[gene_match]
                         trimmed_sequence_nt = self.sequences_nt[gene_match]
@@ -660,8 +672,8 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
         return hmmer_result_dict_new, matched_genes_new
 
     def trim_sequence(self, old_gene_match, start_trim, end_trim):
-        old_sequence_aa = self.metaeuk_runner.sequences_aa[old_gene_match]
-        old_sequence_nt = self.metaeuk_runner.sequences_nt[old_gene_match]
+        old_sequence_aa = self.sequences_aa[old_gene_match]
+        old_sequence_nt = self.sequences_nt[old_gene_match]
 
         new_sequence_nt = old_sequence_nt[start_trim : len(old_sequence_nt) - end_trim]
         if start_trim % 3 != 0 and end_trim % 3 != 0:
@@ -850,7 +862,11 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                         overlap[0] if match1["Score"] < match2["Score"] else overlap[1]
                     )
 
-                exons_to_remove = secondary_exons if index_to_remove in secondary_exons.index else priority_exons
+                exons_to_remove = (
+                    secondary_exons
+                    if index_to_remove in secondary_exons.index
+                    else priority_exons
+                )
                 indices_to_remove.extend(list(exons_to_remove.index))
         return indices_to_remove
 
