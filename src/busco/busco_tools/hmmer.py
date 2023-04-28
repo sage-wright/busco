@@ -478,19 +478,26 @@ class HMMERRunner(BaseRunner):
             matched_genes_fragment,
         )
 
-    @staticmethod
-    def remove_overlaps(matched_records):
+    def remove_overlaps(self, matched_records):
         seq_ids = []
-        start_coords = []
-        end_coords = []
+        low_coords = []
+        high_coords = []
         scores = []
+        strands = []
         try:
             for record in matched_records:
                 seq_id, coords = record.split(":")
-                start_coord, end_coord = coords.split("-")
+                start_coord, stop_coord = map(int, coords.split("-"))
+                low_coord = min(start_coord, stop_coord)
+                high_coord = max(start_coord, stop_coord)
+                if low_coord == start_coord:
+                    strand = "+"
+                else:
+                    strand = "-"
                 seq_ids.append(seq_id)
-                start_coords.append(start_coord)
-                end_coords.append(end_coord)
+                low_coords.append(low_coord)
+                high_coords.append(high_coord)
+                strands.append(strand)
                 scores.append(matched_records[record]["score"])
         except ValueError:  # for protein sequences there is no ":<coords>" suffix, so skip the overlap filtering
             return matched_records
@@ -498,45 +505,44 @@ class HMMERRunner(BaseRunner):
         records_df = pd.DataFrame(
             {
                 "Sequence": seq_ids,
-                "Start": start_coords,
-                "Stop": end_coords,
+                "Low coord": low_coords,
+                "High coord": high_coords,
                 "Score": scores,
+                "Strand": strands,
             }
         )
         results_grouped = records_df.groupby("Sequence")
         entries_to_remove = []
         seq_ids = results_grouped.groups.keys()
         for seq in seq_ids:
-            g1 = results_grouped.get_group(seq)
-            g1_sorted = g1.sort_values(
-                "Start"
-            )  # sort to facilitate a single-pass coordinate check
-            for idx1, row1 in g1_sorted.iterrows():
-                current_record = g1_sorted.loc[idx1]
-                start_val = current_record["Start"]
-                stop_val = current_record["Stop"]
-                current_seqid = "{}:{}-{}".format(
-                    current_record["Sequence"], start_val, stop_val
-                )
+            match_finder = self.get_matches(results_grouped, seq)
+            for match in match_finder:
+                idx1, current_seqid, g1_sorted, matches = match
                 if (
                     current_seqid in entries_to_remove
                 ):  # overlaps with removed entries don't count
                     continue
 
-                matches = g1_sorted[g1_sorted["Start"] > start_val].loc[
-                    g1_sorted["Start"] < stop_val
-                ]  # find entries with a start coordinate between the current exon start and end
-                for idx2 in matches.index.values:
-                    if g1_sorted.loc[idx1]["Score"] >= g1_sorted.loc[idx2]["Score"]:
+                for idx2 in matches.index.values: # don't consider overlaps with self
+                    if idx1 == idx2:
+                        continue
+                    elif g1_sorted.loc[idx1]["Score"] >= g1_sorted.loc[idx2]["Score"]:
                         ind_to_remove = idx2
                     else:
                         ind_to_remove = idx1
                     record_to_remove = g1_sorted.loc[ind_to_remove]
+                    record_start_coord, record_stop_coord = (
+                        record_to_remove["Low coord"],
+                        record_to_remove["High coord"],
+                    ) if record_to_remove["Strand"] == "+" else (
+                        record_to_remove["High coord"],
+                        record_to_remove["Low coord"],
+                    )
                     entries_to_remove.append(
                         "{}:{}-{}".format(
                             record_to_remove["Sequence"],
-                            record_to_remove["Start"],
-                            record_to_remove["Stop"],
+                            record_start_coord,
+                            record_stop_coord,
                         )
                     )
 
@@ -632,14 +638,7 @@ class HMMERRunner(BaseRunner):
         """
         # For a given input dictionary {busco_id: gene_ids}, make sure we are using the corresponding dictionary
         # {gene_id: busco_matches}
-        if busco_dict == self.is_complete:
-            matched_genes = self.matched_genes_complete
-        elif busco_dict == self.is_very_large:
-            matched_genes = self.matched_genes_vlarge
-        elif busco_dict == self.is_fragment:
-            matched_genes = self.matched_genes_fragment
-        else:
-            raise BuscoError("Unrecognized dictionary of BUSCOs.")
+        matched_genes = self.get_matched_genes_dict(busco_dict)
 
         busco_matches_to_remove = []
         # Keep the best scoring gene if gene is matched by more than one busco with the same match rank
@@ -679,6 +678,17 @@ class HMMERRunner(BaseRunner):
 
         return
 
+    def get_matched_genes_dict(self, busco_dict):
+        if busco_dict == self.is_complete:
+            matched_genes = self.matched_genes_complete
+        elif busco_dict == self.is_very_large:
+            matched_genes = self.matched_genes_vlarge
+        elif busco_dict == self.is_fragment:
+            matched_genes = self.matched_genes_fragment
+        else:
+            raise BuscoError("Unrecognized dictionary of BUSCOs.")
+        return matched_genes
+
     def _remove_low_scoring_matches(self, busco_dict):
         """
         Go through input dictionary and remove any gene matches that score less than 85% of the top gene match score
@@ -688,6 +698,8 @@ class HMMERRunner(BaseRunner):
         :return:
         """
         empty_buscos = []
+
+        matched_genes = self.get_matched_genes_dict(busco_dict)
 
         # For each busco, keep only matches within 85% of top bitscore match for that busco
         for busco_id, matches in busco_dict.items():
@@ -714,7 +726,9 @@ class HMMERRunner(BaseRunner):
         for item in empty_buscos:
             busco_id, gene_id = item
             busco_dict[busco_id].pop(gene_id)
-
+            matched_genes[gene_id].remove(busco_id)
+            if len(matched_genes[gene_id]) == 0:
+                matched_genes.pop(gene_id)
         return
 
     @staticmethod
@@ -1001,6 +1015,7 @@ class HMMERRunner(BaseRunner):
                     aa_seqs = [sequences_aa[gene_id] for gene_id in gene_matches]
                 with open(os.path.join(output_dir, "{}.faa".format(busco)), "w") as f1:
                     SeqIO.write(aa_seqs, f1, "fasta")
+        return
 
     def write_hmmer_results(self, output_lines):
         """

@@ -4,7 +4,7 @@
 .. module:: GenomeAnalysis
    :synopsis: GenomeAnalysis implements genome analysis specifics
 .. versionadded:: 3.0.0
-.. versionchanged:: 5.4.0
+.. versionchanged:: 5.4.7
 
 Copyright (c) 2016-2023, Evgeny Zdobnov (ez@ezlab.org)
 Licensed under the MIT license. See LICENSE.md file.
@@ -499,8 +499,13 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
         exon_records = []
         for busco_id, gene_match in busco_dict.items():
             for gene_id, details in gene_match.items():
-                sequence, coords = details[0]["orig gene ID"].rsplit(":", 1)
-                gene_start, gene_end = coords.split("-")
+                gene_start, gene_end = gene_id.split(":")[-1].split("-")
+                low_coord = min([int(gene_start), int(gene_end)])
+                high_coord = max([int(gene_start), int(gene_end)])
+                sequence, orig_gene_coords = details[0]["orig gene ID"].rsplit(":", 1)
+                orig_gene_start, orig_gene_end = orig_gene_coords.split("-")
+                low_coord_orig = min([int(orig_gene_start), int(orig_gene_end)])
+                high_coord_orig = max([int(orig_gene_start), int(orig_gene_end)])
                 strand = self.gene_details[gene_id][0]["strand"]
                 score = details[0]["bitscore"]
 
@@ -525,7 +530,7 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                             [
                                 "grep",
                                 "{}|{}|.*|{}|{}|".format(
-                                    sequence, strand, gene_start, gene_end
+                                    sequence, strand, low_coord_orig, high_coord_orig
                                 ),
                                 rerun_results,
                             ]
@@ -535,7 +540,7 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                             [
                                 "grep",
                                 "{}|{}|.*|{}|{}|".format(
-                                    sequence, strand, gene_start, gene_end
+                                    sequence, strand, low_coord_orig, high_coord_orig
                                 ),
                                 initial_run_results,
                             ]
@@ -553,7 +558,7 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                 # redundantly matches the gene coordinates again.
                 good_match = self.metaeuk_runner.find_match(
                     matches,
-                    ["|{}|".format(gene_start), "|{}|".format(gene_end), sequence],
+                    ["|{}|".format(orig_gene_start), "|{}|".format(orig_gene_end), sequence],
                 )
 
                 if good_match:
@@ -564,11 +569,10 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                         low_coords[0] > high_coords[0]
                     ):  # for negative strand exons the order is reversed
                         low_coords, high_coords = high_coords, low_coords
-                    trimmed_low = int(gene_id.split(":")[-1].split("-")[0])
-                    trimmed_high = int(gene_id.split(":")[-1].split("-")[1])
+
                     for i, entry in enumerate(low_coords):
                         if (
-                            int(entry) < trimmed_low or int(entry) > trimmed_high
+                            int(entry) < low_coord or int(entry) > high_coord
                         ):  # don't include exons that were previously removed due to overlaps
                             continue
                         record = (
@@ -602,38 +606,45 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                     elif gene_match not in self.gene_update_mapping[busco_id]:
                         continue
                     else:
-                        gene_match = self.gene_update_mapping[busco_id][gene_match]
-                new_gene_start = gene_match.split(":")[-1].split("-")[
-                    0
-                ]  # these two lines are not really used - they just initialize values that will be changed
-                new_gene_stop = gene_match.split(":")[-1].split("-")[1]
+                        gene_match = self.gene_update_mapping[busco_id][gene_match]["new_gene_coords"]
+                new_gene_start, new_gene_stop = gene_match.split(":")[-1].split("-")  # this line just initializes values that will be changed if an exon is removed
                 start_trim = 0
                 end_trim = 0
                 group_indices = set(busco_gene_group.index)
                 intersection = group_indices.intersection(inds_to_remove)
                 if len(intersection) > 0:
+                    new_gene_low = min(new_gene_start, new_gene_stop)  # initialize values
+                    new_gene_high = max(new_gene_start, new_gene_stop)
                     if intersection == group_indices:
                         continue  # remove entire gene - don't add to new dict
                     ordered_exons = busco_gene_group.sort_values(
-                        by="Start"
+                        by="Low coord"
                     ).reset_index()
                     new_indices = ordered_exons.index
                     seq = ordered_exons.loc[0]["Sequence"]
+                    strand = ordered_exons.loc[0]["Strand"]
 
                     for idx in new_indices:
                         old_index = ordered_exons.loc[idx]["index"]
                         if old_index in intersection:
-                            start_trim += discarded_exon_lengths[old_index]
+                            if strand == "+":
+                                start_trim += discarded_exon_lengths[old_index]
+                            else:
+                                end_trim += discarded_exon_lengths[old_index]
                         else:
-                            new_gene_start = df.loc[old_index]["Start"]
+                            new_gene_low = df.loc[old_index]["Low coord"]
                             break
                     for idx in new_indices[::-1]:
                         old_index = ordered_exons.loc[idx]["index"]
                         if old_index in intersection:
-                            end_trim += discarded_exon_lengths[old_index]
+                            if strand == "+":
+                                end_trim += discarded_exon_lengths[old_index]
+                            else:
+                                start_trim += discarded_exon_lengths[old_index]
                         else:
-                            new_gene_stop = df.loc[old_index]["Stop"]
+                            new_gene_high = df.loc[old_index]["High coord"]
                             break
+                    new_gene_start, new_gene_stop = (new_gene_low, new_gene_high) if strand == "+" else (new_gene_high, new_gene_low)
                     new_gene_match = "{}:{}-{}".format(
                         seq, new_gene_start, new_gene_stop
                     )
@@ -646,16 +657,16 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                 matched_genes_new[new_gene_match].append(busco_id)
                 self.gene_details[new_gene_match] = [
                     {
-                        "gene_start": new_gene_start,
+                        "gene_start": new_gene_start, # these are the same as the old gene coordinates if no exons were removed
                         "gene_end": new_gene_stop,
                         "strand": df_strand,
                     }
                 ]
                 if new_gene_match != gene_match:
                     trimmed_sequence_aa, trimmed_sequence_nt = self.trim_sequence(
-                        gene_match, start_trim, end_trim
+                        gene_match, new_gene_match, start_trim, end_trim
                     )
-                    self.gene_update_mapping[busco_id][gene_match] = new_gene_match
+                    self.gene_update_mapping[busco_id][gene_match] = {"new_gene_coords": new_gene_match, "start_trim": start_trim, "end_trim": end_trim}
                 else:
                     try:
                         trimmed_sequence_aa = self.metaeuk_runner.sequences_aa[
@@ -671,7 +682,7 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                 self.sequences_nt[new_gene_match] = trimmed_sequence_nt
         return hmmer_result_dict_new, matched_genes_new
 
-    def trim_sequence(self, old_gene_match, start_trim, end_trim):
+    def trim_sequence(self, old_gene_match, new_gene_match, start_trim, end_trim):
         old_sequence_aa = self.sequences_aa[old_gene_match]
         old_sequence_nt = self.sequences_nt[old_gene_match]
 
@@ -683,6 +694,8 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
         new_sequence_aa = old_sequence_aa[
             int(start_trim / 3) : len(old_sequence_aa) - int(end_trim / 3)
         ]
+        new_sequence_nt.id = new_sequence_nt.name = new_sequence_nt.description = new_gene_match
+        new_sequence_aa.id = new_sequence_aa.name = new_sequence_aa.description = new_gene_match
         return new_sequence_aa, new_sequence_nt
 
     def exons_to_df(self, records):
@@ -690,10 +703,11 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
             logger.info("Validating exons and removing overlapping matches")
 
         df = self.metaeuk_runner.records_to_df(records)
-        df["Start"] = df["Start"].astype(int)
-        df["Stop"] = df["Stop"].astype(int)
+        df["Low coord"] = df["Low coord"].astype(int)
+        df["High coord"] = df["High coord"].astype(int)
         df["Score"] = df["Score"].astype(float)
         df["Run found"] = df["Run found"].astype(int)
+        df.sort_values(by=["Busco id", "Sequence", "Low coord"], inplace=True)
         return df
 
     def find_overlaps(self, df):
@@ -717,7 +731,7 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                 bad_inds = self.handle_diff_busco_overlap(overlap_inds, df)
                 for idx in bad_inds:
                     discarded_exon_lengths[idx] = (
-                        abs(df.iloc[idx]["Stop"] - df.iloc[idx]["Start"]) + 1
+                        abs(df.loc[idx]["High coord"] - df.loc[idx]["Low coord"]) + 1
                     )
         return discarded_exon_lengths
 
@@ -731,6 +745,8 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
         busco_match2 = match2["Busco id"]
         gene_match2 = match2["Orig gene ID"]
         run_match2 = match2["Run found"]
+        strand1 = match1["Strand"]
+        strand2 = match2["Strand"]
         exons1 = df.loc[
             (df["Busco id"] == busco_match1)
             & (df["Sequence"] == seq)
@@ -761,31 +777,50 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
         )
         gene_id1 = match1["Orig gene ID"]
         gene_id2 = match2["Orig gene ID"]
+
+        if busco_match1 in self.gene_update_mapping and gene_id1 in self.gene_update_mapping[busco_match1]:
+            start_trim1 = self.gene_update_mapping[busco_match1][gene_id1]["start_trim"]
+            end_trim1 = self.gene_update_mapping[busco_match1][gene_id1]["end_trim"]
+        else:
+            start_trim1 = 0
+            end_trim1 = 0
+
+        if busco_match2 in self.gene_update_mapping and gene_id2 in self.gene_update_mapping[busco_match2]:
+            start_trim2 = self.gene_update_mapping[busco_match2][gene_id2]["start_trim"]
+            end_trim2 = self.gene_update_mapping[busco_match2][gene_id2]["end_trim"]
+        else:
+            start_trim2 = 0
+            end_trim2 = 0
+
         if (
             hmmer_match_details1[gene_id1]["score"]
             > hmmer_match_details2[gene_id2]["score"]
         ):
             priority_match = hmmer_match_details1
             secondary_match = hmmer_match_details2
-            priority_exons = exons1
-            secondary_exons = exons2
+            priority_exons = exons1.sort_values(by="Low coord", ascending=strand1 == "+")
+            secondary_exons = exons2.sort_values(by="Low coord", ascending=strand2 == "+")
             priority_gene_id = gene_id1
             secondary_gene_id = gene_id2
+            priority_gene_trim = (start_trim1, end_trim1)
+            secondary_gene_trim = (start_trim2, end_trim2)
         else:
             priority_match = hmmer_match_details2
             secondary_match = hmmer_match_details1
-            priority_exons = exons2
-            secondary_exons = exons1
+            priority_exons = exons2.sort_values(by="Low coord", ascending=strand2 == "+")
+            secondary_exons = exons1.sort_values(by="Low coord", ascending=strand1 == "+")
             priority_gene_id = gene_id2
             secondary_gene_id = gene_id1
+            priority_gene_trim = (start_trim2, end_trim2)
+            secondary_gene_trim = (start_trim1, end_trim1)
 
         priority_env_coords = iter(priority_match[priority_gene_id]["env_coords"])
         secondary_env_coords = iter(secondary_match[secondary_gene_id]["env_coords"])
         priority_used_exons, priority_unused_exons = self.find_unused_exons(
-            priority_env_coords, priority_exons
+            priority_env_coords, priority_exons, priority_gene_trim
         )
         secondary_used_exons, secondary_unused_exons = self.find_unused_exons(
-            secondary_env_coords, secondary_exons
+            secondary_env_coords, secondary_exons, secondary_gene_trim
         )
 
         priority_used_exons = (
@@ -870,16 +905,17 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                 indices_to_remove.extend(list(exons_to_remove.index))
         return indices_to_remove
 
-    def find_unused_exons(self, env_coords, exons):
+    def find_unused_exons(self, env_coords, exons, gene_trim):
         remaining_hmm_region = 0
         unused_exons = []
         used_exons = []
         hmm_coords = next(env_coords)
+        start_trim, end_trim = gene_trim[0]/3, gene_trim[1]/3
         exon_cumul_len = 0
         for idx, entry in exons.iterrows():
             entry["index"] = idx
             exon_matched = False
-            exon_size_nt = int(entry["Stop"]) - int(entry["Start"]) + 1
+            exon_size_nt = int(entry["High coord"]) - int(entry["Low coord"]) + 1
             if not exon_size_nt % 3 == 0:
                 raise BuscoError(
                     "The exon coordinates contain fractional reading frames and are ambiguous."
@@ -894,10 +930,10 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                 exon_matched = True
 
             elif hmm_coords:
-                while hmm_coords[0] < exon_cumul_len + 1:
+                while hmm_coords[0] - start_trim < exon_cumul_len + 1:
                     # hmm starts within exon
                     exon_matched = True
-                    if hmm_coords[1] <= exon_cumul_len + 1:
+                    if hmm_coords[1] - start_trim <= exon_cumul_len + 1:
                         # hmm ends within exon; cycle to the next hmm region
                         try:
                             hmm_coords = next(env_coords)
@@ -906,13 +942,14 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                             break
                         continue
                     else:
-                        remaining_hmm_region = hmm_coords[1] - exon_size_aa + 1
+                        remaining_hmm_region = hmm_coords[1] - start_trim - exon_size_aa + 1
                         break
             if exon_matched:
                 used_exons.append(entry)
             else:
                 unused_exons.append(entry)
-        used_exons, unused_exons = self.adjust_exon_categories(used_exons, unused_exons)
+        if len(used_exons) > 0:
+            used_exons, unused_exons = self.adjust_exon_categories(used_exons, unused_exons)
         return used_exons, unused_exons
 
     @staticmethod
@@ -924,16 +961,16 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
         :return:
         """
 
-        used_exons_start = [x["Start"] for x in used_exons]
-        used_exons_end = [x["Stop"] for x in used_exons]
+        used_exons_start = [x["Low coord"] for x in used_exons]
+        used_exons_end = [x["High coord"] for x in used_exons]
         start = min(used_exons_start)
         stop = max(used_exons_end)
         exons_to_remove = set()
         unused_indices = [exon["index"] for exon in unused_exons]
         for exon in unused_exons:
             if not exon["index"] in exons_to_remove and (
-                (exon["Start"] >= start and exon["Start"] < stop)
-                or (exon["Stop"] > start and exon["Stop"] < stop)
+                (exon["Low coord"] >= start and exon["Low coord"] < stop)
+                or (exon["High coord"] > start and exon["High coord"] < stop)
             ):
                 # find exons that either start or stop within the "used" range
                 used_exons.append(exon)

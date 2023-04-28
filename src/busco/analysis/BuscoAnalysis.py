@@ -154,7 +154,6 @@ class BuscoAnalysis(metaclass=ABCMeta):
 
         :raises BuscoError: if the dataset is missing files or folders
         """
-
         # Check hmm files exist
         files = os.listdir(os.path.join(self.lineage_dataset, "hmms"))
         if not files:

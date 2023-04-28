@@ -237,6 +237,28 @@ class BaseRunner(Tool, metaclass=ABCMeta):
 
         return
 
+    @staticmethod
+    def get_matches(results_grouped, seq):
+        g1 = results_grouped.get_group(seq)
+        g1_sorted = g1.sort_values(
+            "Low coord"
+        )  # sort to facilitate a single-pass coordinate check
+        for idx1, row1 in g1_sorted.iterrows():
+            strand = g1_sorted.loc[idx1]["Strand"]
+            if strand == "-":
+                start_val = high_coord = g1_sorted.loc[idx1]["High coord"]
+                stop_val = low_coord = g1_sorted.loc[idx1]["Low coord"]
+            else:
+                start_val = low_coord = g1_sorted.loc[idx1]["Low coord"]
+                stop_val = high_coord = g1_sorted.loc[idx1]["High coord"]
+            current_seqid = "{}:{}-{}".format(
+                g1_sorted.loc[idx1], start_val, stop_val
+            )
+            matches = g1_sorted[g1_sorted["Low coord"] >= low_coord].loc[
+                g1_sorted["Low coord"] < high_coord
+                ]  # find entries with a start coordinate between the current exon start and end
+            yield idx1, current_seqid, g1_sorted, matches
+
     @abstractmethod
     def get_version(self):
         return

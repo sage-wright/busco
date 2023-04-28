@@ -1,8 +1,13 @@
+5.4.7
+- Fix bug in overlap handling (Issue #653): this fix also updated the way negative strand coordinates are reported,
+i.e. <gene_id>:<start>-<stop> instead of <gene_id>:<low>-<high>
+- Fix bug in HMMER result filtering (Issue #661)
+- Fix bug in sequence trimming when exons are removed
+
 5.4.6
 - Fix mode setting bug in batch mode autolineage (Issue #636)
 - Fix tab discrepancy bug in batch_summary.txt (Issue #643)
 - Fix coordinate bug in overlap handling (Issue #644)
-
 
 5.4.5
 - Fix bug in overlap handling (Issues #627, #633)

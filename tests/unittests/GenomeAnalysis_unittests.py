@@ -7,8 +7,6 @@ class TestConfigManager(unittest.TestCase):
     def setUp(self) -> None:
         pass
 
-    # @patch('busco.analysis.GenomeAnalysis.BuscoAnalysis.config.get', return_value="test")
-    # @patch('busco.analysis.GenomeAnalysis.BuscoAnalysis.config.getboolean', return_value=True)
     @patch("busco.analysis.GenomeAnalysis.BuscoAnalysis.config")
     @patch("busco.analysis.BuscoAnalysis.os.path")
     @patch("busco.analysis.GenomeAnalysis.NucleotideAnalysis.check_nucleotide_file")
@@ -21,7 +19,6 @@ class TestConfigManager(unittest.TestCase):
         "busco.analysis.GenomeAnalysis.BuscoAnalysis.config.get",
         return_value="euk_genome_aug",
     )
-    # @patch('busco.analysis.GenomeAnalysis.BuscoAnalysis.config.getboolean')
     @patch("busco.analysis.GenomeAnalysis.BuscoAnalysis.config")
     @patch("busco.analysis.Analysis.logger.warning")
     @patch("busco.analysis.GenomeAnalysis.BBToolsRunner")
@@ -47,6 +44,7 @@ class TestConfigManager(unittest.TestCase):
         *args
     ):
         analysis = GenomeAnalysis.GenomeAnalysisEukaryotesAugustus()
+        analysis.domain = "eukaryota"
         analysis.init_tools()
         mock_hmmer.assert_called()
         mock_mkblast.assert_called()
@@ -71,6 +69,7 @@ class TestConfigManager(unittest.TestCase):
         self, mock_hmmer, mock_metaeuk, mock_bbtools, *args
     ):
         analysis = GenomeAnalysis.GenomeAnalysisEukaryotesMetaeuk()
+        analysis.domain = "eukaryota"
         analysis.init_tools()
         mock_hmmer.assert_called()
         mock_metaeuk.assert_called()
@@ -89,6 +88,7 @@ class TestConfigManager(unittest.TestCase):
         self, mock_hmmer, mock_prodigal, mock_bbtools, *args
     ):
         analysis = GenomeAnalysis.GenomeAnalysisProkaryotes()
+        analysis.domain = "prokaryota"
         analysis.init_tools()
         mock_hmmer.assert_called()
         mock_prodigal.assert_called()
@@ -121,17 +121,6 @@ class TestConfigManager(unittest.TestCase):
         mock_run_hmmer.assert_called()
         mock_run_bbtools.assert_called()
         analysis.write_gff_files.assert_called()
-
-        # @patch('busco.GenomeAnalysis.GenomeAnalysisEukaryotesAugustus._rerun_analysis')
-        # @patch('busco.GenomeAnalysis.GenomeAnalysisEukaryotesAugustus.run_hmmer')
-        # @patch('busco.GenomeAnalysis.GenomeAnalysisEukaryotesAugustus._run_augustus')
-        # @patch('busco.GenomeAnalysis.BLASTAnalysis._run_tblastn')
-        # @patch('busco.GenomeAnalysis.BLASTAnalysis._run_mkblast')
-        # mock_mkblast.assert_called()
-        # mock_tblastn.assert_called()
-        # mock_augustus.assert_called()
-        # mock_hmmer.assert_called()
-        # mock_rerun.assert_called()
 
     def tearDown(self) -> None:
         pass

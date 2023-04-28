@@ -164,8 +164,10 @@ class SingleRunner:
             try:
                 self.compile_summary()
             except AttributeError:
-                raise BatchFatalError("BUSCO encountered a problem. This is possibly caused by restarting a previously completed run with different parameters.")
+                raise BatchFatalError(
+                    "BUSCO encountered a problem. This is possibly caused by restarting a previously completed run with different parameters.")
             self.runner.finish(time.time() - self.start_time)
+
 
         except BuscoError:
             if self.runner is not None:

@@ -290,8 +290,8 @@ class MetaeukRunner(BaseRunner):
             columns=[
                 "Busco id",
                 "Sequence",
-                "Start",
-                "Stop",
+                "Low coord",
+                "High coord",
                 "Strand",
                 "Score",
                 "Run found",
@@ -302,20 +302,12 @@ class MetaeukRunner(BaseRunner):
 
         return results
 
-    @staticmethod
-    def detect_overlap(results_grouped, seq):
+    def detect_overlap(self, results_grouped, seq):
         overlap_inds = []
         handled_inds = set()
-        g1 = results_grouped.get_group(seq)
-        g1_sorted = g1.sort_values(
-            "Start"
-        )  # sort to facilitate a single-pass coordinate check
-        for idx1, row1 in g1_sorted.iterrows():
-            start_val = g1_sorted.loc[idx1]["Start"]
-            stop_val = g1_sorted.loc[idx1]["Stop"]
-            matches = g1_sorted[g1_sorted["Start"] >= start_val].loc[
-                g1_sorted["Start"] < stop_val
-            ]  # find entries with a start coordinate between the current exon start and end
+        match_finder = self.get_matches(results_grouped, seq)
+        for match in match_finder:
+            idx1, current_seqid, g1_sorted, matches = match
             for idx2 in matches.index.values:
                 if idx2 in handled_inds:
                     continue
@@ -340,8 +332,8 @@ class MetaeukRunner(BaseRunner):
                         ]  # check overlaps are on the same strand
                     )
                     and (
-                        match1_details["Start"] % 3
-                        == match2_details["Start"]
+                        match1_details["Low coord"] % 3
+                        == match2_details["Low coord"]
                         % 3  # check overlaps are in the same reading frame
                     )
                 ):
@@ -602,6 +594,11 @@ class MetaeukRunner(BaseRunner):
         high_coord = int(header_parts[7])
         exon_coords = header_parts[8:]
 
+        if strand == "+":
+            gene_id = "{}:{}-{}".format(C_acc, low_coord, high_coord)
+        else:
+            gene_id = "{}:{}-{}".format(C_acc, high_coord, low_coord)
+
         all_low_exon_coords = []
         all_taken_low_exon_coords = []
         all_high_exon_coords = []
@@ -635,8 +632,6 @@ class MetaeukRunner(BaseRunner):
             all_taken_low_exon_coords.append(taken_low_exon_coord)
             all_taken_high_exon_coords.append(taken_high_exon_coord)
             all_taken_exon_nucl_len.append(taken_nucl_len)
-
-        gene_id = "{}:{}-{}".format(C_acc, low_coord, high_coord)
 
         details = {
             "T_acc": T_acc,

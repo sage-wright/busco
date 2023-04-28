@@ -225,6 +225,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
             elif domain == "viruses":
                 mode = "prok_genome"  # Suggested by Mose - Prodigal may perform better on viruses
                 # than BLAST + HMMER.
+
             else:
                 raise BatchFatalError("Unrecognized mode {}".format(mode))
 
@@ -317,7 +318,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
                     ]:
                         if self.get("busco_run", "mode") in [
                             "euk_genome_met",
-                            "euk_tran",
+                            "euk_tran"
                         ]:
                             self.set("busco_run", key, value)
                     else:
@@ -666,7 +667,9 @@ class BuscoConfigMain(BaseConfig):
                     ):
                         raise BatchFatalError(
                             "Unknown mode {}.\n'Mode' parameter must be one of "
-                            "['genome', 'transcriptome', 'proteins']".format(value)
+                            "['genome', 'transcriptome', 'proteins']".format(
+                                value
+                            )
                         )
                     if value in synonyms["genome"]:
                         self.set("busco_run", "mode", "genome")
