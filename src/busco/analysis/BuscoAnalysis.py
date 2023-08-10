@@ -132,13 +132,22 @@ class BuscoAnalysis(metaclass=ABCMeta):
             self.hmmer_runner.run()
         self.hmmer_runner.process_output()
         self.validate_output()
-        self.hmmer_runner.filter()
-        self.hmmer_runner.consolidate_busco_lists()
+        self.filter_results()
+        self.consolidate_busco_lists()
         output = self.hmmer_runner.create_output_content()
         self.hmmer_runner.write_hmmer_results(output)
-        self.hmmer_runner.record_results()
+        self.record_results()
         self.hmmer_runner.produce_hmmer_summary()
         return
+
+    def record_results(self):
+        self.hmmer_runner.record_results()
+
+    def filter_results(self):
+        self.hmmer_runner.filter()
+
+    def consolidate_busco_lists(self):
+        self.hmmer_runner.consolidate_busco_lists()
 
     def validate_output(
         self,

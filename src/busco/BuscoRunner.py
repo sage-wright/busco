@@ -3,6 +3,7 @@ from busco.analysis.BuscoAnalysis import BuscoAnalysis
 from busco.analysis.GenomeAnalysis import (
     GenomeAnalysisEukaryotesAugustus,
     GenomeAnalysisEukaryotesMetaeuk,
+    GenomeAnalysisEukaryotesMiniprot,
 )
 from busco.analysis.TranscriptomeAnalysis import (
     TranscriptomeAnalysisProkaryotes,
@@ -331,6 +332,7 @@ class BatchRunner:
 class AnalysisRunner:
 
     mode_dict = {
+        "euk_genome_min": GenomeAnalysisEukaryotesMiniprot,
         "euk_genome_met": GenomeAnalysisEukaryotesMetaeuk,
         "euk_genome_aug": GenomeAnalysisEukaryotesAugustus,
         "prok_genome": GenomeAnalysisProkaryotes,
@@ -441,6 +443,8 @@ class AnalysisRunner:
                 gene_predictor = "prodigal"
             elif self.config.getboolean("busco_run", "use_augustus"):
                 gene_predictor = "augustus"
+            elif self.config.getboolean("busco_run", "use_miniprot"):
+                gene_predictor = "miniprot"
             else:
                 gene_predictor = "metaeuk"
             self.summary["parameters"]["gene_predictor"] = gene_predictor
@@ -894,15 +898,23 @@ class AnalysisRunner:
 
 class SmartBox:
     def __init__(self):
-        self.width = None
+        self.width = 50
 
-    def wrap_header(self, header_text):
-        if len(header_text) < 80:
-            self.width = max(50, len(header_text.expandtabs()))
+    def define_width(self, header_text, body_text):
+        lines = body_text.split("\n")
+        lens = [len(x) for x in lines]
+        max_ind = lens.index(max(lens))
+        longest_line = lines[max_ind]
+        if len(header_text) > len(longest_line):
+            longest_line = header_text
+        if len(longest_line) < 80:
+            self.width = max(50, len(longest_line.expandtabs()))
         else:
             self.width = 50
-            header_text = self.wrap_long_line(header_text)
 
+    def wrap_header(self, header_text):
+        if len(header_text) > 80:
+            header_text = self.wrap_long_line(header_text)
         return header_text
 
     def wrap_long_line(self, line):
@@ -955,7 +967,8 @@ class SmartBox:
         return "-" * self.width
 
     def create_results_box(self, header_text, body_text):
-        header = self.wrap_header(header_text)  # Called first to define width
+        self.define_width(header_text, body_text)  # Called first to define width
+        header = self.wrap_header(header_text)
         box_lines = list(["\n"])
         box_lines.append("\t{}".format(self.add_horizontal()))
         framed_header = self.add_vertical(header)

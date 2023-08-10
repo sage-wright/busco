@@ -259,7 +259,7 @@ class AugustusRunner(BaseRunner):
         return ordered_jobs
 
     def generate_job_args(self):
-        contig_ordinal_inds = defaultdict(int)
+        contig_nominal_inds = defaultdict(int)
         njobs = 0
 
         ordered_jobs = self.sort_jobs()
@@ -272,8 +272,8 @@ class AugustusRunner(BaseRunner):
             contig_tmp_file = "{}.temp".format(
                 contig_name[:100]
             )  # Avoid very long filenames
-            contig_ordinal_inds[busco_group] += 1
-            output_index = contig_ordinal_inds[busco_group]
+            contig_nominal_inds[busco_group] += 1
+            output_index = contig_nominal_inds[busco_group]
             out_filename = os.path.join(
                 self.pred_genes_dir, "{}.out.{}".format(busco_group, output_index)
             )

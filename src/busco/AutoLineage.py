@@ -256,6 +256,10 @@ class AutoSelectLineage:
                     protein_seqs_dir = self.selected_runner.analysis.augustus_runner.extracted_prot_dir
                     protein_seqs = [os.path.join(protein_seqs_dir, f) for f in os.listdir(protein_seqs_dir)
                                     if f.split(".")[-2] == "faa"]
+                elif self.config.getboolean("busco_run", "use_miniprot"):
+                    protein_seqs_dir = self.selected_runner.analysis.miniprot_align_runner.translated_proteins_folder
+                    protein_seqs = [os.path.join(protein_seqs_dir, f) for f in os.listdir(protein_seqs_dir)
+                                    if f.endswith("faa")]
                 else:
                     protein_seqs = self.selected_runner.analysis.metaeuk_runner.combined_pred_protein_seqs
         elif "tran" in self.selected_runner.mode:

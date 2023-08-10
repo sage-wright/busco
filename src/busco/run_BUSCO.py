@@ -330,6 +330,14 @@ def _parse_args():
     )
 
     optional.add_argument(
+        "--miniprot",
+        dest="use_miniprot",
+        action="store_true",
+        required=False,
+        help="Use miniprot gene predictor for eukaryote runs",
+    )
+
+    optional.add_argument(
         "--offline",
         dest="offline",
         action="store_true",

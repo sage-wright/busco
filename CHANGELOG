@@ -1,3 +1,6 @@
+5.5.0
+- Add miniprot pipeline (beta test)
+
 5.4.7
 - Fix bug in overlap handling (Issue #653): this fix also updated the way negative strand coordinates are reported,
 i.e. <gene_id>:<start>-<stop> instead of <gene_id>:<low>-<high>

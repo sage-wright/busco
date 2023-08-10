@@ -32,6 +32,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         "auto-lineage-euk": False,
         "update-data": False,
         "use_augustus": False,
+        "use_miniprot": False,
         "batch_mode": False,
         "tar": False,
     }
@@ -93,6 +94,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         "tar",
         "download_base_url",
         "use_augustus",
+        "use_miniprot",
         "download_base_url",
     }
 
@@ -122,6 +124,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         "evalue",
         "limit",
         "use_augustus",
+        "use_miniprot",
         "batch_mode",
         "tar",
         "contig_break",
@@ -212,6 +215,8 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
             elif domain == "eukaryota":
                 if self.getboolean("busco_run", "use_augustus"):
                     mode = "euk_genome_aug"
+                elif self.getboolean("busco_run", "use_miniprot"):
+                    mode = "euk_genome_min"
                 else:
                     mode = "euk_genome_met"
             else:
@@ -237,7 +242,6 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
             self.specific_params = type(self).AUGUSTUS_ARGS
             self.specific_params.update(type(self).BLAST_ARGS)
             self.specific_params.update(type(self).BBTOOLS_ARGS)
-
         elif mode == "euk_genome_met":
             self.specific_params = type(self).METAEUK_ARGS
             self.specific_params.update(type(self).BBTOOLS_ARGS)
@@ -245,7 +249,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
             self.specific_params = type(self).BLAST_ARGS
         elif mode == "euk_tran":
             self.specific_params = type(self).METAEUK_ARGS
-        elif mode == "prok_genome":
+        elif mode in ["prok_genome", "euk_genome_min"]:
             self.specific_params = type(self).BBTOOLS_ARGS
         else:
             self.specific_params = {}

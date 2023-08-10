@@ -6,7 +6,6 @@ from Bio import SeqIO
 import shutil
 from configparser import NoOptionError
 import subprocess
-import gzip
 import pandas as pd
 import numpy as np
 import re
@@ -251,24 +250,6 @@ class MetaeukRunner(BaseRunner):
         )
         self.pred_protein_mod_files.append(self.pred_protein_seqs_modified)
         self.codon_mod_files.append(self.codon_file_modified)
-
-    @staticmethod
-    def decompress_refseq_file(gzip_file):
-        unzipped_filename = gzip_file.split(".gz")[0]
-        if not os.path.exists(unzipped_filename):
-            with gzip.open(gzip_file, "rb") as compressed_file:
-                with open(unzipped_filename, "wb") as decompressed_file:
-                    for line in compressed_file:
-                        decompressed_file.write(line)
-        if os.path.exists(gzip_file):
-            try:
-                os.remove(gzip_file)
-            except OSError:
-                logger.warning(
-                    "Unable to remove compressed refseq file in dataset download"
-                )
-                pass
-        return unzipped_filename
 
     def combine_run_results(self):
         with open(self.combined_pred_protein_seqs, "w") as combined_output:

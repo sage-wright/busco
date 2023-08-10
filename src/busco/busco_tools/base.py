@@ -6,6 +6,7 @@ from abc import ABCMeta, abstractmethod
 from busco.BuscoConfig import BuscoConfigAuto
 from busco.Exceptions import BuscoError
 import time
+import gzip
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -156,6 +157,24 @@ class BaseRunner(Tool, metaclass=ABCMeta):
     @abstractmethod
     def generate_job_args(self):
         pass
+
+    @staticmethod
+    def decompress_refseq_file(gzip_file):  # todo: probably doesn't belong in this class as it is only applicable to metaeuk and miniprot
+        unzipped_filename = gzip_file.split(".gz")[0]
+        if not os.path.exists(unzipped_filename):
+            with gzip.open(gzip_file, "rb") as compressed_file:
+                with open(unzipped_filename, "wb") as decompressed_file:
+                    for line in compressed_file:
+                        decompressed_file.write(line)
+        if os.path.exists(gzip_file):
+            try:
+                os.remove(gzip_file)
+            except OSError:
+                logger.warning(
+                    "Unable to remove compressed refseq file in dataset download"
+                )
+                pass
+        return unzipped_filename
 
     @property
     @abstractmethod

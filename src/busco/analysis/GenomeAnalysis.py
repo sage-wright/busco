@@ -14,6 +14,7 @@ from busco.analysis.BuscoAnalysis import BuscoAnalysis
 from busco.analysis.Analysis import NucleotideAnalysis, BLASTAnalysis
 from busco.busco_tools.prodigal import ProdigalRunner
 from busco.busco_tools.metaeuk import MetaeukRunner
+from busco.busco_tools.miniprot import MiniprotIndexRunner, MiniprotAlignRunner
 from busco.busco_tools.bbtools import BBToolsRunner
 from busco.busco_tools.augustus import (
     AugustusRunner,
@@ -34,6 +35,9 @@ import pandas as pd
 from collections import defaultdict
 import subprocess
 from busco.Exceptions import BuscoError
+from multiprocessing import Pool
+from itertools import repeat, chain
+import numpy as np
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -365,7 +369,6 @@ class GenomeAnalysisEukaryotesAugustus(BLASTAnalysis, GenomeAnalysisEukaryotes):
         )
         self.optimize_augustus_runner.run()
         return
-
 
 class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
     def __init__(self):
@@ -793,8 +796,8 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
             end_trim2 = 0
 
         if (
-            hmmer_match_details1[gene_id1]["score"]
-            > hmmer_match_details2[gene_id2]["score"]
+            hmmer_match_details1[gene_id1][0]["score"]  # todo: perhaps revisit - assuming only one match per gene
+            > hmmer_match_details2[gene_id2][0]["score"]
         ):
             priority_match = hmmer_match_details1
             secondary_match = hmmer_match_details2
@@ -814,8 +817,8 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
             priority_gene_trim = (start_trim2, end_trim2)
             secondary_gene_trim = (start_trim1, end_trim1)
 
-        priority_env_coords = iter(priority_match[priority_gene_id]["env_coords"])
-        secondary_env_coords = iter(secondary_match[secondary_gene_id]["env_coords"])
+        priority_env_coords = iter(priority_match[priority_gene_id][i]["env_coords"][0] for i in range(len(priority_match[priority_gene_id])))
+        secondary_env_coords = iter(secondary_match[secondary_gene_id][i]["env_coords"][0] for i in range(len(secondary_match[secondary_gene_id])))
         priority_used_exons, priority_unused_exons = self.find_unused_exons(
             priority_env_coords, priority_exons, priority_gene_trim
         )
@@ -987,4 +990,224 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
             self.metaeuk_runner.remove_tmp_files()
         except OSError:
             pass
+        super().cleanup()
+
+
+class GenomeAnalysisEukaryotesMiniprot(GenomeAnalysisEukaryotes):
+    def __init__(self):
+        super().__init__()
+        self.miniprot_index_runner = None
+        self.miniprot_align_runner = None
+        self.gene_details = {}
+        self.gene_update_mapping = defaultdict(dict)
+        self.cpus = int(self.config.get("busco_run", "cpu"))
+        self.filtered_records = defaultdict(list)
+        self.filtered_busco_hits = []
+
+    def init_tools(self):
+        super().init_tools()
+        self.miniprot_index_runner = MiniprotIndexRunner()
+        self.miniprot_align_runner = MiniprotAlignRunner()
+
+    def reset(self):
+        super().reset()
+        self.miniprot_index_runner.reset()
+        self.miniprot_align_runner.reset()
+
+    def run_analysis(self):
+        """This function calls all needed steps for running the analysis."""
+        super().run_analysis()
+        incomplete_buscos = None
+        try:
+            self.run_miniprot(incomplete_buscos)
+            self.gene_details.update(self.miniprot_align_runner.gene_details)
+            self.sequences_aa.update(self.miniprot_align_runner.sequences_aa)
+            self.hmmer_runner.miniprot_pipeline = True
+            self.run_hmmer(
+                self.miniprot_align_runner.output_sequences,
+                busco_ids=incomplete_buscos
+            )
+        except NoRerunFile:
+            raise NoGenesError("Miniprot")
+
+        self.hmmer_runner.write_buscos_to_file(self.sequences_aa)#, self.sequences_nt)
+
+    def run_miniprot(self, incomplete_buscos):
+        self.miniprot_index_runner.configure_runner()
+        if self.restart and self.miniprot_index_runner.check_previous_completed_run():
+            logger.info("Skipping Miniprot indexing run as already run")
+        else:
+            self.restart = False
+            self.config.set("busco_run", "restart", str(self.restart))
+            self.miniprot_index_runner.run()
+
+        self.miniprot_align_runner.configure_runner(incomplete_buscos)
+        if self.restart and self.miniprot_align_runner.check_previous_completed_run():
+            logger.info("Skipping Miniprot aligning run as already run")
+        else:
+            self.restart = False
+            self.config.set("busco_run", "restart", str(self.restart))
+            self.miniprot_align_runner.run()
+        self.miniprot_align_runner.parse_output()
+        self.miniprot_align_runner.write_protein_sequences_per_busco()
+
+    def filter_results(self):
+        for record in self.gene_details:
+            if record in self.hmmer_runner.hmmer_records:
+                self.filtered_records[record].append(self.gene_details[record])
+                self.filtered_records[record][-1].update({"length": sum(region["hmm_len"] for region in self.hmmer_runner.hmmer_records[record]),
+                                                      "bitscore": self.filtered_records[record][-1]["score"]})
+                self.filtered_busco_hits.append(record.split("|")[0].split("_")[0])
+        return
+
+    def apply_label2(self, gene_match1, gene_match2, min_complete):
+        protein_length1 = self.gene_details[gene_match1]["protein_length"]
+        protein_length2 = self.gene_details[gene_match2]["protein_length"]
+
+        output1 = self.apply_label1([gene_match1], min_complete, by_rate=True)
+        label_length = {output1: protein_length1}
+        output2 = self.apply_label1([gene_match2], min_complete, by_rate=True)
+        label_length.update({output2: protein_length2})
+
+        if list(label_length.keys()) == ["Single"]:
+            gene_label = "Single"
+        elif list(label_length.keys()) == ["Fragmented"]:
+            gene_label = "Fragmented"
+        elif list(label_length.keys()) == ["Duplicated"]:
+            gene_label = "Duplicated"
+        elif set(label_length.keys()) == {"Single", "Fragmented"}:
+            if label_length["Fragmented"] > label_length["Single"] + (1.5):
+                gene_label = "Fragmented"
+            else:
+                gene_label = "Single"
+        elif set(label_length.keys()) == {"Single", "Duplicated"}:
+            if label_length["Duplicated"] > label_length["Single"] + (1.5):
+                gene_label = "Duplicated"
+            else:
+                gene_label = "Single"
+        elif set(label_length.keys()) == {"Fragmented", "Duplicated"}:
+            if label_length["Fragmented"] > label_length["Duplicated"] + (1.5):
+                gene_label = "Fragmented"
+            else:
+                gene_label = "Duplicated"
+        else:
+            gene_label = "Duplicated"
+        return gene_label
+
+    def apply_label1(self, gene_matches, min_complete, by_rate=False):
+        if len(gene_matches) == 0:
+            gene_label = "Missing"
+        elif len(gene_matches) == 1:
+            if (self.gene_details[gene_matches[0]]["gene_end"] - self.gene_details[gene_matches[0]]["gene_start"])/(self.gene_details[gene_matches[0]]["protein_length"]**int(by_rate)) >= min_complete:
+                gene_label = "Single"
+            else:
+                gene_label = "Fragmented"
+        else:
+            complete_regions = []
+            fragmented_regions = []
+            for gene_match in gene_matches:
+                details = self.gene_details[gene_match]
+                if details["gene_end"] - details["gene_start"] >= min_complete:
+                    complete_regions.append(
+                        (gene_match, details["gene_start"], details["gene_end"]))
+                else:
+                    fragmented_regions.append(
+                        (gene_match, details["gene_start"], details["gene_end"]))
+            if len(complete_regions) == 0:
+                gene_label = "Fragmented"
+            elif len(complete_regions) == 1:
+                gene_label = "Single"
+            else:
+                ctgs = [x[0] for x in complete_regions]
+                if len(set(ctgs)) > 1:
+                    gene_label = "Duplicated"
+                else:
+                    regions = [(x[1], x[2]) for x in complete_regions]
+                    clusters = self.get_region_clusters(regions)
+                    if len(clusters) == 1:
+                        gene_label = "Single"
+                    else:
+                        gene_label = "Duplicated"
+
+        return gene_label
+
+    def determine_busco_label(self, busco_id, gene_matches, ixl, min_complete):
+        gene_label = ""
+        if len(gene_matches) == 0:
+            gene_label = "Missing"
+        elif len(gene_matches) == 1:
+            gene_label = self.apply_label1(gene_matches, min_complete)
+        else:
+            if (ixl[0] - ixl[1])/(ixl[1] + 1e-9) >= 0.2:
+                gene_label = self.apply_label1(gene_matches, min_complete)
+            else:
+                if gene_matches[0] == gene_matches[1]:
+                    gene_label = self.apply_label1(gene_matches, min_complete)
+                else:
+                    gene_label = self.apply_label2(gene_matches[0], gene_matches[1], min_complete)
+        return gene_label
+
+    def consolidate_busco_lists(self):
+        self.single_copy_buscos = defaultdict(lambda: defaultdict(list))
+        self.multi_copy_buscos = defaultdict(lambda: defaultdict(list))
+        self.fragmented_copy_buscos = defaultdict(lambda: defaultdict(list))
+        self.missing_buscos = []
+        self.hmmer_runner.load_buscos()
+        for busco_id in set(self.filtered_busco_hits):
+            min_complete = self.hmmer_runner.cutoff_dict[busco_id]["length"] - 2 * \
+                           self.hmmer_runner.cutoff_dict[busco_id]["sigma"]
+            gene_matches = np.array([x for x in self.filtered_records if x.startswith(busco_id)])
+            ixl = np.array([(self.gene_details[g]["gene_end"] - self.gene_details[g]["gene_start"])*self.gene_details[g]["identity"] for g in gene_matches])
+            sort_order = np.argsort(ixl)[::-1]
+            gene_matches = gene_matches[sort_order]
+            ixl = ixl[sort_order]
+            if len(gene_matches) > 0:
+                output = self.determine_busco_label(busco_id, gene_matches, ixl, min_complete)
+                for gene_match in gene_matches:
+                    gene_id = gene_match#.split("|")[-1]
+                    if output == "Single":
+                        self.single_copy_buscos[busco_id][gene_id].append(self.gene_details[gene_match])
+                    elif output == "Fragmented":
+                        self.fragmented_copy_buscos[busco_id][gene_id].append(self.gene_details[gene_match])
+                    elif output == "Duplicated":
+                        self.multi_copy_buscos[busco_id][gene_id].append(self.gene_details[gene_match])
+            else:
+                self.missing_buscos.append(busco_id)
+        self.hmmer_runner.single_copy_buscos = self.convert_dict(self.single_copy_buscos)
+        self.hmmer_runner.multi_copy_buscos = self.convert_dict(self.multi_copy_buscos)
+        self.hmmer_runner.fragmented_buscos = self.convert_dict(self.fragmented_copy_buscos)
+        self.hmmer_runner.missing_buscos = self.missing_buscos
+
+    @staticmethod
+    def convert_dict(busco_dict):
+        new_dict = {}
+        for key, value in busco_dict.items():
+            new_dict[key] = dict(value)
+        return new_dict
+
+    @staticmethod
+    def get_region_clusters(regions):
+        sorted_regions = sorted(regions, key=lambda x: x[0], reverse=False)
+        clusters = []
+        for (start, stop) in sorted_regions:
+            if not clusters:
+                clusters.append([start, stop])
+            else:
+                last_cluster = clusters[-1]
+                if last_cluster[0] <= start <= last_cluster[1]:
+                    # has overlap
+                    clusters[-1][0] = min(last_cluster[0], start)
+                    clusters[-1][1] = max(last_cluster[1], stop)
+                else:
+                    clusters.append([start, stop])
+        return clusters
+
+    def record_results(self):
+        self.hmmer_runner.record_results(frameshifts=True)
+
+    def cleanup(self):
+        # try:
+        #     self.metaeuk_runner.remove_tmp_files()
+        # except OSError:
+        #     pass
         super().cleanup()

@@ -35,6 +35,7 @@ class TestBuscoConfig(unittest.TestCase):
             "metaeuk_parameters": None,
             "metaeuk_rerun_parameters": None,
             "use_augustus": False,
+            "use_miniprot": False,
             "augustus_parameters": None,
             "augustus_species": None,
             "long": False,
@@ -80,6 +81,7 @@ class TestBuscoConfig(unittest.TestCase):
                 "evalue",
                 "limit",
                 "use_augustus",
+                "use_miniprot",
                 "batch_mode",
                 "tar",
                 "contig_break",
@@ -181,6 +183,7 @@ class TestBuscoConfig(unittest.TestCase):
             "restart": False,
             "update-data": False,
             "use_augustus": False,
+            "use_miniprot": False,
         }
         config = BuscoConfig.BuscoConfigMain(
             self.base_config, {"lineage_dataset": "test"}
