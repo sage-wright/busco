@@ -32,9 +32,9 @@ Report problems on the BUSCO issue board at https://gitlab.com/ezlab/busco/issue
 ***
 ### How to cite BUSCO
 
-If you have used BUSCO v4 or V5 in your analyses, please cite:
+If you have used BUSCO v4/V5 or BUSCO *_odb10 datasets in your analyses, please cite:
 
-Manni M., Berkeley M.R., Seppey M., Simao F.A., Zdobnov E.M. 2021. BUSCO update: novel and streamlined workflows along with broader and deeper phylogenetic coverage for scoring of eukaryotic, prokaryotic, and viral genomes. arXiv:2106.11799 [q-bio] [Internet]. Available from: http://arxiv.org/abs/2106.11799
+Manni M., Berkeley M.R., Seppey M., Simao F.A., Zdobnov E.M. 2021. [**BUSCO Update: Novel and Streamlined Workflows along with Broader and Deeper Phylogenetic Coverage for Scoring of Eukaryotic, Prokaryotic, and Viral Genomes**.](https://doi.org/10.1093/molbev/msab199), Molecular Biology and Evolution, Volume 38, Issue 10, October 2021, Pages 4647–4654, https://doi.org/10.1093/molbev/msab199.
 
 Previous publications:
 BUSCO: Assessing Genome Assembly and Annotation Completeness. Mathieu Seppey, Mosè Manni, Evgeny M. Zdobnov In: Kollmar M. (eds) Gene Prediction. Methods in Molecular Biology, vol 1962. Humana, New York, NY. 2019 doi.org/10.1007/978-1-4939-9173-0_14
