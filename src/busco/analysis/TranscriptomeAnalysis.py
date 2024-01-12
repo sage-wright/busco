@@ -1,15 +1,17 @@
-#!/usr/bin/env python3
 # coding: utf-8
 """
-.. module:: TranscriptomeAnalysis
-   :synopsis:TranscriptomeAnalysis implements genome analysis specifics
-.. versionadded:: 3.0.0
-.. versionchanged:: 5.4.0
+TranscriptomeAnalysis.py
 
-Copyright (c) 2016-2023, Evgeny Zdobnov (ez@ezlab.org)
-Licensed under the MIT license. See LICENSE.md file.
+Module for transcriptome mode pipelines.
+
+Author(s): Matthew Berkeley, Mathieu Seppey, Mose Manni, Felipe Simao, Rob Waterhouse
+
+Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
+
+License: Licensed under the MIT license. See LICENSE.md file.
 
 """
+
 import os
 from busco.analysis.BuscoAnalysis import BuscoAnalysis
 from busco.BuscoLogger import BuscoLogger
@@ -54,8 +56,6 @@ class TranscriptomeAnalysisProkaryotes(
         super().__init__()
         self.all_sequences = defaultdict(lambda: defaultdict(dict))
 
-        self.sequences_aa = {}
-        self.sequences_nt = {}
         self.complete_seqs_nt = {}
         self.complete_seqs_aa = {}
 
@@ -80,11 +80,7 @@ class TranscriptomeAnalysisProkaryotes(
         self.prepare_sequences()
         self.write_complete_seqs()
 
-        self.hmmer_runner.write_buscos_to_file(self.sequences_aa, self.sequences_nt)
-
-        # if self._tarzip:
-        #     self._run_tarzip_hmmer_output()
-        #     self._run_tarzip_translated_proteins()
+        self.hmmer_runner.write_buscos_to_file()
         return
 
     def init_tools(self):
@@ -105,12 +101,15 @@ class TranscriptomeAnalysisProkaryotes(
 
         for busco_id, gene_matches in hmmer_results.items():
             for gene_id in gene_matches:
+                orig_gene_id = gene_matches[gene_id][0]["orig gene ID"]
                 gene_info = gene_matches[gene_id][0]
                 frame = gene_info["frame"]
-                seq_aa = self.all_sequences[busco_id][gene_id]["translations"][frame]
-                seq_nt = self.all_sequences[busco_id][gene_id]["original"]
-                seqs_aa[gene_id] = seq_aa
-                seqs_nt[gene_id] = seq_nt
+                seq_aa = self.all_sequences[busco_id][orig_gene_id]["translations"][
+                    frame
+                ]
+                seq_nt = self.all_sequences[busco_id][orig_gene_id]["original"]
+                seqs_aa[orig_gene_id] = seq_aa
+                seqs_nt[orig_gene_id] = seq_nt
         return seqs_aa, seqs_nt
 
     def prepare_sequences(self):
@@ -128,8 +127,14 @@ class TranscriptomeAnalysisProkaryotes(
             hmmer_results_remainder
         )
 
-        self.sequences_aa = {**sc_seqs_aa, **remainder_seqs_aa}
-        self.sequences_nt = {**sc_seqs_nt, **remainder_seqs_nt}
+        sequences_aa = {**sc_seqs_aa, **remainder_seqs_aa}
+        sequences_nt = {**sc_seqs_nt, **remainder_seqs_nt}
+
+        for key in sequences_aa.keys():
+            self.gene_details[key] = {
+                "aa_seq": sequences_aa[key],
+                "nt_seq": sequences_nt[key],
+            }
 
         return
 

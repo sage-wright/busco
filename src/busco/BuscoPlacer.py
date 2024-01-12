@@ -1,17 +1,17 @@
-#!/usr/bin/env python3
 # coding: utf-8
+"""
+BuscoPlacer.py
+
+BuscoPlacer implements methods required for automatically selecting the appropriate dataset in BUSCO auto-lineage mode
+
+Author(s): Mathieu Seppey, Matthew Berkeley, Mose Manni
+
+Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
+
+License: Licensed under the MIT license. See LICENSE.md file.
 
 """
-.. module:: BuscoPlacer
-   :synopsis: BuscoPlacer implements methods required for automatically selecting the appropriate dataset
-   to be used during BUSCO analysis
-.. versionadded:: 4.0.0
-.. versionchanged:: 5.4.0
 
-Copyright (c) 2016-2023, Evgeny Zdobnov (ez@ezlab.org)
-Licensed under the MIT license. See LICENSE.md file.
-
-"""
 import json
 import os
 import re
@@ -347,9 +347,10 @@ class BuscoPlacer:
         marker_genes_names = []
         for busco, gene_matches in self.single_copy_buscos.items():
             if busco in marker_list:
-                marker_genes_names.append(
-                    list(gene_matches.keys())[0]
-                )  # The list should only have one entry because they are single copy buscos
+                for gene_match, details in gene_matches.items():
+                    marker_genes_names.append(
+                        details[0]["orig gene ID"]
+                    )  # The list should only have one entry because they are single copy buscos
 
         if len(marker_genes_names) == 0:
             raise NoMarkersError
@@ -363,10 +364,19 @@ class BuscoPlacer:
         for protein_seqs in list_protein_seqs:
             with open(protein_seqs, "r") as prot_seqs:
                 for record in SeqIO.parse(prot_seqs, "fasta"):
-                    if record.id in marker_genes_names:
-                        record.seq = record.seq.rstrip("*")
-                        record.description = ""
-                        marker_genes_records.append(record)
+                    for mgene in marker_genes_names:
+                        if mgene == record.id:
+                            record.seq = record.seq.rstrip("*")
+                            if "*" in record.seq:
+                                continue
+                            record.description = ""
+                            marker_genes_records.append(record)
+                            break
+
+        if (
+            len(marker_genes_records) == 0
+        ):  # Can be empty if all marker genes contain stop codons
+            raise NoMarkersError
 
         marker_genes_file = os.path.join(self.placement_folder, "marker_genes.fasta")
         with open(marker_genes_file, "w") as output:

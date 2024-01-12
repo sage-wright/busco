@@ -1,14 +1,9 @@
 #!/usr/bin/env python3
 # coding: utf-8
 """
+generate_plot.py
 
-.. module:: generate_plot
-   :synopsis: This module produces a graphic summary for BUSCO runs based on short summary files
-.. versionadded:: 2.0.0
-.. versionchanged:: 4.0.0
-
- This module produces a graphic summary for BUSCO runs based on short summary files
-
+This module produces a graphic summary for BUSCO runs based on short summary files.
 (``python3 generate_plot.py -h`` and user guide for details on how to do it)
 
 Place the short summary files of all BUSCO runs you would like to see on the figure a single folder.
@@ -19,8 +14,11 @@ automatically runs it.
 
 You can find both the resulting R script for customisation and the figure in the working directory.
 
-Copyright (c) 2016-2023, Evgeny Zdobnov (ez@ezlab.org)
-Licensed under the MIT license. See LICENSE.md file.
+Author(s): Mathieu Seppey
+
+Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
+
+License: Licensed under the MIT license. See LICENSE.md file.
 
 """
 
@@ -54,7 +52,7 @@ RCODE = (
     "# @version 4.0.0\n"
     "# @since BUSCO 2.0.0\n"
     "# \n"
-    "# Copyright (c) 2016-2023, Evgeny Zdobnov (ez@ezlab.org)\n"
+    "# Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org)\n"
     "# Licensed under the MIT license. See LICENSE.md file.\n"
     "#\n"
     "######################################\n"

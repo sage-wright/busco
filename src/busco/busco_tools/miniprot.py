@@ -1,24 +1,40 @@
-from busco.busco_tools.base import BaseRunner
+# coding: utf-8
+"""
+miniprot.py
+
+Module for running Miniprot.
+
+Author(s): Matthew Berkeley
+
+Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
+
+License: Licensed under the MIT license. See LICENSE.md file.
+
+"""
+
+from busco.busco_tools.base import GenePredictor, BaseRunner
 from busco.BuscoLogger import BuscoLogger
 import subprocess
 import os
 from pathlib import Path
-import re
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio import SeqIO
 from collections import defaultdict
-import shutil
 import numpy as np
 import re
 
 logger = BuscoLogger.get_logger(__name__)
+
+
 class MiniprotRunner(BaseRunner):
     """
     Class to run Miniprot
     """
+
     name = "miniprot"
     cmd = "miniprot"
+
     def __init__(self):
         super().__init__()
         self._output_folder = os.path.join(self.run_folder, "miniprot_output")
@@ -45,6 +61,7 @@ class MiniprotRunner(BaseRunner):
 
     def check_tool_dependencies(self):
         pass
+
     def configure_job(self, *args):
         """
         Overridden by child classes
@@ -53,6 +70,7 @@ class MiniprotRunner(BaseRunner):
 
     def generate_job_args(self):
         yield
+
     def get_version(self):
         help_output = subprocess.check_output(
             [self.cmd, "--version"], stderr=subprocess.STDOUT, shell=False
@@ -72,9 +90,10 @@ class MiniprotRunner(BaseRunner):
         self.total = 1
         self.run_jobs()
 
-class MiniprotIndexRunner(MiniprotRunner):
 
+class MiniprotIndexRunner(MiniprotRunner):
     name = "miniprot_index"
+
     def generate_job_args(self):
         yield "index"
 
@@ -93,15 +112,13 @@ class MiniprotIndexRunner(MiniprotRunner):
         return miniprot_job
 
 
-class MiniprotAlignRunner(MiniprotRunner):
-
+class MiniprotAlignRunner(MiniprotRunner, GenePredictor):
     name = "miniprot_align"
 
     def __init__(self):
         super().__init__()
         self.output_gff = None
 
-        self.gene_details = defaultdict(dict)
         self.sequences_aa = {}
         self.busco_matches = defaultdict(set)
         self.gene_matches = defaultdict(list)
@@ -113,6 +130,10 @@ class MiniprotAlignRunner(MiniprotRunner):
         self.gene_lookup = {}
         self.cigar_lookup = {}
         self.nominal_lookup = defaultdict(list)
+
+        self.gene_details = defaultdict(dict)
+        self.sequences_aa = {}
+        self.sequences_nt = {}
 
     def generate_job_args(self):
         yield "align"
@@ -142,7 +163,7 @@ class MiniprotAlignRunner(MiniprotRunner):
             "{}_{}_out.log".format(self.name, os.path.basename(self.lineage_dataset)),
         )
         self.logfile_path_err = (
-                self.logfile_path_out.rpartition("_out.log")[0] + "_err.log"
+            self.logfile_path_out.rpartition("_out.log")[0] + "_err.log"
         )
 
         self.incomplete_buscos = incomplete_buscos
@@ -152,77 +173,353 @@ class MiniprotAlignRunner(MiniprotRunner):
         gzip_refseq = os.path.join(self.lineage_dataset, "refseq_db.faa.gz")
         self.refseq_db = self.decompress_refseq_file(gzip_refseq)
         self.output_gff = Path(self._output_folder).joinpath(
-            "{}_{}{}".format(Path(self.input_file).stem, os.path.basename(self.lineage_dataset), ".gff"))
+            "{}_{}{}".format(
+                Path(self.input_file).stem,
+                os.path.basename(self.lineage_dataset),
+                ".gff",
+            )
+        )
 
     def create_symlink(self):
         if not self.output_gff.exists():
-            Path(self.output_gff).symlink_to(self.logfile_path_out)
+            Path(self.output_gff).symlink_to(
+                os.path.relpath(self.logfile_path_out, self.output_gff.parent)
+            )
+        return
+
+    def save_record(
+        self,
+        gene_id,
+        target_id,
+        contig_id,
+        contig_start,
+        contig_end,
+        strand,
+        score,
+        exon_coords,
+        ata_seq,
+        protein_start,
+        protein_end,
+        protein_length,
+        cigar_seq,
+        frameshifts,
+        frameshift_events,
+        frameshift_lengths,
+        stop_codon_count,
+        identity,
+    ):
+        self.all_gff_records.append(
+            np.array(
+                (
+                    gene_id,
+                    target_id.split("_")[0],
+                    target_id,
+                    contig_id,
+                    contig_start,
+                    contig_end,
+                    strand,
+                    score,
+                    exon_coords,
+                    ata_seq,
+                    protein_start,
+                    protein_end,
+                    protein_length,
+                    cigar_seq,
+                    frameshifts,
+                    frameshift_events,
+                    frameshift_lengths,
+                    stop_codon_count,
+                    identity,
+                ),
+                dtype=[
+                    ("gene_id", "U100"),
+                    ("busco_id", "U100"),
+                    ("target_id", "U100"),
+                    ("contig_id", "U50"),
+                    ("contig_start", "i4"),
+                    ("contig_end", "i4"),
+                    ("strand", "U1"),
+                    ("score", "i4"),
+                    ("exon_coords", "O"),
+                    ("aa_seq", "U10000"),
+                    ("protein_start", "i4"),
+                    ("protein_end", "i4"),
+                    ("protein_length", "i4"),
+                    ("cigar_seq", "U10000"),
+                    ("frameshifts", "O"),
+                    ("frameshift_events", "i4"),
+                    ("frameshift_lengths", "i4"),
+                    ("stop_codon_count", "i4"),
+                    ("identity", "f4"),
+                ],
+            )
+        )
         return
 
     def parse_output(self):
         self.create_symlink()
-        self.ata_seq = ""
-        self.target_id = ""
-        self.contig_id = ""
-        self.contig_start = 0
-        self.contig_end = 0
-        self.strand = ""
-        self.score = 0
-        self.exon_coords = defaultdict(list)
-        self.cigar_seq = ""
+        exon_coords = []
+        self.all_gff_records = []
+
         paf_block_started = False
         gene_id = ""
-
+        identity = None
         with open(self.output_gff, "r") as gff:
+
             for line in gff:
                 if line.startswith("##PAF"):
-                    paf_block_started = True
+                    if identity and len(exon_coords) > 0:
+                        self.save_record(
+                            gene_id,
+                            target_id,
+                            contig_id,
+                            contig_start,
+                            contig_end,
+                            strand,
+                            score,
+                            exon_coords,
+                            ata_seq,
+                            protein_start,
+                            protein_end,
+                            protein_length,
+                            cigar_seq,
+                            frameshifts,
+                            frameshift_events,
+                            frameshift_lengths,
+                            stop_codon_count,
+                            identity,
+                        )
+                        identity = None
+                        exon_coords = []
+                        paf_block_started = False
+
                     fields = line.strip().split("\t")[1:]
                     if fields[5] == "*":
                         ## Unmapped protein
                         continue
-                    self.target_id = fields[0]
-                    busco_id = self.target_id.split("_")[0]
-                    self.protein_length = int(fields[1])
-                    self.protein_start = int(fields[2])
-                    self.protein_end = int(fields[3])
-                    self.strand = fields[4]
-                    self.contig_id = fields[5]
-                    self.contig_start = int(fields[7])
-                    self.contig_end = int(fields[8])
-                    gene_id = "{}|{}:{}-{}".format(self.target_id, self.contig_id, self.contig_start, self.contig_end)
-                    self.score = int(fields[13].strip().split(":")[2])
-                    self.cigar_seq = str(fields[17].strip().split(":")[2])
-                    part_lengths, exon_lengths, match_lengths, group_types, ngroups, nexons, frameshifts, \
-                        frameshift_events, frameshift_lengths = self.decode_cigar(self.cigar_seq)
+                    paf_block_started = True
+                    exon_coords = []
+                    target_id = fields[0]
+                    protein_length = int(fields[1])
+                    protein_start = int(fields[2])
+                    protein_end = int(fields[3])
+                    strand = fields[4]
+                    contig_id = fields[5]
+                    contig_start = int(fields[7])
+                    contig_end = int(fields[8])
+                    gene_id = "{}|{}:{}-{}".format(
+                        target_id,
+                        contig_id,
+                        contig_start,
+                        contig_end,
+                    )
+                    score = int(fields[13].strip().split(":")[2])
+
+                    cigar_seq = str(fields[17].strip().split(":")[2])
+                    (
+                        frameshifts,
+                        frameshift_events,
+                        frameshift_lengths,
+                    ) = self.decode_cigar(cigar_seq)
                     sta_line = gff.readline()
                     sta_seq = sta_line.strip().split("\t")[1]
-                    self.ata_seq = re.sub("\*", "", sta_seq.upper())
-
-                    self.busco_matches[busco_id].add(gene_id)
-
-                    self.gene_details[gene_id] = {"gene_start": self.contig_start, "gene_end": self.contig_end,
-                                                       "strand": self.strand, "score": self.score,
-                                                       "cigar": self.cigar_seq, "nexons": nexons,
-                                                       "frameshift_events": frameshift_events,
-                                                       "protein_start": self.protein_start,
-                                                       "protein_end": self.protein_end,
-                                                       "protein_length": self.protein_length}
-
-                    self.sequences_aa[gene_id] = SeqRecord(Seq(self.ata_seq), id=gene_id, description=gene_id)
+                    ata_seq = sta_seq.upper()
+                    stop_codon_count = ata_seq.strip("*").count("*")
+                    ata_seq = ata_seq.replace("*", "")
 
                 elif paf_block_started:
                     fields = line.strip().split("\t")
                     if fields[2] == "CDS":
-                        start, stop, score, strand = fields[3], fields[4], fields[5], fields[6]
-                        self.exon_coords[gene_id].append((start, stop, score, strand))
+                        start, stop, score, strand = (
+                            int(fields[3]),
+                            int(fields[4]),
+                            float(fields[5]),
+                            fields[6],
+                        )
+                        exon_coords.append((start, stop, score, strand))
                     if fields[2] == "mRNA":
-                        info_dict = dict(v.split("=") for v in fields[8].split()[0].split(";"))
+                        info_dict = dict(
+                            v.split("=") for v in fields[8].split()[0].split(";")
+                        )
                         identity = float(info_dict["Identity"])
-                        self.gene_details[gene_id].update({"identity": identity})
-        for item in self.exon_coords:
-            self.exon_coords[item] = np.array(self.exon_coords[item], dtype=[("start", "i4"), ("stop", "i4"), ("score", "f4"), ("strand", "U1")])
+            else:
+                self.save_record(
+                    gene_id,
+                    target_id,
+                    contig_id,
+                    contig_start,
+                    contig_end,
+                    strand,
+                    score,
+                    exon_coords,
+                    ata_seq,
+                    protein_start,
+                    protein_end,
+                    protein_length,
+                    cigar_seq,
+                    frameshifts,
+                    frameshift_events,
+                    frameshift_lengths,
+                    stop_codon_count,
+                    identity,
+                )
+        self.gff_arr = np.array(self.all_gff_records)
         return
+
+    def filter(self):
+        contigs = np.unique(self.gff_arr["contig_id"])
+        self.filtered_matches = np.array([], dtype=self.gff_arr.dtype)
+        for contig in contigs:
+            contig_filtered = self.filter_contig(contig)
+            self.filtered_matches = np.concatenate(
+                (self.filtered_matches, contig_filtered)
+            )
+
+        return
+
+    def filter_contig(self, contig):
+        contig_matches = self.gff_arr[self.gff_arr["contig_id"] == contig]
+        for i in range(len(contig_matches)):
+            if contig_matches["contig_start"][i] < 0:
+                continue  # Already removed
+
+            overlap_mask = (
+                (
+                    (
+                        (
+                            contig_matches["contig_start"]
+                            >= contig_matches["contig_start"][i]
+                        )
+                        & (
+                            contig_matches["contig_start"]
+                            < contig_matches["contig_end"][i]
+                        )
+                    )
+                    | (
+                        (
+                            contig_matches["contig_end"]
+                            > contig_matches["contig_start"][i]
+                        )
+                        & (
+                            contig_matches["contig_end"]
+                            <= contig_matches["contig_end"][i]
+                        )
+                    )
+                )
+                & (contig_matches["contig_start"] > 0)
+                & (contig_matches["busco_id"] == contig_matches["busco_id"][i])
+            )
+            overlap_inds = np.arange(len(contig_matches))[overlap_mask]
+            for j in overlap_inds:
+                if i == j:
+                    continue
+
+                length1 = (
+                    contig_matches["contig_end"][i] - contig_matches["contig_start"][i]
+                )
+                length2 = (
+                    contig_matches["contig_end"][j] - contig_matches["contig_start"][j]
+                )
+                max_length = max(length1, length2)
+
+                overlap_start = max(
+                    contig_matches["contig_start"][i],
+                    contig_matches["contig_start"][j],
+                )
+                overlap_end = min(
+                    contig_matches["contig_end"][i], contig_matches["contig_end"][j]
+                )
+                overlap_length = overlap_end - overlap_start
+
+                if overlap_length > 0.80 * max_length:
+                    if contig_matches["score"][j] > contig_matches["score"][i]:
+                        contig_matches["contig_start"][i] = -1  # Remove match
+                        break
+                    else:
+                        contig_matches["contig_start"][j] = -1  # Remove match
+
+        return contig_matches[contig_matches["contig_start"] != -1]
+
+    def record_gene_details(self):
+        for match in self.filtered_matches:
+            gene_id = match["gene_id"]
+            target_id = match["target_id"]
+            contig_id = match["contig_id"]
+            contig_start = match["contig_start"]
+            contig_end = match["contig_end"]
+            strand = match["strand"]
+            score = match["score"]
+            exon_coords = match["exon_coords"]
+            ata_seq = match["aa_seq"]
+            protein_start = match["protein_start"]
+            protein_end = match["protein_end"]
+            protein_length = match["protein_length"]
+            cigar_seq = match["cigar_seq"]
+            frameshifts = match["frameshifts"]
+            frameshift_events = match["frameshift_events"]
+            frameshift_lengths = match["frameshift_lengths"]
+            stop_codon_count = match["stop_codon_count"]
+            identity = match["identity"]
+
+            self.gene_details[gene_id].update(
+                {
+                    "gene_id": gene_id,
+                    "target_id": target_id,
+                    "contig_id": contig_id,
+                    "contig_start": contig_start,
+                    "contig_end": contig_end,
+                    "strand": strand,
+                    "score": score,
+                    "exon_coords": exon_coords,
+                    "aa_seq": SeqRecord(Seq(ata_seq), id=gene_id),
+                    "protein_start": protein_start,
+                    "protein_end": protein_end,
+                    "protein_length": protein_length,
+                    "cigar_seq": cigar_seq,
+                    "frameshifts": frameshifts,
+                    "frameshift_events": frameshift_events,
+                    "frameshift_lengths": frameshift_lengths,
+                    "stop_codon_count": stop_codon_count,
+                    "identity": identity,
+                    "run_number": self.run_number,
+                }
+            )
+            self.sequences_aa[gene_id] = SeqRecord(Seq(ata_seq), id=gene_id)
+            self.busco_matches[target_id.split("_")[0]].add(gene_id)
+        return
+
+    def check_overlap(self, contig_id, contig_start, contig_end, score, gene_id):
+        keeper = gene_id
+        matches_to_remove = []
+        matches = np.array(self.genomic_regions[contig_id])
+        overlap_matches = matches[
+            (
+                (matches["contig_start"] >= contig_start)
+                & (matches["contig_start"] < contig_end)
+            )
+            | (
+                (matches["contig_end"] > contig_start)
+                & (matches["contig_end"] <= contig_end)
+            )
+        ]
+        if len(overlap_matches) > 0:
+            for match in overlap_matches:
+                overlap_start = max(contig_start, match["contig_start"])
+                overlap_end = min(contig_end, match["contig_end"])
+                overlap_length = overlap_end - overlap_start
+                if (overlap_length > 0.8 * (contig_end - contig_start)) or (
+                    overlap_length > 0.8 * (match["contig_end"] - match["contig_start"])
+                ):
+                    if score > match["score"]:
+                        keeper = gene_id
+                        matches_to_remove.append(match)
+                    else:
+                        keeper = match["gene_id"]
+        if len(matches_to_remove) > 0:
+            self.genomic_regions[contig_id] = [
+                m for m in matches if m not in matches_to_remove
+            ]
+        return keeper
 
     @staticmethod
     def decode_cigar(cigar):
@@ -231,31 +528,10 @@ class MiniprotAlignRunner(MiniprotRunner):
         frameshift_lengths = 0
         pattern = r"[0-9]+[MIDFGNUV]"
         parts = list(re.finditer(pattern, cigar))
-        part_lengths = []
-        exon_lengths = []
-        exon_length = 0
-        match_lengths = {"M": 0, "I": 0, "D": 0, "F": 0, "G": 0, "N": 0, "U": 0, "V": 0}
-        group_types = {"M": 0, "I": 0, "D": 0, "F": 0, "G": 0, "N": 0, "U": 0, "V": 0}
-        ngroups = 0
-        nexons = 0
         for p, part in enumerate(parts):
-            ngroups += 1
             n, type = int(part.group(0)[:-1]), part.group(0)[-1]
-            match_lengths[type] += n
-            group_types[type] += 1
-            if type in ["M", "D"]:
-                exon_length += n
-            elif type in ["U", "V"]:
-                part_lengths.append(exon_length)
-                exon_lengths.append(exon_length)
-                nexons += 1
-                part_lengths.append(1)
-                exon_length = 0
-            elif type == "N":
-                part_lengths.append(exon_length)
-                exon_lengths.append(exon_length)
-                nexons += 1
-                exon_length = 0
+            if type in ["M", "D", "U", "V", "N"]:
+                continue
             elif type in ["F", "G"]:
                 # left search
                 q = p - 1
@@ -284,17 +560,14 @@ class MiniprotAlignRunner(MiniprotRunner):
                     frameshift_events += 1
                     frameshift_lengths += int(n)
 
-            # elif type == "G":
-            #     exon_length += 1
-        part_lengths.append(exon_length)
-        exon_lengths.append(exon_length)
-        nexons += 1
-        return part_lengths, exon_lengths, match_lengths, group_types, ngroups, nexons, frameshifts, frameshift_events, frameshift_lengths
+        return frameshifts, frameshift_events, frameshift_lengths
 
     def write_protein_sequences_per_busco(self):
         for busco_id in self.busco_matches:
             seqs_to_write = []
-            output_filename = os.path.join(self.translated_proteins_folder, "{}.faa".format(busco_id))
+            output_filename = os.path.join(
+                self.translated_proteins_folder, "{}.faa".format(busco_id)
+            )
             self.output_sequences.append(output_filename)
             with open(output_filename, "w") as f:
                 for g in self.busco_matches[busco_id]:

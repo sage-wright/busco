@@ -1,3 +1,17 @@
+# coding: utf-8
+"""
+BuscoConfig.py
+
+Controls configuration of BUSCO run.
+
+Author(s): Matthew Berkeley, Mathieu Seppey, Mose Manni, Guennadi Klioutchnikov, Felipe Simao, Rob Waterhouse
+
+Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
+
+License: Licensed under the MIT license. See LICENSE.md file.
+
+"""
+
 from configparser import ConfigParser
 from configparser import NoOptionError, NoSectionError
 from configparser import ParsingError
@@ -33,8 +47,10 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         "update-data": False,
         "use_augustus": False,
         "use_miniprot": False,
+        "skip_bbtools": False,
         "batch_mode": False,
         "tar": False,
+        "opt-out-run-stats": False,
     }
 
     AUGUSTUS_ARGS = {
@@ -51,6 +67,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
     BBTOOLS_ARGS = {
         "contig_break": 10,
         "scaffold_composition": False,
+        "skip_bbtools": False,
     }
 
     METAEUK_ARGS = {
@@ -64,6 +81,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         "prodigal",
         "sepp",
         "metaeuk",
+        "miniprot",
         "augustus",
         "etraining",
         "gff2gbSmallDNA.pl",
@@ -96,6 +114,8 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         "use_augustus",
         "use_miniprot",
         "download_base_url",
+        "skip_bbtools",
+        "opt-out-run-stats",
     }
 
     PERMITTED_OPTIONS = {
@@ -125,10 +145,12 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         "limit",
         "use_augustus",
         "use_miniprot",
+        "skip_bbtools",
         "batch_mode",
         "tar",
         "contig_break",
         "scaffold_composition",
+        "opt-out-run-stats",
     }
 
     FORBIDDEN_HEADER_CHARS = [
@@ -179,6 +201,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
 
     def __init__(self):
         super().__init__()
+        self.run_stats = {}
         config_dict = {"busco_run": type(self).DEFAULT_ARGS_VALUES}
         config_dict.update(
             {
@@ -211,7 +234,10 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         domain = self.get("busco_run", "domain")
         if "genome" in mode:
             if domain in ["prokaryota", "viruses"]:
-                mode = "prok_genome"
+                if self.getboolean("busco_run", "use_miniprot"):
+                    mode = "prok_genome_min"
+                else:
+                    mode = "prok_genome_prod"
             elif domain == "eukaryota":
                 if self.getboolean("busco_run", "use_augustus"):
                     mode = "euk_genome_aug"
@@ -228,7 +254,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
             elif domain == "eukaryota":
                 mode = "euk_tran"
             elif domain == "viruses":
-                mode = "prok_genome"  # Suggested by Mose - Prodigal may perform better on viruses
+                mode = "prok_genome_prod"  # Suggested by Mose - Prodigal may perform better on viruses
                 # than BLAST + HMMER.
 
             else:
@@ -249,7 +275,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
             self.specific_params = type(self).BLAST_ARGS
         elif mode == "euk_tran":
             self.specific_params = type(self).METAEUK_ARGS
-        elif mode in ["prok_genome", "euk_genome_min"]:
+        elif mode in ["prok_genome_prod", "prok_genome_min", "euk_genome_min"]:
             self.specific_params = type(self).BBTOOLS_ARGS
         else:
             self.specific_params = {}
@@ -312,7 +338,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
                         "ambiguous_cd_range_lower",
                     ]:
                         if self.get("busco_run", "mode") in [
-                            "prok_genome",
+                            "prok_genome_prod",
                             "prok_tran",
                         ]:
                             self.set("busco_run", key, value)
@@ -322,9 +348,17 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
                     ]:
                         if self.get("busco_run", "mode") in [
                             "euk_genome_met",
-                            "euk_tran"
+                            "euk_tran",
                         ]:
                             self.set("busco_run", key, value)
+                    elif (
+                        key == "creation_date"
+                    ):  # add creation date for each dataset (multiple in auto-lineage pipeline)
+                        if "dataset_creation_date" in self.run_stats:
+                            self.run_stats["dataset_creation_date"].append(value)
+                        else:
+                            self.run_stats["dataset_creation_date"] = [value]
+                        self.set("busco_run", key, value)
                     else:
                         self.set("busco_run", key, value)
 
@@ -343,9 +377,21 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
             os.makedirs(main_out)
 
     def reset(self):
-        options_to_reset = ["domain_run_name", "ambiguous_cd_range_lower", "ambiguous_cd_range_upper", "creation_date",
-                            "domain", "in", "lineage_results_dir", "name", "number_of_buscos",
-                            "number_of_species", "main_out", "prodigal_genetic_code"]
+        options_to_reset = [
+            "domain_run_name",
+            "ambiguous_cd_range_lower",
+            "ambiguous_cd_range_upper",
+            "creation_date",
+            "domain",
+            "in",
+            "lineage_results_dir",
+            "name",
+            "number_of_buscos",
+            "number_of_species",
+            "main_out",
+            "prodigal_genetic_code",
+            "skip_bbtools",
+        ]
         for option in options_to_reset:
             try:
                 self.remove_option("busco_run", option)
@@ -405,6 +451,23 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
                     self.set("busco_run", key, str(val))
                 elif val:  # if True
                     self.set("busco_run", key, "True")
+                if (
+                    key not in ["in", "out", "out_path"]
+                    and bool(val)
+                    and (
+                        key not in type(self).DEFAULT_ARGS_VALUES
+                        or type(self).DEFAULT_ARGS_VALUES[key] != val
+                    )
+                ):
+                    if "path" in key:
+                        self.run_stats[key] = "user-specified"
+                    elif key == "lineage_dataset":  # make a list, for auto-lineage runs
+                        if key in self.run_stats:
+                            self.run_stats[key].append(val)
+                        else:
+                            self.run_stats[key] = [val]
+                    else:
+                        self.run_stats[key] = val
         return
 
 
@@ -425,6 +488,15 @@ class PseudoConfig(BaseConfig):
 
     def _fill_default_values(self):
         self.set("busco_run", "offline", "False")
+
+        try:
+            self.get("busco_run", "opt-out-run-stats")
+        except NoOptionError:
+            self.set(
+                "busco_run",
+                "opt-out-run-stats",
+                type(self).DEFAULT_ARGS_VALUES["opt-out-run-stats"],
+            )
 
         try:
             self.get("busco_run", "download_base_url")
@@ -504,7 +576,7 @@ class BuscoConfigAuto(BaseConfig):
 
 class BuscoConfigMain(BaseConfig):
 
-    MANDATORY_USER_PROVIDED_PARAMS = ["in", "out", "mode"]
+    MANDATORY_USER_PROVIDED_PARAMS = ["in", "mode"]
 
     def __init__(self, conf_file, params):
         """
@@ -527,6 +599,21 @@ class BuscoConfigMain(BaseConfig):
         self._update_logger()
         self.harmonize_auto_lineage_settings()
 
+    def _add_out_folder(self):
+        """
+        If output folder name is not provided, use the name of the input file.
+        :return:
+        """
+        try:
+            self.get("busco_run", "out")
+        except NoOptionError:
+            self.set(
+                "busco_run",
+                "out",
+                "BUSCO_{}".format(os.path.basename(self.get("busco_run", "in"))),
+            )
+        return
+
     def _update_logger(self):
         if self.getboolean("busco_run", "quiet"):
             type(logger).quiet = True
@@ -540,6 +627,7 @@ class BuscoConfigMain(BaseConfig):
 
     def validate(self):
         self._check_mandatory_keys_exist()
+        self._add_out_folder()
         self._cleanup_config()
         self._check_no_previous_run()
         self._check_allowed_keys()
@@ -594,10 +682,13 @@ class BuscoConfigMain(BaseConfig):
     def _check_batch_mode(self):
         if os.path.isdir(self._input_filepath):
             self.set("busco_run", "batch_mode", "True")
+            self.run_stats["batch_mode"] = True
         elif not os.path.isfile(self._input_filepath):
             raise BatchFatalError(
                 "Unrecognized input type. Please use either a single file or a directory name (for batch mode)"
             )
+        else:
+            self.run_stats["batch_mode"] = False
         return
 
     def _check_evalue(self):
@@ -622,7 +713,9 @@ class BuscoConfigMain(BaseConfig):
             )
         return
 
-    @log("Mode is {0}", logger, attr_name="_mode", on_func_exit=True, log_once=True)
+    @log(
+        "Running {0} mode", logger, attr_name="_mode", on_func_exit=True, log_once=True
+    )
     def _check_mandatory_keys_exist(self):
         """
         Make sure all mandatory user-provided parameters are present in the config.
@@ -671,9 +764,7 @@ class BuscoConfigMain(BaseConfig):
                     ):
                         raise BatchFatalError(
                             "Unknown mode {}.\n'Mode' parameter must be one of "
-                            "['genome', 'transcriptome', 'proteins']".format(
-                                value
-                            )
+                            "['genome', 'transcriptome', 'proteins']".format(value)
                         )
                     if value in synonyms["genome"]:
                         self.set("busco_run", "mode", "genome")
@@ -684,12 +775,6 @@ class BuscoConfigMain(BaseConfig):
 
                     self._mode = self.get("busco_run", "mode")
 
-                if param == "out":
-                    if value == "":
-                        raise BatchFatalError(
-                            "Please specify an output name for the BUSCO run. "
-                            "This can be done using the -o flag or in the config file"
-                        )
             except NoOptionError:
                 raise BatchFatalError(
                     'The parameter "{} (--{})" was not provided. '
@@ -741,9 +826,12 @@ class BuscoConfigMain(BaseConfig):
         return
 
     def _check_no_previous_run(self):
-        self.main_out = os.path.join(
-            self.get("busco_run", "out_path"), self.get("busco_run", "out")
-        )
+        if "/" in self.get("busco_run", "out"):
+            self.main_out = os.path.expanduser(self.get("busco_run", "out"))
+        else:
+            self.main_out = os.path.join(
+                self.get("busco_run", "out_path"), self.get("busco_run", "out")
+            )
         if os.path.exists(self.main_out):
             if self.getboolean("busco_run", "force"):
                 self._force_remove_existing_output_dir(self.main_out)

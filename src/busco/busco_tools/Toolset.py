@@ -1,14 +1,14 @@
-#!/usr/bin/env python3
 # coding: utf-8
 """
-.. module:: Toolset
-   :synopsis: the interface to OS enables to run executables / scripts
-   in external processes
-.. versionadded:: 3.0.0
-.. versionchanged:: 5.4.0
+Toolset.py
 
-Copyright (c) 2016-2023, Evgeny Zdobnov (ez@ezlab.org)
-Licensed under the MIT license. See LICENSE.md file.
+Control all job calls to external tools.
+
+Author(s): Matthew Berkeley, Mathieu Seppey, Mose Manni, Guennadi Klioutchnikov, Felipe Simao, Rob Waterhouse
+
+Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
+
+License: Licensed under the MIT license. See LICENSE.md file.
 
 """
 import os

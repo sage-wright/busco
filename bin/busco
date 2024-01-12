@@ -1,5 +1,17 @@
 #!/usr/bin/env python3
+"""
+busco
 
+Benchmarking Universal Single-Copy Orthologs.
+Default command line entry point.
+
+Author(s): Matthew Berkeley
+
+Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
+
+License: Licensed under the MIT license. See LICENSE.md file.
+
+"""
 
 if __name__ == "__main__":
     __spec__ = None

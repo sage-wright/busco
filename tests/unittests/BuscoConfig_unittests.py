@@ -86,6 +86,8 @@ class TestBuscoConfig(unittest.TestCase):
                 "tar",
                 "contig_break",
                 "scaffold_composition",
+                "skip_bbtools",
+                "opt-out-run-stats",
             ],
             "etraining": ["path", "command"],
             "gff2gbSmallDNA.pl": ["path", "command"],
@@ -98,6 +100,10 @@ class TestBuscoConfig(unittest.TestCase):
             "sepp": ["path", "command"],
             "tblastn": ["path", "command"],
         }
+
+    def test_runtime_collection_empty(self):
+        config = BuscoConfig.BaseConfig()
+        self.assertEqual(config.run_stats, {})
 
     def test_read_config_file(self):
         config = BuscoConfig.BaseConfig()
@@ -278,13 +284,6 @@ class TestBuscoConfig(unittest.TestCase):
     def test_mandatory_keys_check_missing_param_mode(self):
         with self.assertRaises(BuscoConfig.BatchFatalError):
             params_test = {"in": "input_file", "out": "output_name"}
-            config = BuscoConfig.BuscoConfigMain(self.base_config, params_test)
-            config.configure()
-            config._check_mandatory_keys_exist()
-
-    def test_mandatory_keys_check_missing_param_out(self):
-        with self.assertRaises(BuscoConfig.BatchFatalError):
-            params_test = {"in": "input_file", "mode": "genome"}
             config = BuscoConfig.BuscoConfigMain(self.base_config, params_test)
             config.configure()
             config._check_mandatory_keys_exist()

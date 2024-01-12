@@ -1,4 +1,18 @@
-from busco.busco_tools.base import BaseRunner, NoGenesError
+# coding: utf-8
+"""
+prodigal.py
+
+Module for running Prodigal.
+
+Author(s): Matthew Berkeley, Mose Manni
+
+Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
+
+License: Licensed under the MIT license. See LICENSE.md file.
+
+"""
+
+from busco.busco_tools.base import GenePredictor, NoGenesError
 import os
 import re
 from collections import defaultdict
@@ -9,11 +23,13 @@ import numpy as np
 from configparser import NoOptionError
 import subprocess
 from busco.Exceptions import BuscoError
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
 
 logger = BuscoLogger.get_logger(__name__)
 
 
-class ProdigalRunner(BaseRunner):
+class ProdigalRunner(GenePredictor):
 
     name = "prodigal"
     cmd = "prodigal"
@@ -59,9 +75,6 @@ class ProdigalRunner(BaseRunner):
 
         self.output_faa = os.path.join(self._pred_genes_dir, "predicted.faa")
         self._output_fna = os.path.join(self._pred_genes_dir, "predicted.fna")
-        self.sequences_aa = {}
-        self.sequences_nt = {}
-        self.gene_details = {}
 
         self._input_length = self._get_genome_length()
         self._run_mode = ["single", "meta"] if self._input_length > 100000 else ["meta"]
@@ -172,13 +185,6 @@ class ProdigalRunner(BaseRunner):
 
             self._organize_prodigal_files(selected_tmpfile, selected_logfile)
             self.get_gene_details()
-            self._gc_run_results[self.current_gc].update(
-                {
-                    "seqs_aa": self.sequences_aa,
-                    "seqs_nt": self.sequences_nt,
-                    "gene_details": self.gene_details,
-                }
-            )
             break
         if not run_check:
             logger.info("Genetic code {} selected as optimal".format(self.current_gc))
@@ -259,7 +265,6 @@ class ProdigalRunner(BaseRunner):
         return prodigal_job
 
     def get_gene_details(self):
-        self.gene_details = defaultdict(list)
         (
             output_filename_fna,
             output_filename_faa,
@@ -268,21 +273,69 @@ class ProdigalRunner(BaseRunner):
         ) = self.get_output_filenames()
 
         with open(output_filename_fna, "r") as f:
+            with open(output_filename_faa, "r") as f2:
+                record_dict = SeqIO.to_dict(
+                    SeqIO.parse(f2, "fasta")
+                )  # shouldn't need to worry about clashing entries as each output has a different underscore identifier provided by Prodigal
+                self.modify_sequence_ids(record_dict)
             for record in SeqIO.parse(f, "fasta"):
-                gene_name = record.id
-                self.sequences_nt[gene_name] = record
+                contig_id = record.id.rsplit("_", 1)[0]
+                nt_seq = record.seq
+                aa_seq = record_dict[record.id].seq
                 description_parts = record.description.split()
-                gene_start = int(description_parts[2])
-                gene_end = int(description_parts[4])
+                contig_start = int(description_parts[2])
+                contig_end = int(description_parts[4])
                 strand = "+" if int(description_parts[6]) == 1 else "-"
-                self.gene_details[gene_name].append(
-                    {"gene_start": gene_start, "gene_end": gene_end, "strand": strand}
+
+                self.record_gene_details(
+                    {
+                        "contig_id": contig_id,
+                        "contig_start": contig_start,
+                        "contig_end": contig_end,
+                        "strand": strand,
+                        "aa_seq": aa_seq,
+                        "nt_seq": nt_seq,
+                    }
                 )
 
-        with open(output_filename_faa, "r") as f:
-            for record in SeqIO.parse(f, "fasta"):
-                self.sequences_aa[record.id] = record
+        return
 
+    def record_gene_details(self, details={}):
+        """
+        Record all required match details from gene predictor output. The exact contents of the dictionary will vary
+        depending on the gene predictor and pipeline.
+        :param details:
+        :return:
+        """
+
+        gene_id = "{}:{}-{}".format(
+            details["contig_id"],
+            details["contig_start"],
+            details["contig_end"],
+        )
+
+        aa_seq = SeqRecord(Seq(details["aa_seq"]), id=gene_id, description="")
+        nt_seq = SeqRecord(Seq(details["nt_seq"]), id=gene_id, description="")
+
+        self.gene_details[gene_id] = {
+            "contig_id": details["contig_id"],
+            "contig_start": details["contig_start"],
+            "contig_end": details["contig_end"],
+            "strand": details["strand"],
+            "nt_seq": nt_seq,
+            "aa_seq": aa_seq,
+        }
+
+    def modify_sequence_ids(self, record_dict):
+        mod_records = []
+        for id, record in record_dict.items():
+            parts = record.description.split("#")
+            seq_id = id.rsplit("_", 1)[0]
+            left_coord = parts[1].strip()
+            right_coord = parts[2].strip()
+            record.id = "{}:{}-{}".format(seq_id, left_coord, right_coord)
+            mod_records.append(record)
+        SeqIO.write(mod_records, self.output_faa, "fasta")
         return
 
     @staticmethod
@@ -323,7 +376,7 @@ class ProdigalRunner(BaseRunner):
 
     def _organize_prodigal_files(self, tmp_file, tmp_logfile):
 
-        shutil.copy(tmp_file, self.output_faa)
+        # shutil.copy(tmp_file, self.output_faa)
         shutil.copy(tmp_file.rpartition(".faa")[0] + ".fna", self._output_fna)
 
         # copy selected log files from tmp/ to logs/

@@ -78,7 +78,7 @@ class TestConfigManager(unittest.TestCase):
     @patch("busco.analysis.GenomeAnalysis.NucleotideAnalysis.__init__")
     @patch(
         "busco.analysis.GenomeAnalysis.BuscoAnalysis.config.get",
-        return_value="prok_genome",
+        return_value="prok_genome_prod",
     )
     @patch("busco.analysis.GenomeAnalysis.BuscoAnalysis.config", autospec=True)
     @patch("busco.analysis.GenomeAnalysis.BBToolsRunner")
@@ -108,6 +108,9 @@ class TestConfigManager(unittest.TestCase):
         self, mock_run_metaeuk, mock_run_hmmer, mock_run_bbtools, *args
     ):
         analysis = GenomeAnalysis.GenomeAnalysisEukaryotesMetaeuk()
+        analysis.config.get = Mock(return_value="euk_genome_met")
+        analysis.config.getboolean = Mock(return_value=False)
+        GenomeAnalysis._bbtools_already_run = False
         analysis.bbtools_runner = Mock()
         analysis.metaeuk_runner = Mock()
         analysis.hmmer_runner = Mock(missing_buscos=[])

@@ -1,3 +1,17 @@
+# coding: utf-8
+"""
+bbtools.py
+
+Module for running BBTools.
+
+Author(s): Matthew Berkeley
+
+Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
+
+License: Licensed under the MIT license. See LICENSE.md file.
+
+"""
+
 from busco.busco_tools.base import BaseRunner
 from busco.BuscoLogger import BuscoLogger
 import os
@@ -95,10 +109,17 @@ class BBToolsRunner(BaseRunner):
                     line.split("\t")[-1].strip().strip(" gap")
                 )
             elif line.startswith("Main genome scaffold N/L50:"):
-                self.metrics["Scaffold N50"] = (
-                    line.split(":")[-1].strip().split("/")[1].strip()
-                )
+                nl50 = line.split(":")[-1].strip().split("/")
+                if int(nl50[0]) < int(
+                    nl50[1]
+                ):  # The N50/L50 values are inverted. Add a condition so if this is
+                    # fixed in bbtools in future versions, it will still work.
+                    self.metrics["Scaffold N50"] = nl50[1].strip()
+                else:
+                    self.metrics["Scaffold N50"] = nl50[0].strip()
             elif line.startswith("Main genome contig N/L50:"):
-                self.metrics["Contigs N50"] = (
-                    line.split(":")[-1].strip().split("/")[1].strip()
-                )
+                nl50 = line.split(":")[-1].strip().split("/")
+                if int(nl50[0]) < int(nl50[1]):
+                    self.metrics["Contigs N50"] = nl50[1].strip()
+                else:
+                    self.metrics["Contigs N50"] = nl50[0].strip()

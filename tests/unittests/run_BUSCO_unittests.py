@@ -101,6 +101,7 @@ class TestParams(unittest.TestCase):
             "list_datasets": "==SUPPRESS==",
             "mode": None,
             "offline": False,
+            'opt-out-run-stats': False,
             "out": None,
             "out_path": None,
             "quiet": False,
@@ -120,6 +121,7 @@ class TestParams(unittest.TestCase):
             "version": "==SUPPRESS==",
             "tar": False,
             "scaffold_composition": False,
+            "skip_bbtools": False,
         }
         self.assertDictEqual(params, correct_parse)
 
@@ -162,6 +164,7 @@ class TestParams(unittest.TestCase):
             "list_datasets": "==SUPPRESS==",
             "mode": mode,
             "offline": False,
+            'opt-out-run-stats': False,
             "out": output_file,
             "out_path": None,
             "quiet": True,
@@ -181,6 +184,7 @@ class TestParams(unittest.TestCase):
             "update-data": False,
             "version": "==SUPPRESS==",
             "tar": False,
+            "skip_bbtools": False,
         }
         self.assertDictEqual(params, correct_parse)
 
@@ -235,6 +239,8 @@ class TestParams(unittest.TestCase):
             "--offline",
             "--tar",
             "--scaffold_composition",
+            "--skip_bbtools",
+            "--opt-out-run-stats",
         ]
         command_str = " ".join(
             [" ".join([key, str(value)]) for key, value in arg_values.items()]
@@ -270,6 +276,7 @@ class TestParams(unittest.TestCase):
             "long": True,
             "mode": mode,
             "offline": True,
+            'opt-out-run-stats': True,
             "out": output_file,
             "out_path": out_path,
             "quiet": True,
@@ -277,6 +284,7 @@ class TestParams(unittest.TestCase):
             "version": "==SUPPRESS==",
             "tar": True,
             "scaffold_composition": True,
+            "skip_bbtools": True,
         }
         self.assertDictEqual(params, correct_parse)
 

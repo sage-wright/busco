@@ -1,3 +1,17 @@
+# coding: utf-8
+"""
+sepp.py
+
+Module for running SEPP.
+
+Author(s): Matthew Berkeley, Mose Manni, Mathieu Seppey
+
+Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
+
+License: Licensed under the MIT license. See LICENSE.md file.
+
+"""
+
 from busco.busco_tools.base import BaseRunner
 import os
 from busco.BuscoLogger import BuscoLogger

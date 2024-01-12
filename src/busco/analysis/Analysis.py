@@ -1,3 +1,17 @@
+# coding: utf-8
+"""
+Analysis.py
+
+This module contains validation classes for nucleotide and protein input files, as well as the BLAST analysis class that is used in genome eukarota analysis and transcriptome analysis.
+
+Author(s): Matthew Berkeley, Mathieu Seppey, Mose Manni, Felipe Simao, Rob Waterhouse
+
+Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
+
+License: Licensed under the MIT license. See LICENSE.md file.
+
+"""
+
 from Bio import SeqIO
 from busco.BuscoLogger import BuscoLogger
 from abc import ABCMeta

@@ -1,3 +1,17 @@
+# coding: utf-8
+"""
+blast.py
+
+Module for running BLAST.
+
+Author(s): Matthew Berkeley, Mathieu Seppey, Mose Manni, Felipe Simao, Rob Waterhouse
+
+Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
+
+License: Licensed under the MIT license. See LICENSE.md file.
+
+"""
+
 from busco.busco_tools.base import BaseRunner
 import os
 from collections import defaultdict

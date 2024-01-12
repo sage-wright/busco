@@ -1,15 +1,17 @@
-#!/usr/bin/env python3
 # coding: utf-8
 """
-.. module:: GeneSetAnalysis
-   :synopsis: GeneSetAnalysis implements genome analysis specifics
-.. versionadded:: 3.0.0
-.. versionchanged:: 5.4.0
+GeneSetAnalysis.py
 
-Copyright (c) 2016-2023, Evgeny Zdobnov (ez@ezlab.org)
-Licensed under the MIT license. See LICENSE.md file.
+Module called for proteins mode.
+
+Author(s): Matthew Berkeley, Mathieu Seppey, Mose Manni, Felipe Simao, Rob Waterhouse
+
+Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
+
+License: Licensed under the MIT license. See LICENSE.md file.
 
 """
+
 from busco.analysis.BuscoAnalysis import BuscoAnalysis
 from busco.BuscoLogger import BuscoLogger
 from busco.analysis.Analysis import ProteinAnalysis
@@ -30,8 +32,9 @@ class GeneSetAnalysis(ProteinAnalysis, BuscoAnalysis):
         Initialize an instance.
         """
         super().__init__()
-        self.sequences_aa = {
-            record.id: record for record in list(SeqIO.parse(self.input_file, "fasta"))
+        self.gene_details = {
+            record.id: {"aa_seq": record}
+            for record in list(SeqIO.parse(self.input_file, "fasta"))
         }
 
     def cleanup(self):
@@ -43,9 +46,7 @@ class GeneSetAnalysis(ProteinAnalysis, BuscoAnalysis):
         """
         super().run_analysis()
         self.run_hmmer(self.input_file)
-        self.hmmer_runner.write_buscos_to_file(self.sequences_aa)
-        # if self._tarzip:
-        #     self._run_tarzip_hmmer_output()
+        self.hmmer_runner.write_buscos_to_file()
         return
 
     def reset(self):

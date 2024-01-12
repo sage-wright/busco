@@ -1,13 +1,15 @@
-#!/usr/bin/env python3
 # coding: utf-8
 """
-.. module:: BuscoAnalysis
-   :synopsis: BuscoAnalysis implements general BUSCO analysis specifics
-.. versionadded:: 3.0.0
-.. versionchanged:: 5.4.0
+BuscoAnalysis.py
 
-Copyright (c) 2016-2023, Evgeny Zdobnov (ez@ezlab.org)
-Licensed under the MIT license. See LICENSE.md file.
+This module contains functions used by all BUSCO analysis pipelines, including the main call to HMMER.
+
+Author(s): Matthew Berkeley, Mathieu Seppey, Mose Manni, Felipe Simao, Rob Waterhouse
+
+Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
+
+License: Licensed under the MIT license. See LICENSE.md file.
+
 """
 
 from abc import ABCMeta, abstractmethod
@@ -256,7 +258,6 @@ class BuscoAnalysis(metaclass=ABCMeta):
         """
         self._create_main_dir()
         self._create_log_dir()
-        # self._create_tmp_dir()
 
     def _create_log_dir(self):
         """

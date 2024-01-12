@@ -1,13 +1,14 @@
-#!/usr/bin/env python3
 # coding: utf-8
 """
-.. module:: BuscoDownloadManager
-   :synopsis: BuscoDownloadManager manage the version and download the most recent file
-.. versionadded:: 4.0.0
-.. versionchanged:: 5.4.0
+BuscoDownloadManager.py
 
-Copyright (c) 2016-2023, Evgeny Zdobnov (ez@ezlab.org)
-Licensed under the MIT license. See LICENSE.md file.
+Manage file and dataset downloads.
+
+Author(s): Matthew Berkeley, Mathieu Seppey, Mose Manni
+
+Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
+
+License: Licensed under the MIT license. See LICENSE.md file.
 
 """
 
@@ -270,12 +271,13 @@ class BuscoDownloadManager:
             except OSError:
                 try:
                     timestamp = time.time()
+                    datestamp = time.strftime("%Y%m%d", time.localtime(timestamp))
                     os.rename(
-                        local_filepath, "{}.old.{}".format(local_filepath, timestamp)
+                        local_filepath, "{}.old.{}".format(local_filepath, datestamp)
                     )
                     logger.info(
                         "Renaming {} into {}.old.{}".format(
-                            local_filepath, local_filepath, timestamp
+                            local_filepath, local_filepath, datestamp
                         )
                     )
                 except OSError:

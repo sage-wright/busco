@@ -1,3 +1,17 @@
+# coding: utf-8
+"""
+hmmer.py
+
+Module for running HMMER.
+
+Author(s): Matthew Berkeley, Mathieu Seppey, Mose Manni, Felipe Simao, Rob Waterhouse
+
+Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
+
+License: Licensed under the MIT license. See LICENSE.md file.
+
+"""
+
 from busco.busco_tools.base import BaseRunner
 import os
 from collections import defaultdict
@@ -9,9 +23,8 @@ import csv
 import subprocess
 from busco.BuscoConfig import BuscoConfigAuto
 from busco.Exceptions import BatchFatalError, BuscoError
-import pandas as pd
 import busco
-from multiprocessing import Pool
+import numpy as np
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -45,7 +58,7 @@ class HMMERRunner(BaseRunner):
         self.multi_copy_buscos = {}
         self.fragmented_buscos = {}
         self.extra_columns = False
-        self.log_count = 0  # Dummy variable used to skip logging for intermediate eukaryote pipeline results.
+        self.log_count = 0  # variable used to skip logging for intermediate eukaryote pipeline results.
         self.one_line_summary = None
         self.one_line_summary_raw = None
 
@@ -53,7 +66,7 @@ class HMMERRunner(BaseRunner):
         self.input_sequences = None
         self.busco_ids = None
         self.mode = None
-        self.gene_details = None
+        self.gene_details = {}
         self.results_dir = None
 
         self.matched_genes_complete = {}
@@ -63,15 +76,18 @@ class HMMERRunner(BaseRunner):
         self.is_fragment = {}
         self.is_very_large = {}
 
+        self.create_dirs(self._hmmer_output_folder)
         self.create_dirs(
             [
-                self._hmmer_output_folder,
                 self.single_copy_sequences_folder,
                 self.multi_copy_sequences_folder,
                 self.fragmented_sequences_folder,
-            ]
+            ],
+            overwrite=True,  # avoid a clash with a previous run result in restart mode
         )
-        if self.domain == "eukaryota":
+        if (
+            self.domain == "eukaryota" and self.mode != "euk_genome_min"
+        ):  # miniprot pipeline only runs once
             self.initial_results_dir = os.path.join(
                 self._hmmer_output_folder, "initial_run_results"
             )
@@ -105,9 +121,6 @@ class HMMERRunner(BaseRunner):
         self.busco_ids = busco_ids
         self.mode = mode
 
-        self.is_fragment = {}
-        self.matched_genes_fragment = {}
-
         self.single_copy_buscos = {}
         self.multi_copy_buscos = {}
         self.fragmented_buscos = {}
@@ -119,7 +132,9 @@ class HMMERRunner(BaseRunner):
         if len(self.cutoff_dict) == 0:
             self.load_buscos()
 
-        if self.domain == "eukaryota":
+        if (
+            self.domain == "eukaryota" and self.mode != "euk_genome_min"
+        ):  # miniprot pipeline only runs once
             if self.run_number == 1:
                 self.results_dir = self.initial_results_dir
             elif self.run_number == 2:
@@ -259,88 +274,164 @@ class HMMERRunner(BaseRunner):
             for busco_id, busco_matches in hmmer_dict.items():
                 for gene_id, matches in busco_matches.items():
                     merged_dict[busco_id][gene_id].extend(matches)
-        # for busco_id in merged_dict.keys():
-        #     merged_dict[busco_id] = dict(merged_dict[busco_id])  # convert from defaultdict to dict
         return dict(merged_dict)
 
+    def sort_hmmer_results(self, arr):
+        hmm_match_lengths = {}
+        match_scores = {}
+        matches = np.unique(arr["target_name"])
+        for match in matches:
+            all_domain_hits = arr[arr["target_name"] == match]
+            scores = np.unique(
+                all_domain_hits["score"]
+            )  # in transcriptome mode the same gene id can have multiple reading frame matches. Take the highest scoring match.
+            top_scoring_domain_hits = all_domain_hits[
+                all_domain_hits["score"] == max(scores)
+            ]
+            hmm_coords = []
+            for hit in top_scoring_domain_hits:
+                hmm_coords.append((hit["hmm_coord_from"], hit["hmm_coord_to"]))
+            match_len = self.sum_hmm_len(hmm_coords)
+            hmm_match_lengths[match] = match_len
+            match_scores[match] = max(
+                scores
+            )  # use score as a tiebreaker in case of identical match lengths
+
+        target_hits_sorted = sorted(
+            matches, key=lambda x: (-hmm_match_lengths[x], -match_scores[x])
+        )  # sort descending by match length, then by score
+        return target_hits_sorted, hmm_match_lengths
+
     def parse_hmmer_output(self, filename, busco_query):
-        """
-        Read and parse HMMER output file.
-        :param filename: Name of HMMER output file
-        :param busco_query: Basename of file, used to identify BUSCO
-        :type filename: str
-        :type busco_query: str
-        :return: Dictionary of (gene_id, total_matched_length) pairs
-        :rtype: dict
-        """
-        records = defaultdict(list)
-        top_hit = None
+
+        processed_genes = []
         matched_genes = []
+        records = defaultdict(list)
 
+        data = []
         with open(filename, "r") as f:
+            lines = f.readlines()
 
-            # Read HMMER output file
-            for line in f:
-                if line.startswith("#"):
+        for line in lines:
+            if line.startswith("#"):
+                continue
+            else:
+                values = line.split()
+                description = "".join(values[22:])
+                row_data = tuple(values[:22]) + (description,)
+                data.append(row_data)
+
+        arr = np.array(
+            data,
+            dtype=[
+                ("target_name", "U100"),
+                ("target_accession", "U50"),
+                ("tlen", "i4"),
+                ("query_name", "U30"),
+                ("query_accession", "U30"),
+                ("qlen", "i4"),
+                ("eval", "f8"),
+                ("score", "f8"),
+                ("bias", "f8"),
+                ("dom_num", "i4"),
+                ("ndom", "i4"),
+                ("c-eval", "f8"),
+                ("i-eval", "f8"),
+                ("dom_score", "f8"),
+                ("dom_bias", "f8"),
+                ("hmm_coord_from", "i4"),
+                ("hmm_coord_to", "i4"),
+                ("ali_coord_from", "i4"),
+                ("ali_coord_to", "i4"),
+                ("env_coord_from", "i4"),
+                ("env_coord_to", "i4"),
+                ("acc", "f8"),
+                ("description", "U100"),
+            ],
+        )
+
+        target_hits_sorted, hmm_match_lengths = self.sort_hmmer_results(arr)
+
+        for target in target_hits_sorted:
+            all_domain_hits = arr[arr["target_name"] == target]
+            gene_id = target.split("|", maxsplit=1)[-1]
+            score = all_domain_hits[0]["score"]
+
+            if not self.mode == "proteins" and not target in processed_genes:
+                if self._check_overlap(matched_genes, gene_id):
                     continue
-                else:
-                    try:
-                        line = line.strip().split()
-                        gene_id = line[0]
-                        tlen = int(line[2])
-                        bit_score = float(line[7])
 
-                        if self.miniprot_pipeline and top_hit and top_hit != gene_id:  # only load the top result for efficiency
-                            if self._check_overlap(matched_genes, gene_id.split("|", maxsplit=1)[-1]):
-                                continue
+            # Extract frame information (present in transcriptome mode)
+            frame = (
+                all_domain_hits[0]["description"]
+                if "frame" in all_domain_hits[0]["description"]
+                else None
+            )
+            # Store bitscore matches for each gene match. If match below cutoff, discard.
+            if score < float(self.cutoff_dict[busco_query]["score"]):
+                continue
 
-                        # Extract frame information (present in transcriptome mode)
-                        frame = str(line[-1]) if "frame" in str(line[-1]) else None
+            hmm_coords = [
+                (hit["hmm_coord_from"], hit["hmm_coord_to"]) for hit in all_domain_hits
+            ]
+            env_coords = [
+                (hit["env_coord_from"], hit["env_coord_to"]) for hit in all_domain_hits
+            ]
 
-                        # Store bitscore matches for each gene match. If match below cutoff, discard.
-                        if bit_score < float(self.cutoff_dict[busco_query]["score"]):
-                            continue
-                        records[gene_id].append({
-                            "tlen": tlen,
-                            "hmm_len": 0,
-                            "env_coords": [],
-                            "score": bit_score,
-                            "frame": frame,
-                        })
-                        hmm_start = int(line[15])
-                        hmm_end = int(line[16])
-                        env_start = int(line[19])
-                        env_end = int(line[20])
-                        records[gene_id][-1]["hmm_len"] += hmm_end - hmm_start
-                        records[gene_id][-1]["env_coords"].append((env_start, env_end))
-                        if self.miniprot_pipeline:
-                            hit_busco_seq, hit_gene = gene_id.split("|", maxsplit=1)
-                            if hit_gene not in matched_genes:
-                                matched_genes.append(hit_gene)
-                            if not top_hit:
-                                top_hit = gene_id
-                    except IndexError as e:
-                        logger.error(
-                            "Cannot parse HMMER output file {}".format(filename)
-                        )
-                        raise BuscoError(e)
+            records[gene_id].append(
+                {
+                    "hmm_matched_length": hmm_match_lengths[target],
+                    "hmm_coords": hmm_coords,
+                    "env_coords": env_coords,
+                    "score": score,
+                    "frame": frame,
+                    "orig gene ID": target,
+                    "ref gene ID": target,
+                }
+            )
+
+            if gene_id not in matched_genes:
+                matched_genes.append(gene_id)
+                processed_genes.append(target)
         return records
 
     @staticmethod
     def _check_overlap(matched_genes, gene2):
         overlaps = []
-        coords2 = gene2.split(":")[-1]
+        contig2, coords2 = gene2.rsplit(":", 1)
         for gene1 in matched_genes:
-            coords1 = gene1.split(":")[-1]
-            start1, end1 = coords1.split("-")
+            contig1, coords1 = gene1.rsplit(":", 1)
+            if contig1 != contig2:
+                continue
+            start1, end1 = coords1.split(
+                "-"
+            )  # start should always be a lower number than end at this point
             start2, end2 = coords2.split("-")
             if int(end2) - int(start2) > int(end1) - int(start1):
                 start1, end1, start2, end2 = start2, end2, start1, end1
-            if int(start1) <= int(start2) <= int(end1) or int(start1) <= int(end2) <= int(end1):
+            if int(start1) <= int(start2) <= int(end1) or int(start1) <= int(
+                end2
+            ) <= int(end1):
                 overlaps.append(True)
             else:
                 overlaps.append(False)
         return any(overlaps)
+
+    def sum_hmm_len(self, hmm_coords):
+        hmm_regions_sorted = sorted(hmm_coords, key=lambda x: x[0])
+        hmm_regions_used = []
+        for region in hmm_regions_sorted:
+            for used in hmm_regions_used:
+                if (
+                    used[0] <= region[0] <= used[1]
+                ):  # if any new coord contained in previous region, expand if necessary
+                    if region[1] > used[1]:
+                        used[1] = region[1]
+                    break
+            else:
+                hmm_regions_used.append(list(region))
+
+        return sum([region[1] - region[0] for region in hmm_regions_used])
 
     def _sort_matches(self, matched_record, busco_query):
         """
@@ -363,31 +454,44 @@ class HMMERRunner(BaseRunner):
 
         # Determine whether matched gene represents a complete, very_large or fragment of a BUSCO
         for gene_id, record in matched_record.items():
-            size = sum([record[i]["hmm_len"] for i in range(len(record))])
-            frame = record[0]["frame"]
+            orig_gene_ids = set([r["orig gene ID"] for r in record])
+            for orig_gene_id in orig_gene_ids:
+                subrecord = [
+                    r for r in record if r["orig gene ID"] == orig_gene_id
+                ]  # needed for miniprot pipeline,
+                # where identical gene coords can match different reference sequences for the same BUSCO
 
-            # Kind of like a z-score, but it is compared with a cutoff value, not a mean
-            zeta = (self.cutoff_dict[busco_query]["length"] - size) / self.cutoff_dict[
-                busco_query
-            ]["sigma"]
+                size = subrecord[0]["hmm_matched_length"]
 
-            # gene match can only be either complete, v_large or fragment
-            if -2 <= zeta <= 2:
-                busco_type = busco_complete
-                match_type = matched_genes_complete
-            elif zeta < -2:
-                busco_type = busco_vlarge
-                match_type = matched_genes_vlarge
-            else:
-                busco_type = busco_fragment
-                match_type = matched_genes_fragment
+                # Kind of like a z-score, but it is compared with a cutoff value, not a mean
+                zeta = (
+                    self.cutoff_dict[busco_query]["length"] - size
+                ) / self.cutoff_dict[busco_query]["sigma"]
 
-            # Add information about match to dict
-            busco_type[gene_id].append(
-                dict({"bitscore": record[0]["score"], "length": size, "frame": frame, "orig gene ID": gene_id})
-            )
-            # Reference which busco_queries are associated with each gene match
-            match_type[gene_id].append(busco_query)
+                # gene match can only be either complete, v_large or fragment
+                if -2 <= zeta <= 2:
+                    busco_type = busco_complete
+                    match_type = matched_genes_complete
+                elif zeta < -2:
+                    busco_type = busco_vlarge
+                    match_type = matched_genes_vlarge
+                else:
+                    busco_type = busco_fragment
+                    match_type = matched_genes_fragment
+
+                # Add information about match to dict
+                busco_type[gene_id].append(
+                    dict({"bitscore": subrecord[0]["score"], "length": size})
+                )
+                for key, val in subrecord[
+                    0
+                ].items():  # allows miniprot-specific keyvals to be added simply without
+                    # having to reference other modules
+                    if not key in busco_type[gene_id][-1]:
+                        busco_type[gene_id][-1][key] = val
+
+                # Reference which busco_queries are associated with each gene match
+                match_type[gene_id].append(busco_query)
 
         return (
             busco_complete,
@@ -424,21 +528,17 @@ class HMMERRunner(BaseRunner):
                 "HMMER should not be run more than twice in the same Run instance."
             )
         self.gene_id_lookup = gene_id_lookup
-        with Pool(self.cpus) as job_pool:
-            hmmer_records = job_pool.map(
-                self.load_results_from_file, hmmer_results_files
-            )
-        if self.miniprot_pipeline:
-            self.unpack_hmmer_records_miniprot(hmmer_records)
-        else:
-            self.unpack_hmmer_records_default(hmmer_records)
 
-    def unpack_hmmer_records_miniprot(self, hmmer_records):
-        self.hmmer_records = {}
-        for record in hmmer_records:
-            self.hmmer_records.update(record)
+        hmmer_records = []
+        for (
+            filename
+        ) in hmmer_results_files:  # quicker to run in serial than in parallel
+            results = self.load_results_from_file(filename)
+            hmmer_records.append(results)
 
-    def unpack_hmmer_records_default(self, hmmer_records):
+        self.unpack_hmmer_records(hmmer_records)
+
+    def unpack_hmmer_records(self, hmmer_records):
 
         self.is_complete = defaultdict(
             lambda: defaultdict(list), self.is_complete
@@ -501,111 +601,24 @@ class HMMERRunner(BaseRunner):
     def load_results_from_file(self, filename):
         busco_query = str(os.path.basename(filename).split(".")[0])
         matched_record = self.parse_hmmer_output(filename, busco_query)
-        if self.miniprot_pipeline:
-            return matched_record
-        else:
-            filtered_records = self.remove_overlaps(matched_record)
-            (
-                busco_complete,
-                busco_vlarge,
-                busco_fragment,
-                matched_genes_complete,
-                matched_genes_vlarge,
-                matched_genes_fragment,
-            ) = self._sort_matches(filtered_records, busco_query)
-            return (
-                busco_query,
-                busco_complete,
-                busco_vlarge,
-                busco_fragment,
-                matched_genes_complete,
-                matched_genes_vlarge,
-                matched_genes_fragment,
-            )
 
-    def remove_overlaps(self, matched_records):
-        seq_ids = []
-        low_coords = []
-        high_coords = []
-        scores = []
-        strands = []
-        record_ids = []
-        try:
-            for record in matched_records:
-                record_ids.append(record)
-                if self.gene_id_lookup is not None:
-                    gene_id = self.gene_id_lookup[int(record)]
-                else:
-                    gene_id = record
-                seq_id, coords = gene_id.split(":")
-                coords = coords.split("_")[0]
-                start_coord, stop_coord = map(int, coords.split("-"))
-                low_coord = min(start_coord, stop_coord)
-                high_coord = max(start_coord, stop_coord)
-                if low_coord == start_coord:
-                    strand = "+"
-                else:
-                    strand = "-"
-                seq_ids.append(seq_id)
-                low_coords.append(low_coord)
-                high_coords.append(high_coord)
-                strands.append(strand)
-                scores.append(matched_records[record][0]["score"])  # multiple matches for same record have the same score
-        except ValueError:  # for protein sequences there is no ":<coords>" suffix, so skip the overlap filtering
-            return matched_records
-
-        records_df = pd.DataFrame(
-            {
-                "Sequence": seq_ids,
-                "Low coord": low_coords,
-                "High coord": high_coords,
-                "Score": scores,
-                "Strand": strands,
-                "Record ID": record_ids,
-            }
+        (
+            busco_complete,
+            busco_vlarge,
+            busco_fragment,
+            matched_genes_complete,
+            matched_genes_vlarge,
+            matched_genes_fragment,
+        ) = self._sort_matches(matched_record, busco_query)
+        return (
+            busco_query,
+            busco_complete,
+            busco_vlarge,
+            busco_fragment,
+            matched_genes_complete,
+            matched_genes_vlarge,
+            matched_genes_fragment,
         )
-        results_grouped = records_df.groupby("Sequence")
-        entries_to_remove = []
-        record_ids_to_remove = set()
-        seq_ids = results_grouped.groups.keys()
-        for seq in seq_ids:
-            match_finder = self.get_matches(results_grouped, seq)
-            for match in match_finder:
-                idx1, current_seqid, g1_sorted, matches = match
-                if (
-                    current_seqid in entries_to_remove
-                ):  # overlaps with removed entries don't count
-                    continue
-
-                for idx2 in matches.index.values: # don't consider overlaps with self
-                    if idx1 == idx2:
-                        continue
-                    elif g1_sorted.loc[idx1]["Score"] >= g1_sorted.loc[idx2]["Score"]:
-                        ind_to_remove = idx2
-                    else:
-                        ind_to_remove = idx1
-                    record_ids_to_remove.add(g1_sorted.loc[ind_to_remove]["Record ID"])
-                    record_to_remove = g1_sorted.loc[ind_to_remove]
-                    record_start_coord, record_stop_coord = (
-                        record_to_remove["Low coord"],
-                        record_to_remove["High coord"],
-                    ) if record_to_remove["Strand"] == "+" else (
-                        record_to_remove["High coord"],
-                        record_to_remove["Low coord"],
-                    )
-                    entries_to_remove.append(
-                        "{}:{}-{}".format(
-                            record_to_remove["Sequence"],
-                            record_start_coord,
-                            record_stop_coord,
-                        )
-                    )
-
-        filtered_records = {
-            i: matched_records[i] for i in matched_records if i not in record_ids_to_remove
-        }
-
-        return filtered_records
 
     def _update_used_gene_set(self, busco_dict):
         """
@@ -702,10 +715,11 @@ class HMMERRunner(BaseRunner):
                 busco_bitscores = []
                 busco_matches = []
                 for busco in buscos:
-                    matches = busco_dict[busco][gene_id]
-                    for match in matches:
-                        bitscore = match["bitscore"]
-                        busco_bitscores.append(bitscore)
+                    if not busco in busco_matches:
+                        matches = busco_dict[busco][gene_id]
+                        for match in matches:
+                            bitscore = match["bitscore"]
+                            busco_bitscores.append(bitscore)
                         busco_matches.append(busco)
 
                 if (
@@ -898,18 +912,21 @@ class HMMERRunner(BaseRunner):
                                 )
                             )
                     elif self.mode == "genome":
-                        try:
-                            scaffold = self.gene_details[gene_id][0]
-                        except KeyError:
-                            scaffold = match
+                        scaffold = self.gene_details[match["ref gene ID"]]
                         if self.domain == "eukaryota":
-                            location_pattern = ":{}-{}".format(
-                                scaffold["gene_start"], scaffold["gene_end"]
-                            )
-                            # if gene_id.endswith(location_pattern):
-                            #     gene_id = gene_id.replace(location_pattern, "")
+                            if "strand" in scaffold:
+                                location_pattern = ":{}-{}".format(
+                                    scaffold["contig_start"], scaffold["contig_end"]
+                                )
+                                if gene_id.endswith(location_pattern):
+                                    gene_id = gene_id.replace(location_pattern, "")
+
                         else:  # Remove suffix assigned by Prodigal
                             gene_id = gene_id.rsplit("_", 1)[0]
+                        start, end = sorted(
+                            [scaffold["contig_start"], scaffold["contig_end"]],
+                            reverse=bool(scaffold["strand"] == "-"),
+                        )
                         try:
                             desc = links_info[busco]["description"]
                             link = links_info[busco]["link"]
@@ -919,8 +936,8 @@ class HMMERRunner(BaseRunner):
                                     busco,
                                     label,
                                     gene_id,
-                                    scaffold["gene_start"],
-                                    scaffold["gene_end"],
+                                    start,
+                                    end,
                                     scaffold["strand"],
                                     bit_score,
                                     match_length,
@@ -934,8 +951,8 @@ class HMMERRunner(BaseRunner):
                                     busco,
                                     label,
                                     gene_id,
-                                    scaffold["gene_start"],
-                                    scaffold["gene_end"],
+                                    start,
+                                    end,
                                     scaffold["strand"],
                                     bit_score,
                                     match_length,
@@ -970,7 +987,11 @@ class HMMERRunner(BaseRunner):
         for busco_group in self.cutoff_dict:
             if not any(
                 busco_group in d
-                for d in [self.single_copy_buscos, self.multi_copy_buscos, self.fragmented_buscos]
+                for d in [
+                    self.single_copy_buscos,
+                    self.multi_copy_buscos,
+                    self.fragmented_buscos,
+                ]
             ):
                 output_lines.append("{}\tMissing\n".format(busco_group))
                 self.missing_buscos.append(busco_group)
@@ -1038,12 +1059,10 @@ class HMMERRunner(BaseRunner):
             )
         return
 
-    def write_buscos_to_file(self, sequences_aa, sequences_nt=None):
+    def write_buscos_to_file(self):
         """
         Write BUSCO matching sequences to output fasta files. Each sequence is printed in a separate file and both
         nucleotide and amino acid versions are created.
-        :param sequences_aa: dict
-        :param sequences_nt: dict
         :return:
         """
         for busco_type in ["single_copy", "multi_copy", "fragmented"]:
@@ -1058,19 +1077,31 @@ class HMMERRunner(BaseRunner):
                 busco_matches = self.fragmented_buscos
 
             for busco, gene_matches in busco_matches.items():
+                aa_seqs = []
+                nt_seqs = []
                 try:
-                    aa_seqs, nt_seqs = zip(
-                        *[
-                            (sequences_aa[gene_id], sequences_nt[gene_id])
-                            for gene_id in gene_matches
-                        ]
-                    )
-                    with open(
-                        os.path.join(output_dir, "{}.fna".format(busco)), "w"
-                    ) as f2:
-                        SeqIO.write(nt_seqs, f2, "fasta")
+                    for gene_id, matches in gene_matches.items():
+                        for match in matches:
+                            try:
+                                nt_seqs.append(
+                                    self.gene_details[match["ref gene ID"]]["nt_seq"]
+                                )
+                            except KeyError:
+                                pass
+                            aa_seqs.append(
+                                self.gene_details[match["ref gene ID"]]["aa_seq"]
+                            )
+                    if len(nt_seqs) > 0:
+                        with open(
+                            os.path.join(output_dir, "{}.fna".format(busco)), "w"
+                        ) as f2:
+                            SeqIO.write(nt_seqs, f2, "fasta")
                 except TypeError:
-                    aa_seqs = [sequences_aa[gene_id] for gene_id in gene_matches]
+                    for gene_id, matches in gene_matches.items():
+                        for match in matches:
+                            aa_seqs.append(
+                                self.gene_details[match["ref gene ID"]]["aa_seq"]
+                            )
                 with open(os.path.join(output_dir, "{}.faa".format(busco)), "w") as f1:
                     SeqIO.write(aa_seqs, f1, "fasta")
         return
@@ -1109,31 +1140,31 @@ class HMMERRunner(BaseRunner):
         return sorted_lines
 
     def produce_hmmer_summary(self):
-        frameshift_pattern = "(incl. {} with frameshifts)"
+        internal_stop_codon_pattern = "(of which {} contain internal stop codons)"
 
         self.hmmer_results_lines.append("***** Results: *****\n\n")
         self.hmmer_results_lines.append(self.one_line_summary_raw)
         self.hmmer_results_lines.append(
             "{}\tComplete BUSCOs (C)\t{}\t\t{}\n".format(
-                self.single_copy + self.multi_copy, frameshift_pattern.format(self.c_frameshifts) if self.c_frameshifts > 0 else "",
-                "   "
+                self.single_copy + self.multi_copy,
+                internal_stop_codon_pattern.format(self.complete_stop_codon_count)
+                if self.complete_stop_codon_count > 0
+                else "",
+                "   ",
             )
         )
         self.hmmer_results_lines.append(
-            "{}\tComplete and single-copy BUSCOs (S)\t{}{}\n".format(
-                self.single_copy, frameshift_pattern.format(self.s_frameshifts) if self.s_frameshifts > 0 else "",
-                "   "
+            "{}\tComplete and single-copy BUSCOs (S)\t{}\n".format(
+                self.single_copy, "   "
             )
         )
         self.hmmer_results_lines.append(
-            "{}\tComplete and duplicated BUSCOs (D)\t{}{}\n".format(
-                self.multi_copy, frameshift_pattern.format(self.d_frameshifts) if self.d_frameshifts > 0 else "",
-                "   "
+            "{}\tComplete and duplicated BUSCOs (D)\t{}\n".format(
+                self.multi_copy, "   "
             )
         )
         self.hmmer_results_lines.append(
-            "{}\tFragmented BUSCOs (F)\t{}\t\t{}\n".format(self.only_fragments, frameshift_pattern.format(self.f_frameshifts) if self.f_frameshifts > 0 else "",
-                                                           "   ")
+            "{}\tFragmented BUSCOs (F)\t\t\t{}\n".format(self.only_fragments, "   ")
         )
         self.hmmer_results_lines.append(
             "{}\tMissing BUSCOs (M)\t\t\t{}\n".format(
@@ -1160,36 +1191,21 @@ class HMMERRunner(BaseRunner):
 
         return
 
-    def record_results(self, frameshifts=False):
+    def record_results(self):
         self._get_busco_percentages()
-        self.one_line_summary_raw = "C:{}%[S:{}%,D:{}%],F:{}%,M:{}%,n:{}\t{}\n".format(
-            self.complete_percent,
-            self.s_percent,
-            self.d_percent,
-            self.f_percent,
-            self.missing_percent,
-            self.total_buscos,
-            "   ",
+        extra = ",E:{}%".format(self.e_percent) if self.e_percent else ""
+        self.one_line_summary_raw = (
+            "C:{}%[S:{}%,D:{}%],F:{}%,M:{}%,n:{}{}\t{}\n".format(
+                self.complete_percent,
+                self.s_percent,
+                self.d_percent,
+                self.f_percent,
+                self.missing_percent,
+                self.total_buscos,
+                extra,
+                "   ",
+            )
         )
-        if frameshifts:
-            self.s_frameshifts = 0
-            for x in self.single_copy_buscos.values():
-                for g, details in x.items():
-                    self.s_frameshifts += bool(int(details[0]["frameshift_events"]))  # just add one for each gene_id containing a frameshift
-            self.d_frameshifts = 0
-            for x in self.multi_copy_buscos.values():
-                for g, details in x.items():
-                    self.d_frameshifts += bool(int(details[0]["frameshift_events"]))
-            self.f_frameshifts = 0
-            for x in self.fragmented_buscos.values():
-                for g, details in x.items():
-                    self.f_frameshifts += bool(int(details[0]["frameshift_events"]))
-            self.c_frameshifts = self.s_frameshifts + self.d_frameshifts
-        else:
-            self.s_frameshifts = 0
-            self.d_frameshifts = 0
-            self.f_frameshifts = 0
-            self.c_frameshifts = 0
         self.one_line_summary = "Results:\t{}".format(self.one_line_summary_raw)
 
     @log("{}", logger, attr_name="hmmer_results_lines", apply="join", on_func_exit=True)
@@ -1274,5 +1290,84 @@ class HMMERRunner(BaseRunner):
         self.missing_percent = abs(
             round(100 - self.s_percent - self.d_percent - self.f_percent, 1)
         )
+        if self.miniprot_pipeline:
+            self._get_stop_codon_percent_and_avg_identity()
+        else:
+            self.e_percent = 0
+            self.complete_stop_codon_count = 0
 
         return
+
+    def _get_stop_codon_percent_and_avg_identity(self):
+        single_copy_stop_codon_count = 0
+        multi_copy_stop_codon_count = 0
+        identities = []
+        for busco_id, matches in self.single_copy_buscos.items():
+            for gene_id, match in matches.items():
+                ref_gene_id = match[0]["ref gene ID"]
+                identities.append(self.gene_details[ref_gene_id]["identity"])
+                if self.gene_details[ref_gene_id]["stop_codon_count"] > 0:
+                    single_copy_stop_codon_count += 1
+
+        for busco_id, matches in self.multi_copy_buscos.items():
+            for gene_id, match in matches.items():
+                ref_gene_id = match[0]["ref gene ID"]
+                identities.append(self.gene_details[ref_gene_id]["identity"])
+                if self.gene_details[ref_gene_id]["stop_codon_count"] > 0:
+                    pass
+                else:
+                    break
+            else:
+                multi_copy_stop_codon_count += 1
+
+        for busco_id, matches in self.fragmented_buscos.items():
+            for gene_id, match in matches.items():
+                ref_gene_id = match[0]["ref gene ID"]
+                identities.append(self.gene_details[ref_gene_id]["identity"])
+
+        self.complete_stop_codon_count = (
+            single_copy_stop_codon_count + multi_copy_stop_codon_count
+        )
+
+        if self.complete_stop_codon_count > 0:
+            complete_count = len(self.single_copy_buscos) + len(self.multi_copy_buscos)
+            self.e_percent = round(
+                100 * self.complete_stop_codon_count / complete_count, 1
+            )
+            logger.warning(
+                "{} of {} Complete matches ({}%) contain internal stop codons in Miniprot gene predictions".format(
+                    self.complete_stop_codon_count, complete_count, self.e_percent
+                )
+            )
+
+        avg_identity = round(sum(identities) / len(identities), 2)
+        if avg_identity < 0.5:
+            logger.warning(
+                "BUSCO gene predictions from Miniprot have low average identity ({}). You may want to repeat the analysis using the Metaeuk pipeline.".format(
+                    avg_identity
+                )
+            )
+        return
+
+    def get_error_count(self):
+        error_count = 0
+        for busco_id, busco_matches in self.single_copy_buscos.items():
+            for gene_id, matches in busco_matches.items():
+                for match in matches:
+                    stop_codon_count = self.gene_details[match["ref gene ID"]][
+                        "stop_codon_count"
+                    ]
+                    error_count += bool(stop_codon_count)
+
+        for busco_id, busco_matches in self.multi_copy_buscos.items():
+            duplicate_contains_error = False
+            for gene_id, matches in busco_matches.items():
+                for match in matches:
+                    stop_codon_count = self.gene_details[match["ref gene ID"]][
+                        "stop_codon_count"
+                    ]
+                    if bool(stop_codon_count):
+                        error_count += bool(stop_codon_count)
+                        duplicate_contains_error = True
+                if duplicate_contains_error:
+                    break

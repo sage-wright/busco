@@ -1,4 +1,18 @@
-from busco.busco_tools.base import BaseRunner, NoGenesError
+# coding: utf-8
+"""
+augustus.py
+
+Module containing classes for running Augustus gene prediction and parsing the output.
+
+Author(s): Matthew Berkeley, Mathieu Seppey, Mose Manni, Felipe Simao, Rob Waterhouse
+
+Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
+
+License: Licensed under the MIT license. See LICENSE.md file.
+
+"""
+
+from busco.busco_tools.base import BaseRunner, GenePredictor, NoGenesError
 import os
 import re
 from collections import defaultdict
@@ -21,7 +35,7 @@ class AugustusParsingError(Exception):
         pass
 
 
-class AugustusRunner(BaseRunner):
+class AugustusRunner(GenePredictor):
 
     ACCEPTED_PARAMETERS = [
         "strand",
@@ -61,7 +75,6 @@ class AugustusRunner(BaseRunner):
     cmd = "augustus"
 
     def __init__(self):
-        self.gene_details = None
         try:
             self._augustus_config_path = os.environ.get("AUGUSTUS_CONFIG_PATH")
             self.config.set(
@@ -110,12 +123,10 @@ class AugustusRunner(BaseRunner):
         self.output_sequences = []
         self.seqs_path = None
         self.coords = None
-        self.sequences_aa = None
-        self.sequences_nt = None
 
         self.create_dirs([self._output_folder, self.extracted_prot_dir, self.gff_dir])
 
-    def configure_runner(self, seqs_path, coords, sequences_aa, sequences_nt):
+    def configure_runner(self, seqs_path, coords):
         super().configure_runner()
         self.run_number += 1
 
@@ -123,14 +134,10 @@ class AugustusRunner(BaseRunner):
         self._target_species = self.config.get("busco_run", "augustus_species")
 
         self.check_tool_dependencies()
-        self.gene_details = defaultdict(list)
         self.output_sequences = []
 
         self.seqs_path = seqs_path
         self.coords = coords
-
-        self.sequences_aa = sequences_aa
-        self.sequences_nt = sequences_nt
 
         self.pred_genes_dir = (
             self.pred_genes_dir_rerun
@@ -221,8 +228,6 @@ class AugustusRunner(BaseRunner):
 
         if not self.any_gene_found and self.run_number == 1:
             raise NoGenesError("Augustus")
-
-        self.gene_details = dict(self.gene_details)
 
         self._merge_stderr_logs()
         self._remove_individual_err_logs()
@@ -378,19 +383,19 @@ class AugustusRunner(BaseRunner):
         sequences_nt = []
         gene_found = False
         completed_record = False
+        gene_info_section = False
+        nt_sequence_section = False
+        aa_sequence_section = False
+        nt_sequence_parts = []
+        aa_sequence_parts = []
+        exon_coords = []
 
         with open(
             os.path.join(self.pred_genes_dir, filename), "r", encoding="utf-8"
         ) as f:
             # utf-8 encoding needed to handle the umlaut in the third line of the file.
-            gene_info_section = False
-            nt_sequence_section = False
-            aa_sequence_section = False
-            nt_sequence_parts = []
-            aa_sequence_parts = []
-
+            busco_id = filename.split(".")[0]
             for line in f:
-
                 if aa_sequence_section:
                     if "]" in line:
                         line = line.strip().lstrip("# ").rstrip("]")
@@ -408,6 +413,18 @@ class AugustusRunner(BaseRunner):
                             )
                             sequences_aa.append(seq_record_aa)
                             sequences_nt.append(seq_record_nt)
+                            self.record_gene_details(
+                                {
+                                    "target_id": busco_id,
+                                    "contig_id": contig_id,
+                                    "contig_start": contig_start,
+                                    "contig_end": contig_end,
+                                    "strand": strand,
+                                    "exon_coords": exon_coords,
+                                    "aa_seq": aa_sequence,
+                                    "nt_seq": nt_sequence,
+                                }
+                            )
                             aa_sequence_parts = []
                             nt_sequence_parts = []
                             gene_id = None
@@ -421,7 +438,9 @@ class AugustusRunner(BaseRunner):
                 if line.startswith("# protein"):
                     nt_sequence_section = False
                     aa_sequence_section = True
-                    if "]" in line:
+                    if (
+                        "]" in line
+                    ):  # duplicate code here in case aa sequence starts and ends on same line
                         line = line.strip().rstrip("]").split("[")
                         aa_sequence_parts.append(line[1])
                         aa_sequence_section = False
@@ -437,6 +456,18 @@ class AugustusRunner(BaseRunner):
                             )
                             sequences_aa.append(seq_record_aa)
                             sequences_nt.append(seq_record_nt)
+                            self.record_gene_details(  # todo: remove duplicate code in this function
+                                {
+                                    "target_id": busco_id,
+                                    "contig_id": contig_id,
+                                    "contig_start": contig_start,
+                                    "contig_end": contig_end,
+                                    "strand": strand,
+                                    "exon_coords": exon_coords,
+                                    "aa_seq": aa_sequence,
+                                    "nt_seq": nt_sequence,
+                                }
+                            )
                             aa_sequence_parts = []
                             nt_sequence_parts = []
                             gene_id = None
@@ -451,7 +482,7 @@ class AugustusRunner(BaseRunner):
                     continue
 
                 if line.startswith("# coding sequence"):
-                    gene_info = []
+                    # gene_info = []
                     gene_info_section = False
                     nt_sequence_section = True
                     line = (
@@ -462,20 +493,19 @@ class AugustusRunner(BaseRunner):
 
                 if gene_info_section:
                     line = line.strip().split()
-                    seq_name = line[0].strip()
-                    gene_start = line[3].strip()
-                    gene_end = line[4].strip()
+                    part_id = line[0].strip()
+                    part_type = line[2].strip()
+                    part_start = line[3].strip()
+                    part_end = line[4].strip()
                     strand = line[6].strip()
-                    if not gene_id:
-                        gene_id = "{}:{}-{}".format(seq_name, gene_start, gene_end)
-                        self.gene_details[gene_id].append(
-                            {
-                                "gene_start": gene_start,
-                                "gene_end": gene_end,
-                                "strand": strand,
-                            }
-                        )
-                    gene_info.append("\t".join(line))
+                    if part_type == "gene":
+                        gene_id = "{}:{}-{}".format(part_id, part_start, part_end)
+                        contig_id = part_id
+                        contig_start = part_start
+                        contig_end = part_end
+                    elif part_type == "exon":
+                        exon_coords.append((part_start, part_end, strand))
+                    # gene_info.append("\t".join(line))
                     continue
 
                 if line.startswith("# start gene"):
@@ -488,14 +518,40 @@ class AugustusRunner(BaseRunner):
             if gene_found and not completed_record:
                 logger.warning("Augustus output file {} truncated".format(filename))
 
-        self.sequences_aa.update({record.id: record for record in sequences_aa})
-        self.sequences_nt.update({record.id: record for record in sequences_nt})
         if gene_found:
             self._write_sequences_to_file(filename, sequences_nt, sequences_aa)
 
         return
 
-    def make_gff_files(self, single_copy_buscos):
+    def record_gene_details(self, details={}):
+        """
+        Record all required match details from gene predictor output. The exact contents of the dictionary will vary
+        depending on the gene predictor and pipeline.
+        :param details:
+        :return:
+        """
+
+        gene_id = "{}:{}-{}".format(
+            details["contig_id"], details["contig_start"], details["contig_end"]
+        )
+
+        aa_seq = SeqRecord(Seq(details["aa_seq"]), id=gene_id, description="")
+        nt_seq = SeqRecord(Seq(details["nt_seq"]), id=gene_id, description="")
+
+        self.gene_details[gene_id] = {
+            "contig_id": details["contig_id"],
+            "contig_start": details["contig_start"],
+            "contig_end": details["contig_end"],
+            "strand": details["strand"],
+            "exon_coords": details["exon_coords"],
+            "aa_seq": aa_seq,
+            "nt_seq": nt_seq,
+            "run_number": self.run_number,
+        }
+
+    def make_gff_files(
+        self, single_copy_buscos
+    ):  # todo: combine this with the earlier parsing function
 
         for b in single_copy_buscos:
             gene_info = []

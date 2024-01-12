@@ -1,17 +1,17 @@
-#!/usr/bin/env python3
 # coding: utf-8
 """
-.. module:: BuscoLogger
-   :synopsis: base logger customization for the analysis pipeline
-.. versionadded:: 3.0.0
-.. versionchanged:: 5.4.0
+BuscoLogger.py
 
-This is a logger for the pipeline that extends the default Python logger class
+Controls logging for all BUSCO pipelines. Extension of the default Python logger class.
 
-Copyright (c) 2016-2023, Evgeny Zdobnov (ez@ezlab.org)
-Licensed under the MIT license. See LICENSE.md file.
+Author(s): Matthew Berkeley
+
+Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
+
+License: Licensed under the MIT license. See LICENSE.md file.
 
 """
+
 
 import logging
 import logging.handlers

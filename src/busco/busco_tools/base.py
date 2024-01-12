@@ -1,3 +1,17 @@
+# coding: utf-8
+"""
+base.py
+
+A collection of classes and methods used by all tools.
+
+Author(s): Matthew Berkeley, Mathieu Seppey, Mose Manni, Felipe Simao, Rob Waterhouse
+
+Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
+
+License: Licensed under the MIT license. See LICENSE.md file.
+
+"""
+
 import os
 from busco.BuscoLogger import BuscoLogger
 from busco.busco_tools.Toolset import Tool
@@ -7,6 +21,9 @@ from busco.BuscoConfig import BuscoConfigAuto
 from busco.Exceptions import BuscoError
 import time
 import gzip
+import shutil
+from collections import defaultdict
+import numpy as np
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -81,7 +98,9 @@ class BaseRunner(Tool, metaclass=ABCMeta):
             cpt_file.write("Run: {}\n".format(self.run_number))
             for args in additional_args:
                 cpt_file.write("{}: {}\n".format(args[0], args[1]))
-            cpt_file.write("Time: {}\n".format(time.strftime("%d/%m/%Y %H:%M:%S")))
+            current_time = time.strftime("%d/%m/%Y %H:%M:%S")
+            cpt_file.write("Time: {}\n".format(current_time))
+            self.config.run_stats["{}_start_time".format(self.name)] = current_time
             cpt_file.write("Completed {} jobs\n\n".format(self.total))
 
     def check_previous_completed_run(self, additional_args=[]):
@@ -158,24 +177,6 @@ class BaseRunner(Tool, metaclass=ABCMeta):
     def generate_job_args(self):
         pass
 
-    @staticmethod
-    def decompress_refseq_file(gzip_file):  # todo: probably doesn't belong in this class as it is only applicable to metaeuk and miniprot
-        unzipped_filename = gzip_file.split(".gz")[0]
-        if not os.path.exists(unzipped_filename):
-            with gzip.open(gzip_file, "rb") as compressed_file:
-                with open(unzipped_filename, "wb") as decompressed_file:
-                    for line in compressed_file:
-                        decompressed_file.write(line)
-        if os.path.exists(gzip_file):
-            try:
-                os.remove(gzip_file)
-            except OSError:
-                logger.warning(
-                    "Unable to remove compressed refseq file in dataset download"
-                )
-                pass
-        return unzipped_filename
-
     @property
     @abstractmethod
     def output_folder(self):
@@ -193,7 +194,7 @@ class BaseRunner(Tool, metaclass=ABCMeta):
             logger.debug("Version: {}".format(self.version))
 
     @staticmethod
-    def create_dirs(dirnames):
+    def create_dirs(dirnames, overwrite=False):
         """
         Create all required directories
 
@@ -201,12 +202,21 @@ class BaseRunner(Tool, metaclass=ABCMeta):
         :return:
         """
         if isinstance(dirnames, str):
-            os.makedirs(dirnames, exist_ok=True)
+            dirnames = [dirnames]
         elif isinstance(dirnames, list):
-            for d in dirnames:
-                os.makedirs(d, exist_ok=True)
+            pass
         else:
             raise TypeError("'dirnames' should be either a str or a list")
+
+        for d in dirnames:
+            if overwrite:
+                if os.path.exists(d):
+                    try:
+                        shutil.rmtree(d)
+                    except OSError:
+                        logger.warning("Unable to remove {}".format(d))
+                        pass
+            os.makedirs(d, exist_ok=True)
 
     def check_tool_available(self):
         """
@@ -256,28 +266,6 @@ class BaseRunner(Tool, metaclass=ABCMeta):
 
         return
 
-    @staticmethod
-    def get_matches(results_grouped, seq):
-        g1 = results_grouped.get_group(seq)
-        g1_sorted = g1.sort_values(
-            "Low coord"
-        )  # sort to facilitate a single-pass coordinate check
-        for idx1, row1 in g1_sorted.iterrows():
-            strand = g1_sorted.loc[idx1]["Strand"]
-            if strand == "-":
-                start_val = high_coord = g1_sorted.loc[idx1]["High coord"]
-                stop_val = low_coord = g1_sorted.loc[idx1]["Low coord"]
-            else:
-                start_val = low_coord = g1_sorted.loc[idx1]["Low coord"]
-                stop_val = high_coord = g1_sorted.loc[idx1]["High coord"]
-            current_seqid = "{}:{}-{}".format(
-                g1_sorted.loc[idx1], start_val, stop_val
-            )
-            matches = g1_sorted[g1_sorted["Low coord"] >= low_coord].loc[
-                g1_sorted["Low coord"] < high_coord
-                ]  # find entries with a start coordinate between the current exon start and end
-            yield idx1, current_seqid, g1_sorted, matches
-
     @abstractmethod
     def get_version(self):
         return
@@ -286,6 +274,121 @@ class BaseRunner(Tool, metaclass=ABCMeta):
     def reset(cls):
         BaseRunner.config = None
         BaseRunner.tool_versions = {}
+
+
+class GenePredictor(BaseRunner, metaclass=ABCMeta):
+    def __init__(self):
+        super().__init__()
+        self.gene_details = defaultdict(dict)
+        self.sequences_aa = {}
+        self.sequences_nt = {}
+
+    @abstractmethod
+    def record_gene_details(self):
+        """
+        Record all required match details from gene predictor output. The exact contents of the dictionary will vary
+        depending on the gene predictor and pipeline.
+        :return:
+        """
+        return
+
+    @staticmethod
+    def get_matches(results_seq):
+        results_sorted = np.sort(
+            results_seq, order=["low_coord"]
+        )  # sort to facilitate a single-pass coordinate check
+        for row1 in results_sorted:
+            low_coord = row1["low_coord"]
+            high_coord = row1["high_coord"]
+            current_seqid = row1["gene_id"]
+            matches = results_sorted[
+                (results_sorted["low_coord"] >= low_coord)
+                & (results_sorted["low_coord"] < high_coord)
+            ]  # find entries with a start coordinate between the current exon start and end
+            yield row1, current_seqid, matches
+
+    def detect_overlap(self, record_arr, seq):
+        results_seq = record_arr[record_arr["contig_id"] == seq]
+        overlaps = []
+        entries_to_remove = []
+        handled_gene_ids = set()
+        match_finder = self.get_matches(results_seq)
+        for match in match_finder:
+            row1, current_seqid, matches = match
+            exon_id1 = "{}|{}-{}".format(
+                row1["gene_id"], row1["low_coord"], row1["high_coord"]
+            )
+            if exon_id1 in entries_to_remove:
+                continue
+            for row2 in matches:
+                exon_id2 = "{}|{}-{}".format(
+                    row2["gene_id"], row2["low_coord"], row2["high_coord"]
+                )
+                if exon_id2 in handled_gene_ids:
+                    continue
+                if exon_id1 == exon_id2:  # don't consider overlaps with self
+                    continue
+                elif (
+                    (
+                        (
+                            row1["gene_id"].split("|", 1)[-1]
+                            != row2["gene_id"].split("|", 1)[-1]
+                        )  # for efficiency skip overlaps that are
+                        # actually the same gene matching multiple BUSCOs, as this will be dealt with in the
+                        # filtering step later
+                    )
+                    and (
+                        row1["strand"]
+                        == row2["strand"]  # check overlaps are on the same strand
+                    )
+                    and (
+                        row1["low_coord"] % 3
+                        == row2["low_coord"]
+                        % 3  # check overlaps are in the same reading frame
+                    )
+                ):
+                    if row1["score"] > row2["score"]:
+                        entries_to_remove.append(exon_id2)
+                        overlaps.append((row2, row1))  # first entry has the lower score
+                    else:
+                        entries_to_remove.append(exon_id1)
+                        overlaps.append((row1, row2))
+            handled_gene_ids.add(exon_id1)
+        return overlaps
+
+    def find_overlaps(self, structured_arr):
+        seq_ids = np.unique(structured_arr["contig_id"])
+        overlaps = []
+        for seq_id in seq_ids:
+            overlaps += self.detect_overlap(structured_arr, seq_id)
+
+        max_bitscores = []
+        for overlap in overlaps:
+            max_bitscores.append(max([x["score"] for x in overlap]))
+        sort_order = np.argsort(max_bitscores)[::-1]
+        overlaps = [overlaps[i] for i in sort_order]
+
+        return overlaps
+
+    @staticmethod
+    def decompress_refseq_file(
+        gzip_file,
+    ):
+        unzipped_filename = gzip_file.split(".gz")[0]
+        if not os.path.exists(unzipped_filename):
+            with gzip.open(gzip_file, "rb") as compressed_file:
+                with open(unzipped_filename, "wb") as decompressed_file:
+                    for line in compressed_file:
+                        decompressed_file.write(line)
+        if os.path.exists(gzip_file):
+            try:
+                os.remove(gzip_file)
+            except OSError:
+                logger.warning(
+                    "Unable to remove compressed refseq file in dataset download"
+                )
+                pass
+        return unzipped_filename
 
 
 class NoGenesError(Exception):

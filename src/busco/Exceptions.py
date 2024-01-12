@@ -1,3 +1,18 @@
+# coding: utf-8
+"""
+Exceptions.py
+
+Custom exceptions for BUSCO.
+
+Author(s): Matthew Berkeley
+
+Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
+
+License: Licensed under the MIT license. See LICENSE.md file.
+
+"""
+
+
 class BatchFatalError(Exception):
     """
     Error that prevents batch mode from running.

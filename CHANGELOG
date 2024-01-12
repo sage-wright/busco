@@ -1,3 +1,13 @@
+5.6.0
+- Miniprot pipeline developed and retained as an option (--miniprot)
+- Add miniprot prokaryota pipeline option
+- Make -o (--out) parameter optional
+- Introduce usage statistics reporting
+- Datasets updated, including links to OrthoDB v10.1 (Issue #347)
+- Fix symlink problems in Docker (Issue #602)
+- Add option --skip_bbtools to skip BBtools run (Issue #641)
+- Update HMMER post-processing
+
 5.5.0
 - Add miniprot pipeline (beta test)
 

@@ -51,6 +51,7 @@ class TestAutoLineage(unittest.TestCase):
         config_manager = BuscoConfigManager({})
         config_manager.config_main = Mock()
         asl = AutoLineage.AutoSelectLineage(config_manager)
+        asl.config.get = Mock(return_value="")
         test_lineages = ["a", "b", "c"]
         test_dataset_version = "<dataset_version>"
         asl.dataset_version = test_dataset_version
@@ -80,6 +81,7 @@ class TestAutoLineage(unittest.TestCase):
         config_manager = BuscoConfigManager({})
         config_manager.config_main = Mock()
         asl = AutoLineage.AutoSelectLineage(config_manager)
+        asl.config.get = Mock(return_value="")
         test_lineages = ["a", "b", "c"]
         test_dataset_version = "<dataset_version>"
         asl.dataset_version = test_dataset_version

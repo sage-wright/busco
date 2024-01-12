@@ -1,3 +1,17 @@
+# coding: utf-8
+"""
+BuscoRunner.py
+
+Intermediary module for delegating control of run features to individual classes
+
+Author(s): Matthew Berkeley
+
+Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
+
+License: Licensed under the MIT license. See LICENSE.md file.
+
+"""
+
 from busco.Exceptions import BatchFatalError, BuscoError
 from busco.analysis.BuscoAnalysis import BuscoAnalysis
 from busco.analysis.GenomeAnalysis import (
@@ -91,9 +105,17 @@ class SingleRunner:
             type(self).summary["parameters"][option[0]] = option[1]
 
         type(self).summary["versions"] = self.runner.analysis.hmmer_runner.tool_versions
+        self.config.run_stats[
+            "versions"
+        ] = self.runner.analysis.hmmer_runner.tool_versions
+        self.config.run_stats["versions"]["python"] = sys.version_info
         type(self).summary["versions"]["busco"] = busco.__version__
 
         type(self).summary["results"] = self.runner.all_results
+        self.config.run_stats["results"] = self.runner.all_results
+
+        if "genome" in self.config.get("busco_run", "mode"):
+            type(self).summary["metrics"] = self.runner.analysis.bbtools_runner.metrics
 
     @staticmethod
     def log_error(err):
@@ -155,7 +177,10 @@ class SingleRunner:
                     main_out_folder, self.config.get("busco_run", "lineage_results_dir")
                 )
                 if not os.path.exists(new_dest):
-                    os.symlink(lineage_results_folder, new_dest)
+                    new_src = os.path.relpath(
+                        lineage_results_folder, os.path.dirname(new_dest)
+                    )
+                    os.symlink(new_src, new_dest)
             else:
                 self.runner.run_analysis()
                 AnalysisRunner.selected_dataset = lineage_basename
@@ -166,9 +191,9 @@ class SingleRunner:
                 self.compile_summary()
             except AttributeError:
                 raise BatchFatalError(
-                    "BUSCO encountered a problem. This is possibly caused by restarting a previously completed run with different parameters.")
+                    "BUSCO encountered a problem. This is possibly caused by restarting a previously completed run with different parameters."
+                )
             self.runner.finish(time.time() - self.start_time)
-
 
         except BuscoError:
             if self.runner is not None:
@@ -222,7 +247,6 @@ class SingleRunner:
                     shutil.rmtree(folder)
                 except OSError:
                     raise
-                    # logger.warning("Unable to compress folder {}".format(folder))
 
 
 class BatchRunner:
@@ -276,13 +300,25 @@ class BatchRunner:
                 if "did not recognize any genes" in be.value:
                     type(self).batch_results.append(
                         "{}\tNo genes found\t\t\t\t\t\t\t\t\t\t{}\n".format(
-                            os.path.basename(input_file), "\t\t\t"*int(single_run.config.getboolean("busco_run", "auto-lineage"))
+                            os.path.basename(input_file),
+                            "\t\t\t"
+                            * int(
+                                single_run.config.getboolean(
+                                    "busco_run", "auto-lineage"
+                                )
+                            ),
                         )
                     )
                 else:
                     type(self).batch_results.append(
                         "{}\tRun failed; check logs\t\t\t\t\t\t\t\t\t\t{}\n".format(
-                            os.path.basename(input_file), "\t\t\t"*int(single_run.config.getboolean("busco_run", "auto-lineage"))
+                            os.path.basename(input_file),
+                            "\t\t\t"
+                            * int(
+                                single_run.config.getboolean(
+                                    "busco_run", "auto-lineage"
+                                )
+                            ),
                         )
                     )
                 logger.error(be.value)
@@ -303,8 +339,7 @@ class BatchRunner:
             self.config.get("busco_run", "out"),
             "batch_summary.txt",
         )
-        # for inp, res in type(self).batch_results.items():
-        #     if
+
         with open(summary_file, "w") as f:
             if "genome" in self.config.get("busco_run", "mode"):
                 metrics_header = (
@@ -335,7 +370,8 @@ class AnalysisRunner:
         "euk_genome_min": GenomeAnalysisEukaryotesMiniprot,
         "euk_genome_met": GenomeAnalysisEukaryotesMetaeuk,
         "euk_genome_aug": GenomeAnalysisEukaryotesAugustus,
-        "prok_genome": GenomeAnalysisProkaryotes,
+        "prok_genome_prod": GenomeAnalysisProkaryotes,
+        "prok_genome_min": GenomeAnalysisEukaryotesMiniprot,
         "euk_tran": TranscriptomeAnalysisEukaryotes,
         "prok_tran": TranscriptomeAnalysisProkaryotes,
         "proteins": GeneSetAnalysis,
@@ -395,25 +431,52 @@ class AnalysisRunner:
                 "one_line_summary"
             ] = self.analysis.hmmer_runner.one_line_summary_raw.strip()
             self.all_results[self.lineage_basename][
-                "Complete"
+                "Complete percentage"
             ] = self.analysis.hmmer_runner.complete_percent
+            self.all_results[self.lineage_basename]["Complete BUSCOs"] = (
+                self.analysis.hmmer_runner.single_copy
+                + self.analysis.hmmer_runner.multi_copy
+            )
             self.all_results[self.lineage_basename][
-                "Single copy"
+                "Single copy percentage"
             ] = self.analysis.hmmer_runner.s_percent
             self.all_results[self.lineage_basename][
-                "Multi copy"
+                "Single copy BUSCOs"
+            ] = self.analysis.hmmer_runner.single_copy
+            self.all_results[self.lineage_basename][
+                "Multi copy percentage"
             ] = self.analysis.hmmer_runner.d_percent
             self.all_results[self.lineage_basename][
-                "Fragmented"
+                "Multi copy BUSCOs"
+            ] = self.analysis.hmmer_runner.multi_copy
+            self.all_results[self.lineage_basename][
+                "Fragmented percentage"
             ] = self.analysis.hmmer_runner.f_percent
             self.all_results[self.lineage_basename][
-                "Missing"
+                "Fragmented BUSCOs"
+            ] = self.analysis.hmmer_runner.only_fragments
+            self.all_results[self.lineage_basename][
+                "Missing percentage"
             ] = self.analysis.hmmer_runner.missing_percent
+            self.all_results[self.lineage_basename]["Missing BUSCOs"] = len(
+                self.analysis.hmmer_runner.missing_buscos
+            )
             self.all_results[self.lineage_basename][
                 "n_markers"
             ] = self.analysis.hmmer_runner.total_buscos
             self.all_results[self.lineage_basename]["domain"] = self.analysis.domain
-            if "genome" in self.mode:
+            try:  # these values will only be present in miniprot runs, and if internal stop codons are detected
+                self.all_results[self.lineage_basename][
+                    "internal_stop_codon_count"
+                ] = self.analysis.complete_stop_codon_count
+                self.all_results[self.lineage_basename][
+                    "internal_stop_codon_percent"
+                ] = self.analysis.stop_codon_percent
+            except AttributeError:
+                pass
+            if "genome" in self.mode and not self.config.getboolean(
+                "busco_run", "skip_bbtools"
+            ):
                 self.all_results[self.lineage_basename].update(
                     self.analysis.bbtools_runner.metrics
                 )
@@ -516,11 +579,11 @@ class AnalysisRunner:
                 isinstance(self.config, BuscoConfigMain)
                 or (
                     self.config.getboolean("busco_run", "auto-lineage-euk")
-                    and self.mode == "euk_genome"
+                    and self.mode.startswith("euk_genome")
                 )
                 or (
                     self.config.getboolean("busco_run", "auto-lineage-prok")
-                    and self.mode == "prok_genome"
+                    and self.mode.startswith("prok_genome")
                 )
                 and self.prok_fail_count == 1
             )
@@ -529,7 +592,7 @@ class AnalysisRunner:
             else:
                 logger.warning(no_genes_msg)
                 s_buscos = d_buscos = f_buscos = s_percent = d_percent = f_percent = 0.0
-                if self.mode == "prok_genome":
+                if self.mode.startswith("prok_genome"):
                     self.prok_fail_count += 1
 
         except (BuscoError, BatchFatalError):
@@ -647,11 +710,11 @@ class AnalysisRunner:
     def format_run_summary(self):
         input_file = os.path.basename(self.config.get("busco_run", "in"))
         dataset = type(self).selected_dataset
-        complete = type(self).all_results[dataset]["Complete"]
-        single = type(self).all_results[dataset]["Single copy"]
-        duplicated = type(self).all_results[dataset]["Multi copy"]
-        fragmented = type(self).all_results[dataset]["Fragmented"]
-        missing = type(self).all_results[dataset]["Missing"]
+        complete = type(self).all_results[dataset]["Complete percentage"]
+        single = type(self).all_results[dataset]["Single copy percentage"]
+        duplicated = type(self).all_results[dataset]["Multi copy percentage"]
+        fragmented = type(self).all_results[dataset]["Fragmented percentage"]
+        missing = type(self).all_results[dataset]["Missing percentage"]
         n_markers = type(self).all_results[dataset]["n_markers"]
 
         if "genome" in self.mode:
@@ -746,9 +809,7 @@ class AnalysisRunner:
                     if not self.config.getboolean("busco_run", "auto-lineage"):
                         auto_lineage_line = "\nConsider using the auto-lineage mode to select a more specific lineage."
                         final_output_results.append(auto_lineage_line)
-                    with open(
-                        self.short_summary_file, "a"
-                    ) as short_summary_file:
+                    with open(self.short_summary_file, "a") as short_summary_file:
                         short_summary_file.write(positive_parasitic_line)
 
         except OSError:
@@ -800,7 +861,11 @@ class AnalysisRunner:
             root_domain_output_folder_final = os.path.join(
                 main_out_folder, "run_{}".format(domain_results_folder)
             )
-            os.symlink(root_domain_output_folder, root_domain_output_folder_final)
+            new_src = os.path.relpath(
+                root_domain_output_folder,
+                os.path.dirname(root_domain_output_folder_final),
+            )
+            os.symlink(new_src, root_domain_output_folder_final)
             self.copy_summary_file(
                 root_domain_output_folder_final,
                 main_out_folder,
@@ -899,6 +964,7 @@ class AnalysisRunner:
 class SmartBox:
     def __init__(self):
         self.width = 50
+        self.tab = 4 * " "
 
     def define_width(self, header_text, body_text):
         lines = body_text.split("\n")
@@ -907,12 +973,13 @@ class SmartBox:
         longest_line = lines[max_ind]
         if len(header_text) > len(longest_line):
             longest_line = header_text
-        if len(longest_line) < 80:
+        if len(longest_line) + 2 < 80:  # add 2 for vertical frame lines
             self.width = max(50, len(longest_line.expandtabs()))
         else:
             self.width = 50
 
     def wrap_header(self, header_text):
+        header_text = header_text.strip().replace("\t", self.tab)
         if len(header_text) > 80:
             header_text = self.wrap_long_line(header_text)
         return header_text
@@ -943,8 +1010,10 @@ class SmartBox:
         lines = text.split("\n")
         output_lines = []
         for line in lines:
-            line = line.strip()
-            if len(line.expandtabs()) < self.width:
+            line = line.strip().replace("\t", self.tab)
+            if (
+                len(line.expandtabs()) + 2 < self.width
+            ):  # add 2 for vertical frame lines
                 output_lines.append(line)
             else:
                 output_lines.append(self.wrap_long_line(line))
@@ -970,14 +1039,14 @@ class SmartBox:
         self.define_width(header_text, body_text)  # Called first to define width
         header = self.wrap_header(header_text)
         box_lines = list(["\n"])
-        box_lines.append("\t{}".format(self.add_horizontal()))
+        box_lines.append("{}{}".format(self.tab, self.add_horizontal()))
         framed_header = self.add_vertical(header)
         for line in framed_header:
-            box_lines.append("\t{}".format(line))
-        box_lines.append("\t{}".format(self.add_horizontal()))
+            box_lines.append("{}{}".format(self.tab, line))
+        box_lines.append("{}{}".format(self.tab, self.add_horizontal()))
         body = self.wrap_text(body_text)
         framed_body = self.add_vertical(body)
         for line in framed_body:
-            box_lines.append("\t{}".format(line))
-        box_lines.append("\t{}".format(self.add_horizontal()))
+            box_lines.append("{}{}".format(self.tab, line))
+        box_lines.append("{}{}".format(self.tab, self.add_horizontal()))
         return "\n".join(box_lines)

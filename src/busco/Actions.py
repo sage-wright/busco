@@ -1,3 +1,17 @@
+# coding: utf-8
+"""
+Actions.py
+
+Custom command line actions.
+
+Author(s): Matthew Berkeley
+
+Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
+
+License: Licensed under the MIT license. See LICENSE.md file.
+
+"""
+
 import argparse
 from busco.BuscoConfig import PseudoConfig
 from busco.ConfigManager import BuscoConfigManager

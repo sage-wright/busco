@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # coding: utf-8
 """
-.. versionadded:: 3.0.0
-.. versionchanged:: 5.0.0
+setup.py
 
-Copyright (c) 2016-2023, Evgeny Zdobnov (ez@ezlab.org)
-Licensed under the MIT license. See LICENSE.md file.
+Script for package installation with setuptools.
 
-This script proceeds to the BUSCO packages installation
+Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
+
+License: Licensed under the MIT license. See LICENSE.md file.
 
 """
 

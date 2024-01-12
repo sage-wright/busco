@@ -1,17 +1,30 @@
-from busco.busco_tools.base import BaseRunner, NoRerunFile, NoGenesError
+# coding: utf-8
+"""
+metaeuk.py
+
+Module for running Metaeuk.
+
+Author(s): Matthew Berkeley
+
+Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
+
+License: Licensed under the MIT license. See LICENSE.md file.
+
+"""
+
+from busco.busco_tools.base import GenePredictor, NoRerunFile
 import os
-from collections import defaultdict
 from busco.BuscoLogger import BuscoLogger
 from Bio import SeqIO
 import shutil
 from configparser import NoOptionError
 import subprocess
-import pandas as pd
 import numpy as np
 import re
 from busco.Exceptions import BuscoError
-from multiprocessing import Pool
-from itertools import repeat, chain
+from collections import defaultdict
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -21,7 +34,7 @@ class MetaeukParsingError(Exception):
         pass
 
 
-class MetaeukRunner(BaseRunner):
+class MetaeukRunner(GenePredictor):
 
     name = "metaeuk"
     cmd = "metaeuk"
@@ -166,7 +179,6 @@ class MetaeukRunner(BaseRunner):
                 self._rerun_results_folder,
             ]
         )
-        self.gene_details = None
 
         self.headers_file = None
         self.codon_file = None
@@ -175,6 +187,7 @@ class MetaeukRunner(BaseRunner):
         self.incomplete_buscos = None
         self.sequences_aa = {}
         self.sequences_nt = {}
+        self.saved_gene_details = {}
 
         self.pred_protein_files = []
         self.pred_protein_mod_files = []
@@ -199,6 +212,8 @@ class MetaeukRunner(BaseRunner):
 
     def configure_runner(self, incomplete_buscos=None):
         super().configure_runner()
+        self.saved_gene_details = self.gene_details.copy()
+        self.gene_details = defaultdict(dict)
         self.run_number += 1
         self.incomplete_buscos = incomplete_buscos
 
@@ -251,6 +266,14 @@ class MetaeukRunner(BaseRunner):
         self.pred_protein_mod_files.append(self.pred_protein_seqs_modified)
         self.codon_mod_files.append(self.codon_file_modified)
 
+    def combine_gene_details(self):
+        for gene_id, details in self.saved_gene_details.items():
+            if gene_id in self.gene_details:
+                pass
+            else:
+                self.gene_details[gene_id] = details
+        return
+
     def combine_run_results(self):
         with open(self.combined_pred_protein_seqs, "w") as combined_output:
             for run_result in self.pred_protein_mod_files:
@@ -263,98 +286,6 @@ class MetaeukRunner(BaseRunner):
                     shutil.copyfileobj(f, combined_output_nucl)
 
         return
-
-    @staticmethod
-    def records_to_df(records):
-        results = pd.DataFrame.from_records(
-            records,
-            columns=[
-                "Busco id",
-                "Sequence",
-                "Low coord",
-                "High coord",
-                "Strand",
-                "Score",
-                "Run found",
-                "Orig gene ID",
-            ],
-            index=np.arange(len(records)),
-        )
-
-        return results
-
-    def detect_overlap(self, results_grouped, seq):
-        overlap_inds = []
-        handled_inds = set()
-        match_finder = self.get_matches(results_grouped, seq)
-        for match in match_finder:
-            idx1, current_seqid, g1_sorted, matches = match
-            for idx2 in matches.index.values:
-                if idx2 in handled_inds:
-                    continue
-                match1_details = g1_sorted.loc[idx1]
-                match2_details = g1_sorted.loc[idx2]
-                if idx2 == idx1:  # don't consider overlaps with self
-                    continue
-                elif (
-                    (
-                        (
-                            match1_details["Orig gene ID"] is None  # needed for header-editing step
-                            or match1_details["Orig gene ID"]
-                            != match2_details["Orig gene ID"]
-                        )  # for efficiency skip overlaps that are
-                        # actually the same gene matching multiple BUSCOs, as this will be dealt with in the
-                        # filtering step later
-                    )
-                    and (
-                        match1_details["Strand"]
-                        == match2_details[
-                            "Strand"
-                        ]  # check overlaps are on the same strand
-                    )
-                    and (
-                        match1_details["Low coord"] % 3
-                        == match2_details["Low coord"]
-                        % 3  # check overlaps are in the same reading frame
-                    )
-                ):
-                    overlap_inds.append((idx1, idx2))
-            handled_inds.add(idx1)
-        return overlap_inds
-
-    def test_for_overlaps(self, record_df, sort=False):
-        results_grouped = record_df.groupby("Sequence")
-        seq_ids = list(results_grouped.groups.keys())
-        with Pool(self.cpus) as job_pool:
-            overlaps = job_pool.starmap(
-                self.detect_overlap, zip(repeat(results_grouped), seq_ids)
-            )
-
-        overlaps = list(chain.from_iterable(overlaps))
-
-        if sort:
-            max_bitscores = []
-            for overlap in overlaps:
-                match1 = record_df.loc[overlap[0]]
-                match2 = record_df.loc[overlap[1]]
-                max_bitscores.append(max(match1["Score"], match2["Score"]))
-            sort_order = np.argsort(max_bitscores)[::-1]  # descending sort
-            overlaps = np.array(overlaps)[sort_order]
-
-        return overlaps
-
-    def find_match(self, matches, id_items):
-        matches_list = str(matches).split("\n")
-        good_match = None
-        good_matches = []
-        for match in matches_list:
-            if all([i in match for i in id_items]):
-                good_match = match
-                good_matches.append(good_match)
-        if len(good_matches) > 1:
-            good_ind = self.select_higher_bitscore_ind(good_matches)
-            good_match = good_matches[good_ind]
-        return good_match
 
     @staticmethod
     def select_higher_bitscore_ind(matches):
@@ -445,7 +376,6 @@ class MetaeukRunner(BaseRunner):
         else:
             self.param_keys = self.param_values = []
 
-        # self.cwd = self._output_folder
         self.total = 1
         self.run_jobs()
 
@@ -464,9 +394,8 @@ class MetaeukRunner(BaseRunner):
             for record in SeqIO.parse(refseq_file, "fasta"):
                 if any(record.id.startswith(b) for b in self.incomplete_buscos):
                     # Remove the ancestral variant identifier ("_1" etc) so it matches all other BUSCO IDs.
-                    # The identifier is still present in the "name" and "description" Sequence Record attributes.
-                    record.id = record.id.split("_")[0]
-                    busco_ids_retrieved.add(record.id)
+                    # The identifier is kept in the Sequence Record ID.
+                    busco_ids_retrieved.add(record.id.split("_")[0])
                     matched_seqs.append(record)
 
         unmatched_incomplete_buscos = list(
@@ -573,12 +502,9 @@ class MetaeukRunner(BaseRunner):
         num_exons = int(header_parts[5])
         low_coord = int(header_parts[6])
         high_coord = int(header_parts[7])
-        exon_coords = header_parts[8:]
+        exon_details = header_parts[8:]
 
-        if strand == "+":
-            gene_id = "{}:{}-{}".format(C_acc, low_coord, high_coord)
-        else:
-            gene_id = "{}:{}-{}".format(C_acc, high_coord, low_coord)
+        gene_id = "{}|{}:{}-{}".format(T_acc, C_acc, low_coord, high_coord)
 
         all_low_exon_coords = []
         all_taken_low_exon_coords = []
@@ -586,7 +512,9 @@ class MetaeukRunner(BaseRunner):
         all_taken_high_exon_coords = []
         all_exon_nucl_len = []
         all_taken_exon_nucl_len = []
-        for exon in exon_coords:
+        recorded_exon_coords = []
+        for exon in exon_details:
+
             low_exon_coords, high_exon_coords, nucl_lens = exon.split(":")
 
             low_exon_coord, taken_low_exon_coord = low_exon_coords.split("[")
@@ -600,6 +528,10 @@ class MetaeukRunner(BaseRunner):
             nucl_len, taken_nucl_len = nucl_lens.split("[")
             all_exon_nucl_len.append(int(nucl_len))
             taken_nucl_len = int(taken_nucl_len.strip().rstrip("]"))
+
+            recorded_exon_coords.append(
+                (taken_low_exon_coord, taken_high_exon_coord, strand)
+            )
 
             # Need to fix the metaeuk coordinate problem
             if strand == "-":
@@ -629,103 +561,154 @@ class MetaeukRunner(BaseRunner):
             "all_taken_high_exon_coords": all_taken_high_exon_coords,
             "all_exon_nucl_len": all_exon_nucl_len,
             "all_taken_exon_nucl_len": all_taken_exon_nucl_len,
+            "recorded_exon_coords": recorded_exon_coords,
             "gene_id": gene_id,
         }
         return details
 
-    def edit_result_headers(self):
-        all_records_faa = []
-        all_records_fna = []
-        all_headers = []
+    def parse_output(self):
+        record_dict = {}
+        structured_arr_contents = []
         try:
-            with open(self.codon_file, "r") as f:
-                for record in SeqIO.parse(f, "fasta"):
+            with open(self.pred_protein_seqs, "r") as aa_file:
+                for record in SeqIO.parse(aa_file, "fasta"):
+                    header_details = self.parse_header(record.id)
+                    if header_details["gene_id"] in record_dict:
+                        raise BuscoError(
+                            "{} already exists in dictionary".format(
+                                header_details["gene_id"]
+                            )
+                        )
+                    record_dict[header_details["gene_id"]] = record
+                    record.id = header_details[
+                        "gene_id"
+                    ]  # simplify the header to just the match ID without all the scores and exon info
+            with open(self.codon_file, "r") as nt_file:
+                for record in SeqIO.parse(nt_file, "fasta"):
                     header_details = self.parse_header(record.id)
                     record.id = header_details["gene_id"]
                     record.name = header_details["gene_id"]
                     record.description = header_details["gene_id"]
-                    all_records_fna.append(record)
-
-            with open(self.pred_protein_seqs, "r") as f:
-                for record in SeqIO.parse(f, "fasta"):
-                    header_details = self.parse_header(record.id)
-                    record.id = header_details["gene_id"]
-                    record.name = header_details["gene_id"]
-                    record.description = header_details["gene_id"]
-                    all_records_faa.append(record)
-
-                    header_df_info = (
-                        header_details["T_acc"].split("_")[0],
-                        header_details["C_acc"],
-                        header_details["low_coord"],
-                        header_details["high_coord"],
-                        header_details["S"],
-                        header_details["bitscore"],
-                        None,
-                        None,
+                    seq_nt = record.seq
+                    seq_aa = record_dict[record.id].seq
+                    self.record_gene_details(
+                        {
+                            "target_id": header_details["T_acc"],
+                            "contig_id": header_details["C_acc"],
+                            "contig_start": header_details["low_coord"],
+                            "contig_end": header_details["high_coord"],
+                            "strand": header_details["S"],
+                            "score": header_details["bitscore"],
+                            "exon_coords": header_details["recorded_exon_coords"],
+                            "aa_seq": seq_aa,
+                            "nt_seq": seq_nt,
+                            "run_number": self.run_number,
+                        }
                     )
-                    all_headers.append(header_df_info)
-
+                    record.id = header_details["gene_id"]
+                    structured_arr_contents.append(
+                        (
+                            record.id,
+                            self.gene_details[record.id]["target_id"],
+                            self.gene_details[record.id]["contig_id"],
+                            self.gene_details[record.id]["contig_start"],
+                            self.gene_details[record.id]["contig_end"],
+                            self.gene_details[record.id]["strand"],
+                            self.gene_details[record.id]["score"],
+                            self.gene_details[record.id]["run_number"],
+                        )
+                    )
         except FileNotFoundError:
             raise NoRerunFile
 
-        if all_headers:
-            matches_df = self.records_to_df(all_headers)
-            overlaps = self.test_for_overlaps(matches_df, sort=True)
-            inds_to_remove = []
+        return structured_arr_contents
+
+    def record_gene_details(self, details={}):
+        """
+        Record all required match details from gene predictor output. The exact contents of the dictionary will vary
+        depending on the gene predictor and pipeline.
+        :param details:
+        :return:
+        """
+
+        gene_id = "{}|{}:{}-{}".format(
+            details["target_id"],
+            details["contig_id"],
+            details["contig_start"],
+            details["contig_end"],
+        )
+
+        aa_seq = SeqRecord(Seq(details["aa_seq"]), id=gene_id, description="")
+        nt_seq = SeqRecord(Seq(details["nt_seq"]), id=gene_id, description="")
+
+        self.gene_details[gene_id] = {
+            "target_id": details["target_id"],
+            "contig_id": details["contig_id"],
+            "contig_start": details["contig_start"],
+            "contig_end": details["contig_end"],
+            "strand": details["strand"],
+            "score": details["score"],
+            "exon_coords": details["exon_coords"],
+            "nt_seq": nt_seq,
+            "aa_seq": aa_seq,
+            "run_number": details["run_number"],
+        }
+
+        self.sequences_aa[gene_id] = aa_seq
+        self.sequences_nt[gene_id] = nt_seq
+
+    def create_filtered_sequence_files(self, structured_arr_contents):
+
+        if len(self.gene_details) > 0:
+            structured_arr = np.array(
+                structured_arr_contents,
+                dtype=[
+                    ("gene_id", "U100"),
+                    ("target_id", "U30"),
+                    ("contig_id", "U70"),
+                    ("low_coord", "i4"),
+                    ("high_coord", "i4"),
+                    ("strand", "U1"),
+                    ("score", "f8"),
+                    ("run_number", "i1"),
+                ],
+            )
+            overlaps = self.find_overlaps(structured_arr)
+            entries_to_remove = []
             for overlap in overlaps:
-                match1 = matches_df.loc[overlap[0]]
-                match2 = matches_df.loc[overlap[1]]
-                if match1.name in inds_to_remove or match2.name in inds_to_remove:
+                match1 = overlap[0]
+                match2 = overlap[1]
+                gene_id1 = match1[0]
+                gene_id2 = match2[0]
+                pattern = r"(\d+at\d+)"  # match the BUSCO ID
+                busco_id1 = re.search(pattern, match1[0]).group(1)
+                busco_id2 = re.search(pattern, match2[0]).group(1)
+                score1 = float(match1[6])
+                score2 = float(match2[6])
+                if gene_id1 in entries_to_remove or gene_id2 in entries_to_remove:
                     continue
-                elif match1["Busco id"] == match2["Busco id"]:
-                    if float(match1["Score"]) > float(match2["Score"]):
-                        ind_to_remove = match2.name
+                elif busco_id1 == busco_id2:
+                    if score1 > score2:  # score
+                        entry_to_remove = gene_id2
                     else:
-                        ind_to_remove = match1.name
-                    inds_to_remove.append(ind_to_remove)
+                        entry_to_remove = gene_id1
+                    entries_to_remove.append(entry_to_remove)
 
-            filtered_records_faa = [
-                i for j, i in enumerate(all_records_faa) if j not in inds_to_remove
-            ]
-            filtered_records_fna = [
-                i for j, i in enumerate(all_records_fna) if j not in inds_to_remove
-            ]
-            for record in filtered_records_faa:
-                self.sequences_aa[record.id] = record
+            filtered_records_faa = []
+            filtered_records_fna = []
 
-            for record in filtered_records_fna:
-                self.sequences_nt[record.id] = record
+            for gene_id, details in self.gene_details.items():
+                if gene_id in entries_to_remove:
+                    continue
+                filtered_records_faa.append(details["aa_seq"])
+                filtered_records_fna.append(details["nt_seq"])
 
             with open(self.pred_protein_seqs_modified, "w") as f_mod:
                 SeqIO.write(filtered_records_faa, f_mod, "fasta")
             with open(self.codon_file_modified, "w") as g_mod:
                 SeqIO.write(filtered_records_fna, g_mod, "fasta")
 
-    def get_gene_details(self):
-        self.gene_details = defaultdict(list)
-
-        try:
-            with open(self.headers_file, "r") as f:
-                lines = f.readlines()
-
-            try:
-                for line in lines:
-                    header = line.split("\t")[-1]
-                    header_details = self.parse_header(header)
-
-                    self.gene_details[header_details["gene_id"]].append(
-                        {
-                            "gene_start": header_details["low_coord"],
-                            "gene_end": header_details["high_coord"],
-                            "strand": header_details["S"],
-                        }
-                    )
-
-            except KeyError:
-                raise BuscoError("*headersMap.tsv file could not be parsed.")
-        except FileNotFoundError:
-            raise NoRerunFile
+        return
 
     def write_gff_files(self, sc_folder, mc_folder, frag_folder):
         try:

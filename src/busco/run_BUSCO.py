@@ -1,20 +1,15 @@
 #!/usr/bin/env python3
 # coding: utf-8
 """
-.. module:: run_BUSCO
-   :synopsis:
-.. versionadded:: 3.0.0
-.. versionchanged:: 5.4.0
+run_BUSCO.py
 
-BUSCO - Benchmarking Universal Single-Copy Orthologs.
-This is the BUSCO main script.
+Main run script.
 
-To get help, ``busco -h``. See also the user guide.
+Author(s): Matthew Berkeley, Mathieu Seppey, Mose Manni, Felipe Simao, Rob Waterhouse
 
-And visit our website `<http://busco.ezlab.org/>`_
+Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
 
-Copyright (c) 2016-2023, Evgeny Zdobnov (ez@ezlab.org)
-Licensed under the MIT license. See LICENSE.md file.
+License: Licensed under the MIT license. See LICENSE.md file.
 
 """
 
@@ -37,7 +32,8 @@ from busco.ConfigManager import BuscoConfigMain
 
 import sys
 import time
-
+import os
+import requests
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -50,6 +46,7 @@ logger = BuscoLogger.get_logger(__name__)
 )
 class BuscoMaster:
     def __init__(self, params):
+        self.run_data = {}
         self.params = params
         self.config_manager = BuscoConfigManager(self.params)
         self.config = self.config_manager.config_main
@@ -77,10 +74,12 @@ class BuscoMaster:
 
         except BuscoError as be:
             SingleRunner.log_error(be)
+            self.run_data["error"] = str(be)
             raise SystemExit(1)
 
         except BatchFatalError as bfe:
             SingleRunner.log_error(bfe)
+            self.run_data["error"] = str(bfe)
             raise SystemExit(1)
 
         finally:
@@ -88,13 +87,85 @@ class BuscoMaster:
                 AnalysisRunner.move_log_file(self.config)
             except:
                 pass
+            try:
+                if not self.config.getboolean("busco_run", "opt-out-run-stats"):
+                    self.assemble_run_data()
+                    self.post_run_data()
+            except:
+                pass
+
+    def assemble_run_data(self):
+        self.get_download_url()
+        self.get_dist_info()
+        self.get_input_checksum()
+        self.run_data.update(self.config.run_stats)
+
+    def post_run_data(self):
+
+        datetime_randomno = (
+            time.strftime("%Y%m%d_%H%M%S_") + str(time.time()).split(".")[1]
+        )
+
+        headers = {"Content-Type": "application/json"}
+        url = "https://busco-data.ezlab.org/upload/{}".format(
+            "rundata{}.txt".format("".join(datetime_randomno.split("_")))
+        )
+
+        response = requests.put(url, json=self.run_data, headers=headers)
+
+        if 200 <= response.status_code < 300:
+            logger.debug("File uploaded successfully.")
+        else:
+            logger.debug("File upload failed. Status code: {}".format(response.status))
+
+    def get_dist_info(self):
+        if (
+            "conda" in __file__
+            and os.environ("CONDA_DEFAULT_ENV")
+            and os.environ("CONDA_PREFIX")
+        ):
+            self.run_data["distribution"] = "conda"
+        elif os.path.exists("/.dockerenv"):
+            self.run_data["distribution"] = "docker"
+        elif os.path.exists("/.singularity.d"):
+            self.run_data["distribution"] = "singularity"
+        else:
+            self.run_data["distribution"] = "manual"
+
+    def get_download_url(self):
+        if self.config.getboolean("busco_run", "offline"):
+            self.run_data["download_url"] = "offline"
+        else:
+            self.run_data["download_url"] = self.config.downloader.download_base_url
+
+    def get_input_checksum(self):
+        """Calculate checksum of input file"""
+        import hashlib
+
+        try:
+            # Create an MD5 hash object
+            md5_hash = hashlib.md5()
+
+            # Open the file in binary mode and read it in chunks
+            with open(self.config.get("busco_run", "in"), "rb") as file:
+                while True:
+                    chunk = file.read(4096)  # Read the file in 4KB chunks
+                    if not chunk:
+                        break  # Exit the loop when there are no more chunks to read
+                    md5_hash.update(chunk)
+
+            # Get the MD5 checksum as a hexadecimal string
+            md5_checksum = md5_hash.hexdigest()
+            self.run_data["input_file_checksum"] = md5_checksum
+        except:
+            pass
 
 
 @log("Command line: {}".format(" ".join(sys.argv[:])), logger, debug=True)
 def _parse_args():
     """
     This function parses the arguments provided by the user
-    :return: a dictionary having a key for each arguments
+    :return: a dictionary having a key for each argument
     :rtype: dict
     """
 
@@ -334,7 +405,15 @@ def _parse_args():
         dest="use_miniprot",
         action="store_true",
         required=False,
-        help="Use miniprot gene predictor for eukaryote runs",
+        help="Use miniprot gene predictor",
+    )
+
+    optional.add_argument(
+        "--skip_bbtools",
+        dest="skip_bbtools",
+        action="store_true",
+        required=False,
+        help="Skip BBTools for assembly statistics",
     )
 
     optional.add_argument(
@@ -343,6 +422,14 @@ def _parse_args():
         action="store_true",
         required=False,
         help="To indicate that BUSCO cannot attempt to download files",
+    )
+
+    optional.add_argument(
+        "--opt-out-run-stats",
+        dest="opt-out-run-stats",
+        action="store_true",
+        required=False,
+        help="Opt out of data collection. Information on the data collected is available in the user guide.",
     )
 
     optional.add_argument(
