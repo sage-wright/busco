@@ -44,7 +44,6 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         "auto-lineage": False,
         "auto-lineage-prok": False,
         "auto-lineage-euk": False,
-        "update-data": False,
         "use_augustus": False,
         "use_miniprot": False,
         "skip_bbtools": False,
@@ -107,7 +106,6 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         "quiet",
         "offline",
         "lineage_dataset",
-        "update-data",
         "batch_mode",
         "tar",
         "download_base_url",
@@ -138,7 +136,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         "augustus_species",
         "download_base_url",
         "lineage_dataset",
-        "update-data",
+        "update-data",  # option removed but kept here for backward compatibility
         "metaeuk_parameters",
         "metaeuk_rerun_parameters",
         "evalue",
@@ -480,8 +478,6 @@ class PseudoConfig(BaseConfig):
     def load(self):
         if self.conf_file != "local environment":
             self._load_config_file(self.conf_file)
-        else:
-            self.set("busco_run", "update-data", "True")
         self._update_config_with_args(self.params)
         self._fill_default_values()
         self._init_downloader()
@@ -516,31 +512,26 @@ class PseudoConfig(BaseConfig):
                 type(self).DEFAULT_ARGS_VALUES["download_path"],
             )
 
-        try:
-            self.update = self.getboolean("busco_run", "update-data")
-            if not self.update:
-                self.existing_downloads = sorted(
-                    glob.glob(
-                        os.path.join(
-                            self.get("busco_run", "download_path"),
-                            "information",
-                            "lineages_list*.txt",
-                        )
+        if self.getboolean("busco_run", "offline"):
+            self.existing_downloads = sorted(
+                glob.glob(
+                    os.path.join(
+                        self.get("busco_run", "download_path"),
+                        "information",
+                        "lineages_list*.txt",
                     )
-                )[::-1]
-                if self.existing_downloads:
-                    logger.warning(
-                        "The datasets list shown may not be up-to-date. To get current information, make sure "
-                        "you have set 'update-data=True' in your config file."
-                    )
-                else:
-                    raise BatchFatalError(
-                        "Unable to download list of datasets. Please use the --update-data option to use the latest "
-                        "available datasets."
-                    )
-
-        except NoOptionError:
-            self.set("busco_run", "update-data", "True")
+                )
+            )[::-1]
+            if self.existing_downloads:
+                logger.warning(
+                    "The datasets list shown may not be up-to-date. To get current information, make sure "
+                    "you are not running in offline mode."
+                )
+            else:
+                raise BatchFatalError(
+                    "Unable to download list of datasets. If you are running in --offline mode, download the "
+                    "latest available datasets and make sure they are available before starting your run."
+                )
 
 
 class BuscoConfigAuto(BaseConfig):
@@ -550,7 +541,7 @@ class BuscoConfigAuto(BaseConfig):
         self.load_dataset(lineage)
         self._create_required_paths()
 
-    def _create_required_paths(self):
+    def _create_required_paths(self, *args):
         """
         Create directory for auto-lineage runs.
         :return:

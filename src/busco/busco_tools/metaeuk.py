@@ -163,8 +163,8 @@ class MetaeukRunner(GenePredictor):
             self.max_seq_len = self.config.get("busco_run", "max_seq_len")
         except NoOptionError:
             raise BuscoError(
-                "{} is an old dataset version and is not compatible with Metaeuk. Please update by using "
-                "the '--update-data' command line option".format(self.lineage_dataset)
+                "{} is an old dataset version and is not compatible with Metaeuk. If you are running in --offline mode "
+                "please make sure you have already downloaded the latest datasets.".format(self.lineage_dataset)
             )
         self.overlap = 1
         self.s_set = False

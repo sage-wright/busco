@@ -105,6 +105,7 @@ class HMMERRunner(BaseRunner):
         self.s_percent = 0
         self.d_percent = 0
         self.f_percent = 0
+        self.e_percent = 0
         self.complete_percent = 0
         self.missing_percent = 0
 

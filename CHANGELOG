@@ -1,3 +1,7 @@
+5.6.1
+- Bug fixes
+- Remove --update-data option and make it the default. To inactivate, use --offline
+
 5.6.0
 - Miniprot pipeline developed and retained as an option (--miniprot)
 - Add miniprot prokaryota pipeline option

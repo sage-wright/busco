@@ -476,15 +476,6 @@ def _parse_args():
     )
 
     optional.add_argument(
-        "--update-data",
-        dest="update-data",
-        action="store_true",
-        required=False,
-        help="Download and replace with last versions all lineages datasets and files necessary"
-        " to their automated selection",
-    )
-
-    optional.add_argument(
         "-v",
         "--version",
         action=CleanVersionAction,

@@ -87,7 +87,6 @@ class DirectDownload(argparse.Action):
         try:
             self.config.load()
             bdm = BuscoDownloadManager(self.config)
-            bdm.update_data = True
             self.download_datasets(bdm, values)
 
         except SystemExit as se:

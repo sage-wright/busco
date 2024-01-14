@@ -45,7 +45,6 @@ class BuscoDownloadManager:
         :type config: BuscoConfig
         """
         self.offline = config.getboolean("busco_run", "offline")
-        self.update_data = config.getboolean("busco_run", "update-data")
         self.download_base_url = config.get("busco_run", "download_base_url")
         self.local_download_path = config.get("busco_run", "download_path")
         self._create_main_download_dir()
@@ -214,7 +213,7 @@ class BuscoDownloadManager:
             hash,
         ) = self._check_existing_version(local_filepath, category, data_basename)
 
-        if (not up_to_date and self.update_data) or not present:
+        if not up_to_date or not present:
             # download
             self._create_category_dir(category)
             compression_extension = ".tar.gz"
@@ -253,9 +252,11 @@ class BuscoDownloadManager:
                 )
         elif not up_to_date:
             logger.warning(
-                "The file or folder {} is not the last available version. "
-                "To update all data files to the last version, add the parameter "
-                "--update-data in your next run.".format(local_filepath)
+                "The local file or folder {} is not the last available version. "
+                "This has been updated automatically, but the old version is retained in your download location. "
+                "To prevent the datasets updating run in --offline mode.".format(
+                    local_filepath
+                )
             )
 
         return local_filepath
@@ -317,7 +318,11 @@ class BuscoDownloadManager:
 
     @log("Decompressing file {}", logger, func_arg=1)
     def _decompress_file(self, local_filepath):
-        unzipped_filename = local_filepath.replace(".gz", "")
+        unzipped_filename = (
+            "".join(local_filepath.rsplit(".gz", 1))
+            if local_filepath.endswith(".gz")
+            else local_filepath
+        )
 
         if os.path.splitext(local_filepath)[1] == ".gz":
             with gzip.open(os.path.join(local_filepath), "rb") as compressed_file:

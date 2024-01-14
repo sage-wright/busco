@@ -18,13 +18,13 @@ from busco.analysis.GenomeAnalysis import (
     GenomeAnalysisEukaryotesAugustus,
     GenomeAnalysisEukaryotesMetaeuk,
     GenomeAnalysisEukaryotesMiniprot,
+    GenomeAnalysisProkaryotes,
 )
 from busco.analysis.TranscriptomeAnalysis import (
     TranscriptomeAnalysisProkaryotes,
     TranscriptomeAnalysisEukaryotes,
 )
 from busco.analysis.GeneSetAnalysis import GeneSetAnalysis
-from busco.analysis.GenomeAnalysis import GenomeAnalysisProkaryotes
 from busco.BuscoLogger import BuscoLogger
 from busco.BuscoConfig import BuscoConfigMain
 from busco.busco_tools.base import NoGenesError, BaseRunner
@@ -96,8 +96,11 @@ class SingleRunner:
             runner = asl.selected_runner
             parent_domain = runner.config.get("busco_run", "domain_run_name")
         finally:
-            type(self).all_runners.update(asl.runners)
-            asl.reset()
+            try:
+                type(self).all_runners.update(asl.runners)
+                asl.reset()
+            except UnboundLocalError:
+                pass
         return lineage_dataset, runner, parent_domain
 
     def compile_summary(self):

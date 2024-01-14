@@ -274,7 +274,10 @@ class AutoSelectLineage:
         Run the output of the auto selection through BuscoPlacer to obtain a more precise lineage dataset.
         :return str lineage_dataset: Local path to the optimal lineage dataset.
         """
-        if self.selected_runner.domain == "eukaryota":
+        if (
+            self.selected_runner.domain == "eukaryota"
+            or self.selected_runner.config.getboolean("busco_run", "use_miniprot")
+        ):
             self.run_busco_placer()
         elif (self.selected_runner.mode in ["proteins", "prok_tran"]) and (
             os.path.basename(
@@ -335,9 +338,9 @@ class AutoSelectLineage:
 
     def run_busco_placer(self):
         if "genome" in self.selected_runner.mode:
-            if self.selected_runner.domain == "prokaryota":
+            if self.selected_runner.domain == "prokaryota" and not self.config.getboolean("busco_run", "use_miniprot"):
                 protein_seqs = self.selected_runner.analysis.prodigal_runner.output_faa
-            elif self.selected_runner.domain == "eukaryota":
+            elif self.selected_runner.domain == "eukaryota" or self.config.getboolean("busco_run", "use_miniprot"):
                 if self.config.getboolean("busco_run", "use_augustus"):
                     protein_seqs_dir = (
                         self.selected_runner.analysis.augustus_runner.extracted_prot_dir

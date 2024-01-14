@@ -1,146 +1,145 @@
-2024-01-12 12:04:56 INFO:	***** Start a BUSCO v5.6.0 analysis, current time: 01/12/2024 12:04:56 *****
-2024-01-12 12:04:56 INFO:	Configuring BUSCO with local environment
-2024-01-12 12:04:56 WARNING:	Running Auto Lineage Selector as no lineage dataset was specified. This will take a little longer than normal. If you know what lineage dataset you want to use, please specify this in the config file or using the -l (--lineage-dataset) flag in the command line.
-2024-01-12 12:04:56 INFO:	Running genome mode
-2024-01-12 12:04:56 INFO:	'Force' option selected; overwriting previous results directory
-2024-01-12 12:04:56 INFO:	Downloading information on latest versions of BUSCO data...
-2024-01-12 12:04:58 INFO:	Input file is /busco_wd/test_data/eukaryota/genome.fna
-2024-01-12 12:04:58 INFO:	No lineage specified. Running lineage auto selector.
+2024-01-14 16:26:03 INFO:	***** Start a BUSCO v5.6.1 analysis, current time: 01/14/2024 16:26:03 *****
+2024-01-14 16:26:03 INFO:	Configuring BUSCO with local environment
+2024-01-14 16:26:03 WARNING:	Running Auto Lineage Selector as no lineage dataset was specified. This will take a little longer than normal. If you know what lineage dataset you want to use, please specify this in the config file or using the -l (--lineage-dataset) flag in the command line.
+2024-01-14 16:26:03 INFO:	Running genome mode
+2024-01-14 16:26:03 INFO:	'Force' option selected; overwriting previous results directory
+2024-01-14 16:26:03 INFO:	Downloading information on latest versions of BUSCO data...
+2024-01-14 16:26:06 INFO:	Input file is /busco_wd/test_data/eukaryota/genome.fna
+2024-01-14 16:26:06 INFO:	No lineage specified. Running lineage auto selector.
 
-2024-01-12 12:04:58 INFO:	***** Starting Auto Select Lineage *****
+2024-01-14 16:26:06 INFO:	***** Starting Auto Select Lineage *****
 	This process runs BUSCO on the generic lineage datasets for the domains archaea, bacteria and eukaryota. Once the optimal domain is selected, BUSCO automatically attempts to find the most appropriate BUSCO dataset to use based on phylogenetic placement.
 	--auto-lineage-euk and --auto-lineage-prok are also available if you know your input assembly is, or is not, an eukaryote. See the user guide for more information.
 	A reminder: Busco evaluations are valid when an appropriate dataset is used, i.e., the dataset belongs to the lineage of the species to test. Because of overlapping markers/spurious matches among domains, busco matches in another domain do not necessarily mean that your genome/proteome contains sequences from this domain. However, a high busco score in multiple domains might help you identify possible contaminations.
-2024-01-12 12:04:58 WARNING:	The file or folder /busco_wd/busco_downloads/lineages/archaea_odb10 is not the last available version. To update all data files to the last version, add the parameter --update-data in your next run.
-2024-01-12 12:04:58 INFO:	Running BUSCO using lineage dataset archaea_odb10 (prokaryota, 2021-02-23)
-2024-01-12 12:04:58 INFO:	Running 1 job(s) on bbtools, starting at 01/12/2024 12:04:58
-2024-01-12 12:04:59 INFO:	[bbtools]	1 of 1 task(s) completed
-2024-01-12 12:04:59 INFO:	***** Run Prodigal on input to predict and extract genes *****
-2024-01-12 12:04:59 INFO:	Running Prodigal with genetic code 11 in single mode
-2024-01-12 12:04:59 INFO:	Running 1 job(s) on prodigal, starting at 01/12/2024 12:04:59
-2024-01-12 12:05:00 INFO:	[prodigal]	1 of 1 task(s) completed
-2024-01-12 12:05:00 INFO:	Genetic code 11 selected as optimal
-2024-01-12 12:05:00 INFO:	***** Run HMMER on gene sequences *****
-2024-01-12 12:05:00 INFO:	Running 194 job(s) on hmmsearch, starting at 01/12/2024 12:05:00
-2024-01-12 12:05:01 INFO:	[hmmsearch]	20 of 194 task(s) completed
-2024-01-12 12:05:01 INFO:	[hmmsearch]	39 of 194 task(s) completed
-2024-01-12 12:05:01 INFO:	[hmmsearch]	59 of 194 task(s) completed
-2024-01-12 12:05:01 INFO:	[hmmsearch]	78 of 194 task(s) completed
-2024-01-12 12:05:01 INFO:	[hmmsearch]	97 of 194 task(s) completed
-2024-01-12 12:05:01 INFO:	[hmmsearch]	117 of 194 task(s) completed
-2024-01-12 12:05:01 INFO:	[hmmsearch]	156 of 194 task(s) completed
-2024-01-12 12:05:01 INFO:	[hmmsearch]	175 of 194 task(s) completed
-2024-01-12 12:05:01 INFO:	[hmmsearch]	194 of 194 task(s) completed
-2024-01-12 12:05:01 INFO:	Results:	C:1.0%[S:1.0%,D:0.0%],F:0.5%,M:98.5%,n:194	   
+2024-01-14 16:26:06 INFO:	Running BUSCO using lineage dataset archaea_odb10 (prokaryota, 2024-01-08)
+2024-01-14 16:26:06 INFO:	Running 1 job(s) on bbtools, starting at 01/14/2024 16:26:06
+2024-01-14 16:26:08 INFO:	[bbtools]	1 of 1 task(s) completed
+2024-01-14 16:26:08 INFO:	***** Run Prodigal on input to predict and extract genes *****
+2024-01-14 16:26:08 INFO:	Running Prodigal with genetic code 11 in single mode
+2024-01-14 16:26:08 INFO:	Running 1 job(s) on prodigal, starting at 01/14/2024 16:26:08
+2024-01-14 16:26:10 INFO:	[prodigal]	1 of 1 task(s) completed
+2024-01-14 16:26:10 INFO:	Genetic code 11 selected as optimal
+2024-01-14 16:26:10 INFO:	***** Run HMMER on gene sequences *****
+2024-01-14 16:26:10 INFO:	Running 194 job(s) on hmmsearch, starting at 01/14/2024 16:26:10
+2024-01-14 16:26:12 INFO:	[hmmsearch]	20 of 194 task(s) completed
+2024-01-14 16:26:12 INFO:	[hmmsearch]	39 of 194 task(s) completed
+2024-01-14 16:26:12 INFO:	[hmmsearch]	59 of 194 task(s) completed
+2024-01-14 16:26:13 INFO:	[hmmsearch]	78 of 194 task(s) completed
+2024-01-14 16:26:13 INFO:	[hmmsearch]	97 of 194 task(s) completed
+2024-01-14 16:26:13 INFO:	[hmmsearch]	97 of 194 task(s) completed
+2024-01-14 16:26:13 INFO:	[hmmsearch]	117 of 194 task(s) completed
+2024-01-14 16:26:13 INFO:	[hmmsearch]	136 of 194 task(s) completed
+2024-01-14 16:26:13 INFO:	[hmmsearch]	156 of 194 task(s) completed
+2024-01-14 16:26:13 INFO:	[hmmsearch]	175 of 194 task(s) completed
+2024-01-14 16:26:14 INFO:	[hmmsearch]	194 of 194 task(s) completed
+2024-01-14 16:26:14 INFO:	Results:	C:1.0%[S:1.0%,D:0.0%],F:0.5%,M:98.5%,n:194	   
 
-2024-01-12 12:05:01 WARNING:	The file or folder /busco_wd/busco_downloads/lineages/bacteria_odb10 is not the last available version. To update all data files to the last version, add the parameter --update-data in your next run.
-2024-01-12 12:05:01 INFO:	Running BUSCO using lineage dataset bacteria_odb10 (prokaryota, 2020-03-06)
-2024-01-12 12:05:01 INFO:	Skipping BBTools run as requested
-2024-01-12 12:05:01 INFO:	***** Run Prodigal on input to predict and extract genes *****
-2024-01-12 12:05:01 INFO:	Genetic code 11 selected as optimal
-2024-01-12 12:05:01 INFO:	***** Run HMMER on gene sequences *****
-2024-01-12 12:05:01 INFO:	Running 124 job(s) on hmmsearch, starting at 01/12/2024 12:05:01
-2024-01-12 12:05:02 INFO:	[hmmsearch]	13 of 124 task(s) completed
-2024-01-12 12:05:02 INFO:	[hmmsearch]	25 of 124 task(s) completed
-2024-01-12 12:05:02 INFO:	[hmmsearch]	38 of 124 task(s) completed
-2024-01-12 12:05:02 INFO:	[hmmsearch]	50 of 124 task(s) completed
-2024-01-12 12:05:02 INFO:	[hmmsearch]	63 of 124 task(s) completed
-2024-01-12 12:05:02 INFO:	[hmmsearch]	75 of 124 task(s) completed
-2024-01-12 12:05:02 INFO:	[hmmsearch]	75 of 124 task(s) completed
-2024-01-12 12:05:02 INFO:	[hmmsearch]	75 of 124 task(s) completed
-2024-01-12 12:05:02 INFO:	[hmmsearch]	87 of 124 task(s) completed
-2024-01-12 12:05:02 INFO:	[hmmsearch]	100 of 124 task(s) completed
-2024-01-12 12:05:02 INFO:	[hmmsearch]	112 of 124 task(s) completed
-2024-01-12 12:05:02 INFO:	[hmmsearch]	124 of 124 task(s) completed
-2024-01-12 12:05:02 WARNING:	BUSCO did not find any match. Make sure to check the log files if this is unexpected.
-2024-01-12 12:05:02 INFO:	Results:	C:0.0%[S:0.0%,D:0.0%],F:0.0%,M:100.0%,n:124	   
+2024-01-14 16:26:14 INFO:	Running BUSCO using lineage dataset bacteria_odb10 (prokaryota, 2024-01-08)
+2024-01-14 16:26:14 INFO:	Skipping BBTools run as requested
+2024-01-14 16:26:14 INFO:	***** Run Prodigal on input to predict and extract genes *****
+2024-01-14 16:26:14 INFO:	Genetic code 11 selected as optimal
+2024-01-14 16:26:14 INFO:	***** Run HMMER on gene sequences *****
+2024-01-14 16:26:14 INFO:	Running 124 job(s) on hmmsearch, starting at 01/14/2024 16:26:14
+2024-01-14 16:26:16 INFO:	[hmmsearch]	13 of 124 task(s) completed
+2024-01-14 16:26:16 INFO:	[hmmsearch]	25 of 124 task(s) completed
+2024-01-14 16:26:16 INFO:	[hmmsearch]	38 of 124 task(s) completed
+2024-01-14 16:26:17 INFO:	[hmmsearch]	50 of 124 task(s) completed
+2024-01-14 16:26:17 INFO:	[hmmsearch]	63 of 124 task(s) completed
+2024-01-14 16:26:17 INFO:	[hmmsearch]	75 of 124 task(s) completed
+2024-01-14 16:26:17 INFO:	[hmmsearch]	87 of 124 task(s) completed
+2024-01-14 16:26:17 INFO:	[hmmsearch]	100 of 124 task(s) completed
+2024-01-14 16:26:17 INFO:	[hmmsearch]	112 of 124 task(s) completed
+2024-01-14 16:26:17 INFO:	[hmmsearch]	124 of 124 task(s) completed
+2024-01-14 16:26:17 WARNING:	BUSCO did not find any match. Make sure to check the log files if this is unexpected.
+2024-01-14 16:26:17 INFO:	Results:	C:0.0%[S:0.0%,D:0.0%],F:0.0%,M:100.0%,n:124	   
 
-2024-01-12 12:05:02 WARNING:	The file or folder /busco_wd/busco_downloads/lineages/eukaryota_odb10 is not the last available version. To update all data files to the last version, add the parameter --update-data in your next run.
-2024-01-12 12:05:02 INFO:	Running BUSCO using lineage dataset eukaryota_odb10 (eukaryota, 2020-09-10)
-2024-01-12 12:05:02 INFO:	Skipping BBTools run as requested
-2024-01-12 12:05:02 INFO:	Running 1 job(s) on metaeuk, starting at 01/12/2024 12:05:02
-2024-01-12 12:05:22 INFO:	[metaeuk]	1 of 1 task(s) completed
-2024-01-12 12:05:22 INFO:	***** Run HMMER on gene sequences *****
-2024-01-12 12:05:22 INFO:	Running 255 job(s) on hmmsearch, starting at 01/12/2024 12:05:22
-2024-01-12 12:05:22 INFO:	[hmmsearch]	26 of 255 task(s) completed
-2024-01-12 12:05:23 INFO:	[hmmsearch]	51 of 255 task(s) completed
-2024-01-12 12:05:23 INFO:	[hmmsearch]	77 of 255 task(s) completed
-2024-01-12 12:05:23 INFO:	[hmmsearch]	102 of 255 task(s) completed
-2024-01-12 12:05:23 INFO:	[hmmsearch]	128 of 255 task(s) completed
-2024-01-12 12:05:23 INFO:	[hmmsearch]	153 of 255 task(s) completed
-2024-01-12 12:05:23 INFO:	[hmmsearch]	179 of 255 task(s) completed
-2024-01-12 12:05:23 INFO:	[hmmsearch]	204 of 255 task(s) completed
-2024-01-12 12:05:23 INFO:	[hmmsearch]	230 of 255 task(s) completed
-2024-01-12 12:05:23 INFO:	[hmmsearch]	255 of 255 task(s) completed
-2024-01-12 12:05:23 INFO:	0 candidate overlapping regions found
-2024-01-12 12:05:23 INFO:	51 exons in total
-2024-01-12 12:05:23 INFO:	Results:	C:19.2%[S:19.2%,D:0.0%],F:0.8%,M:80.0%,n:255	   
+2024-01-14 16:26:18 INFO:	Running BUSCO using lineage dataset eukaryota_odb10 (eukaryota, 2024-01-08)
+2024-01-14 16:26:18 INFO:	Skipping BBTools run as requested
+2024-01-14 16:26:18 INFO:	Running 1 job(s) on metaeuk, starting at 01/14/2024 16:26:18
+2024-01-14 16:27:01 INFO:	[metaeuk]	1 of 1 task(s) completed
+2024-01-14 16:27:01 INFO:	***** Run HMMER on gene sequences *****
+2024-01-14 16:27:01 INFO:	Running 255 job(s) on hmmsearch, starting at 01/14/2024 16:27:01
+2024-01-14 16:27:03 INFO:	[hmmsearch]	26 of 255 task(s) completed
+2024-01-14 16:27:03 INFO:	[hmmsearch]	51 of 255 task(s) completed
+2024-01-14 16:27:04 INFO:	[hmmsearch]	77 of 255 task(s) completed
+2024-01-14 16:27:04 INFO:	[hmmsearch]	102 of 255 task(s) completed
+2024-01-14 16:27:04 INFO:	[hmmsearch]	128 of 255 task(s) completed
+2024-01-14 16:27:04 INFO:	[hmmsearch]	153 of 255 task(s) completed
+2024-01-14 16:27:05 INFO:	[hmmsearch]	179 of 255 task(s) completed
+2024-01-14 16:27:05 INFO:	[hmmsearch]	204 of 255 task(s) completed
+2024-01-14 16:27:05 INFO:	[hmmsearch]	230 of 255 task(s) completed
+2024-01-14 16:27:06 INFO:	[hmmsearch]	255 of 255 task(s) completed
+2024-01-14 16:27:06 INFO:	0 candidate overlapping regions found
+2024-01-14 16:27:06 INFO:	51 exons in total
+2024-01-14 16:27:06 INFO:	Results:	C:19.2%[S:19.2%,D:0.0%],F:0.8%,M:80.0%,n:255	   
 
-2024-01-12 12:05:23 INFO:	Extracting missing and fragmented buscos from the file refseq_db.faa...
-2024-01-12 12:05:40 INFO:	Running 1 job(s) on metaeuk, starting at 01/12/2024 12:05:40
-2024-01-12 12:05:55 INFO:	[metaeuk]	1 of 1 task(s) completed
-2024-01-12 12:05:55 INFO:	***** Run HMMER on gene sequences *****
-2024-01-12 12:05:55 INFO:	Running 206 job(s) on hmmsearch, starting at 01/12/2024 12:05:55
-2024-01-12 12:05:56 INFO:	[hmmsearch]	21 of 206 task(s) completed
-2024-01-12 12:05:56 INFO:	[hmmsearch]	42 of 206 task(s) completed
-2024-01-12 12:05:56 INFO:	[hmmsearch]	62 of 206 task(s) completed
-2024-01-12 12:05:56 INFO:	[hmmsearch]	83 of 206 task(s) completed
-2024-01-12 12:05:56 INFO:	[hmmsearch]	104 of 206 task(s) completed
-2024-01-12 12:05:56 INFO:	[hmmsearch]	124 of 206 task(s) completed
-2024-01-12 12:05:56 INFO:	[hmmsearch]	145 of 206 task(s) completed
-2024-01-12 12:05:56 INFO:	[hmmsearch]	165 of 206 task(s) completed
-2024-01-12 12:05:56 INFO:	[hmmsearch]	186 of 206 task(s) completed
-2024-01-12 12:05:56 INFO:	[hmmsearch]	206 of 206 task(s) completed
-2024-01-12 12:05:56 INFO:	0 candidate overlapping regions found
-2024-01-12 12:05:56 INFO:	51 exons in total
-2024-01-12 12:05:56 INFO:	Results:	C:19.2%[S:19.2%,D:0.0%],F:0.8%,M:80.0%,n:255	   
+2024-01-14 16:27:06 INFO:	Extracting missing and fragmented buscos from the file refseq_db.faa...
+2024-01-14 16:27:20 INFO:	Running 1 job(s) on metaeuk, starting at 01/14/2024 16:27:20
+2024-01-14 16:27:54 INFO:	[metaeuk]	1 of 1 task(s) completed
+2024-01-14 16:27:54 INFO:	***** Run HMMER on gene sequences *****
+2024-01-14 16:27:54 INFO:	Running 206 job(s) on hmmsearch, starting at 01/14/2024 16:27:54
+2024-01-14 16:27:56 INFO:	[hmmsearch]	21 of 206 task(s) completed
+2024-01-14 16:27:57 INFO:	[hmmsearch]	42 of 206 task(s) completed
+2024-01-14 16:27:57 INFO:	[hmmsearch]	62 of 206 task(s) completed
+2024-01-14 16:27:57 INFO:	[hmmsearch]	83 of 206 task(s) completed
+2024-01-14 16:27:57 INFO:	[hmmsearch]	104 of 206 task(s) completed
+2024-01-14 16:27:57 INFO:	[hmmsearch]	124 of 206 task(s) completed
+2024-01-14 16:27:58 INFO:	[hmmsearch]	145 of 206 task(s) completed
+2024-01-14 16:27:58 INFO:	[hmmsearch]	145 of 206 task(s) completed
+2024-01-14 16:27:58 INFO:	[hmmsearch]	165 of 206 task(s) completed
+2024-01-14 16:27:58 INFO:	[hmmsearch]	186 of 206 task(s) completed
+2024-01-14 16:27:58 INFO:	[hmmsearch]	206 of 206 task(s) completed
+2024-01-14 16:27:58 INFO:	0 candidate overlapping regions found
+2024-01-14 16:27:58 INFO:	51 exons in total
+2024-01-14 16:27:58 INFO:	Results:	C:19.2%[S:19.2%,D:0.0%],F:0.8%,M:80.0%,n:255	   
 
-2024-01-12 12:05:56 INFO:	eukaryota_odb10 selected
+2024-01-14 16:27:58 INFO:	eukaryota_odb10 selected
 
-2024-01-12 12:05:56 INFO:	***** Searching tree for chosen lineage to find best taxonomic match *****
+2024-01-14 16:27:58 INFO:	***** Searching tree for chosen lineage to find best taxonomic match *****
 
-2024-01-12 12:05:56 INFO:	Extract markers...
-2024-01-12 12:05:56 INFO:	Place the markers on the reference tree...
-2024-01-12 12:05:56 INFO:	Running 1 job(s) on sepp, starting at 01/12/2024 12:05:56
-2024-01-12 12:08:03 INFO:	[sepp]	1 of 1 task(s) completed
-2024-01-12 12:08:03 INFO:	Lineage saccharomycetes is selected, supported by 18 markers out of 19
-2024-01-12 12:08:04 INFO:	Running BUSCO using lineage dataset saccharomycetes_odb10 (eukaryota, 2024-01-08)
-2024-01-12 12:08:04 INFO:	Skipping BBTools run as requested
-2024-01-12 12:08:04 INFO:	Running 1 job(s) on metaeuk, starting at 01/12/2024 12:08:04
-2024-01-12 12:08:07 INFO:	[metaeuk]	1 of 1 task(s) completed
-2024-01-12 12:08:07 INFO:	***** Run HMMER on gene sequences *****
-2024-01-12 12:08:07 INFO:	Running 2137 job(s) on hmmsearch, starting at 01/12/2024 12:08:07
-2024-01-12 12:08:08 INFO:	[hmmsearch]	214 of 2137 task(s) completed
-2024-01-12 12:08:09 INFO:	[hmmsearch]	428 of 2137 task(s) completed
-2024-01-12 12:08:09 INFO:	[hmmsearch]	642 of 2137 task(s) completed
-2024-01-12 12:08:09 INFO:	[hmmsearch]	855 of 2137 task(s) completed
-2024-01-12 12:08:10 INFO:	[hmmsearch]	1069 of 2137 task(s) completed
-2024-01-12 12:08:10 INFO:	[hmmsearch]	1283 of 2137 task(s) completed
-2024-01-12 12:08:10 INFO:	[hmmsearch]	1496 of 2137 task(s) completed
-2024-01-12 12:08:11 INFO:	[hmmsearch]	1710 of 2137 task(s) completed
-2024-01-12 12:08:11 INFO:	[hmmsearch]	1924 of 2137 task(s) completed
-2024-01-12 12:08:12 INFO:	[hmmsearch]	2137 of 2137 task(s) completed
-2024-01-12 12:08:12 INFO:	0 candidate overlapping regions found
-2024-01-12 12:08:12 INFO:	45 exons in total
-2024-01-12 12:08:12 INFO:	Extracting missing and fragmented buscos from the file refseq_db.faa...
-2024-01-12 12:08:18 INFO:	Running 1 job(s) on metaeuk, starting at 01/12/2024 12:08:18
-2024-01-12 12:08:21 INFO:	[metaeuk]	1 of 1 task(s) completed
-2024-01-12 12:08:21 INFO:	***** Run HMMER on gene sequences *****
-2024-01-12 12:08:21 INFO:	Running 2093 job(s) on hmmsearch, starting at 01/12/2024 12:08:21
-2024-01-12 12:08:23 INFO:	[hmmsearch]	419 of 2093 task(s) completed
-2024-01-12 12:08:23 INFO:	[hmmsearch]	628 of 2093 task(s) completed
-2024-01-12 12:08:24 INFO:	[hmmsearch]	838 of 2093 task(s) completed
-2024-01-12 12:08:24 INFO:	[hmmsearch]	1047 of 2093 task(s) completed
-2024-01-12 12:08:24 INFO:	[hmmsearch]	1256 of 2093 task(s) completed
-2024-01-12 12:08:25 INFO:	[hmmsearch]	1466 of 2093 task(s) completed
-2024-01-12 12:08:25 INFO:	[hmmsearch]	1675 of 2093 task(s) completed
-2024-01-12 12:08:25 INFO:	[hmmsearch]	1884 of 2093 task(s) completed
-2024-01-12 12:08:26 INFO:	[hmmsearch]	2093 of 2093 task(s) completed
-2024-01-12 12:08:26 INFO:	3 candidate overlapping regions found
-2024-01-12 12:08:26 INFO:	49 exons in total
-2024-01-12 12:08:26 INFO:	Results:	C:2.1%[S:2.1%,D:0.0%],F:0.0%,M:97.9%,n:2137	   
+2024-01-14 16:27:59 INFO:	Extract markers...
+2024-01-14 16:27:59 INFO:	Place the markers on the reference tree...
+2024-01-14 16:27:59 INFO:	Running 1 job(s) on sepp, starting at 01/14/2024 16:27:59
+2024-01-14 16:31:53 INFO:	[sepp]	1 of 1 task(s) completed
+2024-01-14 16:31:53 INFO:	Lineage saccharomycetes is selected, supported by 18 markers out of 19
+2024-01-14 16:31:54 INFO:	Running BUSCO using lineage dataset saccharomycetes_odb10 (eukaryota, 2024-01-08)
+2024-01-14 16:31:54 INFO:	Skipping BBTools run as requested
+2024-01-14 16:31:54 INFO:	Running 1 job(s) on metaeuk, starting at 01/14/2024 16:31:54
+2024-01-14 16:32:02 INFO:	[metaeuk]	1 of 1 task(s) completed
+2024-01-14 16:32:03 INFO:	***** Run HMMER on gene sequences *****
+2024-01-14 16:32:03 INFO:	Running 2137 job(s) on hmmsearch, starting at 01/14/2024 16:32:03
+2024-01-14 16:32:06 INFO:	[hmmsearch]	214 of 2137 task(s) completed
+2024-01-14 16:32:08 INFO:	[hmmsearch]	428 of 2137 task(s) completed
+2024-01-14 16:32:09 INFO:	[hmmsearch]	642 of 2137 task(s) completed
+2024-01-14 16:32:10 INFO:	[hmmsearch]	855 of 2137 task(s) completed
+2024-01-14 16:32:12 INFO:	[hmmsearch]	1069 of 2137 task(s) completed
+2024-01-14 16:32:14 INFO:	[hmmsearch]	1283 of 2137 task(s) completed
+2024-01-14 16:32:15 INFO:	[hmmsearch]	1496 of 2137 task(s) completed
+2024-01-14 16:32:16 INFO:	[hmmsearch]	1710 of 2137 task(s) completed
+2024-01-14 16:32:18 INFO:	[hmmsearch]	1924 of 2137 task(s) completed
+2024-01-14 16:32:20 INFO:	[hmmsearch]	2137 of 2137 task(s) completed
+2024-01-14 16:32:20 INFO:	0 candidate overlapping regions found
+2024-01-14 16:32:20 INFO:	45 exons in total
+2024-01-14 16:32:20 INFO:	Extracting missing and fragmented buscos from the file refseq_db.faa...
+2024-01-14 16:32:26 INFO:	Running 1 job(s) on metaeuk, starting at 01/14/2024 16:32:26
+2024-01-14 16:32:34 INFO:	[metaeuk]	1 of 1 task(s) completed
+2024-01-14 16:32:34 INFO:	***** Run HMMER on gene sequences *****
+2024-01-14 16:32:34 INFO:	Running 2093 job(s) on hmmsearch, starting at 01/14/2024 16:32:34
+2024-01-14 16:32:37 INFO:	[hmmsearch]	210 of 2093 task(s) completed
+2024-01-14 16:32:38 INFO:	[hmmsearch]	419 of 2093 task(s) completed
+2024-01-14 16:32:39 INFO:	[hmmsearch]	628 of 2093 task(s) completed
+2024-01-14 16:32:40 INFO:	[hmmsearch]	838 of 2093 task(s) completed
+2024-01-14 16:32:41 INFO:	[hmmsearch]	1047 of 2093 task(s) completed
+2024-01-14 16:32:42 INFO:	[hmmsearch]	1256 of 2093 task(s) completed
+2024-01-14 16:32:43 INFO:	[hmmsearch]	1466 of 2093 task(s) completed
+2024-01-14 16:32:45 INFO:	[hmmsearch]	1675 of 2093 task(s) completed
+2024-01-14 16:32:46 INFO:	[hmmsearch]	1884 of 2093 task(s) completed
+2024-01-14 16:32:47 INFO:	[hmmsearch]	2093 of 2093 task(s) completed
+2024-01-14 16:32:48 INFO:	3 candidate overlapping regions found
+2024-01-14 16:32:48 INFO:	49 exons in total
+2024-01-14 16:32:48 INFO:	Results:	C:2.1%[S:2.1%,D:0.0%],F:0.0%,M:97.9%,n:2137	   
 
-2024-01-12 12:08:26 INFO:	
+2024-01-14 16:32:48 INFO:	
 
     ---------------------------------------------------
     |Results from generic domain eukaryota_odb10       |
@@ -165,16 +164,13 @@
     |2091    Missing BUSCOs (M)                        |
     |2137    Total BUSCO groups searched               |
     ---------------------------------------------------
-2024-01-12 12:08:26 INFO:	BUSCO analysis done with WARNING(s). Total running time: 208 seconds
+2024-01-14 16:32:48 INFO:	BUSCO analysis done with WARNING(s). Total running time: 402 seconds
 
 ***** Summary of warnings: *****
-2024-01-12 12:04:56 WARNING:busco.BuscoConfig	Running Auto Lineage Selector as no lineage dataset was specified. This will take a little longer than normal. If you know what lineage dataset you want to use, please specify this in the config file or using the -l (--lineage-dataset) flag in the command line.
-2024-01-12 12:04:58 WARNING:busco.BuscoDownloadManager	The file or folder /busco_wd/busco_downloads/lineages/archaea_odb10 is not the last available version. To update all data files to the last version, add the parameter --update-data in your next run.
-2024-01-12 12:05:01 WARNING:busco.BuscoDownloadManager	The file or folder /busco_wd/busco_downloads/lineages/bacteria_odb10 is not the last available version. To update all data files to the last version, add the parameter --update-data in your next run.
-2024-01-12 12:05:02 WARNING:busco.busco_tools.hmmer	BUSCO did not find any match. Make sure to check the log files if this is unexpected.
-2024-01-12 12:05:02 WARNING:busco.BuscoDownloadManager	The file or folder /busco_wd/busco_downloads/lineages/eukaryota_odb10 is not the last available version. To update all data files to the last version, add the parameter --update-data in your next run.
+2024-01-14 16:26:03 WARNING:busco.BuscoConfig	Running Auto Lineage Selector as no lineage dataset was specified. This will take a little longer than normal. If you know what lineage dataset you want to use, please specify this in the config file or using the -l (--lineage-dataset) flag in the command line.
+2024-01-14 16:26:17 WARNING:busco.busco_tools.hmmer	BUSCO did not find any match. Make sure to check the log files if this is unexpected.
 
-2024-01-12 12:08:26 INFO:	Results written in /busco_wd/test_eukaryota
-2024-01-12 12:08:26 INFO:	For assistance with interpreting the results, please consult the userguide: https://busco.ezlab.org/busco_userguide.html
+2024-01-14 16:32:48 INFO:	Results written in /busco_wd/test_eukaryota
+2024-01-14 16:32:48 INFO:	For assistance with interpreting the results, please consult the userguide: https://busco.ezlab.org/busco_userguide.html
 
-2024-01-12 12:08:26 INFO:	Visit this page https://gitlab.com/ezlab/busco#how-to-cite-busco to see how to cite BUSCO
+2024-01-14 16:32:48 INFO:	Visit this page https://gitlab.com/ezlab/busco#how-to-cite-busco to see how to cite BUSCO

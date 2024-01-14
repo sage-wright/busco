@@ -42,7 +42,6 @@ class TestBuscoConfig(unittest.TestCase):
             "datasets_version": None,
             "download_base_url": None,
             "download_path": None,
-            "update-data": False,
             "version": "==SUPPRESS==",
             "tar": False,
         }
@@ -75,7 +74,6 @@ class TestBuscoConfig(unittest.TestCase):
                 "augustus_species",
                 "download_base_url",
                 "lineage_dataset",
-                "update-data",
                 "metaeuk_parameters",
                 "metaeuk_rerun_parameters",
                 "evalue",
@@ -88,6 +86,7 @@ class TestBuscoConfig(unittest.TestCase):
                 "scaffold_composition",
                 "skip_bbtools",
                 "opt-out-run-stats",
+                "update-data",
             ],
             "etraining": ["path", "command"],
             "gff2gbSmallDNA.pl": ["path", "command"],
@@ -187,7 +186,6 @@ class TestBuscoConfig(unittest.TestCase):
             "out_path": os.getcwd(),
             "quiet": False,
             "restart": False,
-            "update-data": False,
             "use_augustus": False,
             "use_miniprot": False,
         }
