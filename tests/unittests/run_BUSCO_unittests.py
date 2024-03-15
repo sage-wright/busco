@@ -34,6 +34,17 @@ class TestParams(unittest.TestCase):
                 sys.stdout = sys.__stdout__
         self.assertEqual(cm.exception.code, 0)
 
+    def test_empty_args_calls_help(self):
+        sys.argv[1:] = []
+        with self.assertRaises(SystemExit) as cm:
+            captured_output = io.StringIO()
+            sys.stdout = captured_output
+            try:
+                run_BUSCO._parse_args()
+            finally:
+                sys.stdout = sys.__stdout__
+        self.assertEqual(cm.exception.code, 0)
+
     def test_version_short(self):
         args = ["-v"]
         sys.argv[1:] = args
@@ -84,6 +95,8 @@ class TestParams(unittest.TestCase):
         self.assertEqual(cm.exception.code, 0)
 
     def test_cmdline_options_short_minimum(self):
+        args = ["-i", None]  # required to avoid calling --help
+        sys.argv[1:] = args
         params = run_BUSCO._parse_args()
         correct_parse = {
             "auto-lineage": False,
@@ -109,6 +122,7 @@ class TestParams(unittest.TestCase):
             "metaeuk_parameters": None,
             "metaeuk_rerun_parameters": None,
             "use_augustus": False,
+            "use_metaeuk": False,
             "use_miniprot": False,
             "augustus_parameters": None,
             "augustus_species": None,
@@ -172,6 +186,7 @@ class TestParams(unittest.TestCase):
             "metaeuk_parameters": None,
             "metaeuk_rerun_parameters": None,
             "use_augustus": False,
+            "use_metaeuk": False,
             "use_miniprot": False,
             "augustus_parameters": None,
             "augustus_species": None,
@@ -264,6 +279,7 @@ class TestParams(unittest.TestCase):
             "force": True,
             "restart": True,
             "use_augustus": True,
+            "use_metaeuk": False,
             "use_miniprot": False,
             "help": "==SUPPRESS==",
             "in": input_file,

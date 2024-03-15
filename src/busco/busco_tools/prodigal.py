@@ -308,10 +308,11 @@ class ProdigalRunner(GenePredictor):
         :return:
         """
 
-        gene_id = "{}:{}-{}".format(
+        gene_id = "{}:{}-{}|{}".format(
             details["contig_id"],
             details["contig_start"],
             details["contig_end"],
+            details["strand"],
         )
 
         aa_seq = SeqRecord(Seq(details["aa_seq"]), id=gene_id, description="")
@@ -333,7 +334,8 @@ class ProdigalRunner(GenePredictor):
             seq_id = id.rsplit("_", 1)[0]
             left_coord = parts[1].strip()
             right_coord = parts[2].strip()
-            record.id = "{}:{}-{}".format(seq_id, left_coord, right_coord)
+            strand = "+" if parts[3].strip() == "1" else "-"
+            record.id = "{}:{}-{}|{}".format(seq_id, left_coord, right_coord, strand)
             mod_records.append(record)
         SeqIO.write(mod_records, self.output_faa, "fasta")
         return

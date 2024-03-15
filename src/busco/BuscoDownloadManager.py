@@ -59,6 +59,8 @@ class BuscoDownloadManager:
                     )
                 )
                 self._obtain_versions_file()
+            except URLError:
+                raise BatchFatalError("Too many requests.")
 
     def _create_main_download_dir(self):
         if not os.path.exists(self.local_download_path):
@@ -85,7 +87,7 @@ class BuscoDownloadManager:
                         remote_filepath
                     )
                 )
-            except URLError:
+            except URLError as e:
                 if self.offline:
                     logger.warning(
                         "Unable to verify BUSCO datasets because of offline mode"
@@ -99,7 +101,10 @@ class BuscoDownloadManager:
                     )
                     time.sleep(tsleep)
                 else:
-                    raise BatchFatalError("Cannot reach {}".format(remote_filepath))
+                    if hasattr(e, 'code') and e.code == 429:
+                        raise
+                    else:
+                        raise BatchFatalError("Cannot reach {}".format(remote_filepath))
 
         return
 

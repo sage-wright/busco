@@ -504,7 +504,7 @@ class MetaeukRunner(GenePredictor):
         high_coord = int(header_parts[7])
         exon_details = header_parts[8:]
 
-        gene_id = "{}|{}:{}-{}".format(T_acc, C_acc, low_coord, high_coord)
+        gene_id = "{}|{}:{}-{}|{}".format(T_acc, C_acc, low_coord, high_coord, strand)
 
         all_low_exon_coords = []
         all_taken_low_exon_coords = []
@@ -605,7 +605,6 @@ class MetaeukRunner(GenePredictor):
                             "run_number": self.run_number,
                         }
                     )
-                    record.id = header_details["gene_id"]
                     structured_arr_contents.append(
                         (
                             record.id,
@@ -631,11 +630,12 @@ class MetaeukRunner(GenePredictor):
         :return:
         """
 
-        gene_id = "{}|{}:{}-{}".format(
+        gene_id = "{}|{}:{}-{}|{}".format(
             details["target_id"],
             details["contig_id"],
             details["contig_start"],
             details["contig_end"],
+            details["strand"],
         )
 
         aa_seq = SeqRecord(Seq(details["aa_seq"]), id=gene_id, description="")
@@ -663,9 +663,9 @@ class MetaeukRunner(GenePredictor):
             structured_arr = np.array(
                 structured_arr_contents,
                 dtype=[
-                    ("gene_id", "U100"),
-                    ("target_id", "U30"),
-                    ("contig_id", "U70"),
+                    ("gene_id", "U500"),
+                    ("target_id", "U500"),
+                    ("contig_id", "U500"),
                     ("low_coord", "i4"),
                     ("high_coord", "i4"),
                     ("strand", "U1"),
@@ -709,70 +709,6 @@ class MetaeukRunner(GenePredictor):
                 SeqIO.write(filtered_records_fna, g_mod, "fasta")
 
         return
-
-    def write_gff_files(self, sc_folder, mc_folder, frag_folder):
-        try:
-            with open(self.gff_file, "r") as gf:
-                lines = gf.readlines()
-        except FileNotFoundError:
-            logger.warning(
-                "Metaeuk did not create a GFF file. Please use Metaeuk version 5-34c21f2 or higher for GFF results."
-            )
-            return
-
-        id_pattern = re.compile(r".*Target_ID=(.*?)[_;]")
-        current_busco = ""
-        f = None
-
-        sc_busco_ids = set([s.split(".f")[0] for s in os.listdir(sc_folder)])
-        mc_busco_ids = set([s.split(".f")[0] for s in os.listdir(mc_folder)])
-        frag_busco_ids = set([s.split(".f")[0] for s in os.listdir(frag_folder)])
-        unused_busco_ids = set()
-        used_busco_ids = (
-            set()
-        )  # Needed to track which BUSCOs are used on the rerun vs initial run
-
-        for line in lines:
-            m = id_pattern.match(line)
-            if m:
-                busco_id = m.group(1)
-                if busco_id in unused_busco_ids:
-                    continue
-                elif busco_id in sc_busco_ids:
-                    output_folder = sc_folder
-                elif busco_id in mc_busco_ids:
-                    output_folder = mc_folder
-                elif busco_id in frag_busco_ids:
-                    output_folder = frag_folder
-                else:
-                    unused_busco_ids.add(busco_id)
-                    continue
-
-                if busco_id != current_busco:
-                    if f:
-                        if not f.closed:
-                            f.close()
-                    gff_filename = "{}.gff".format(
-                        os.path.join(output_folder, busco_id)
-                    )
-
-                    if busco_id not in used_busco_ids and os.path.exists(
-                        gff_filename
-                    ):  # don't overwrite the result from the rerun with the inital run GFF file
-                        unused_busco_ids.add(busco_id)
-                        current_busco = busco_id
-                        continue
-
-                    else:
-                        f = open(gff_filename, "a")
-                        # I avoided using a context manager for the file IO to avoid multiple file open/close
-                        # operations and keep a single pass through the large GFF file. Efficiency!
-                        current_busco = busco_id
-                        used_busco_ids.add(busco_id)
-                f.write(line)
-        if f:
-            if not f.closed:
-                f.close()
 
     def reset(self):
         super().reset()

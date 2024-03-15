@@ -221,10 +221,11 @@ class TranscriptomeAnalysisProkaryotes(
                 ):  # These files will only ever have one sequence,
                     # but BioPython examples always parse them in an iterator.
                     translated_seqs = self.six_frame_translation(record)
-                    gene_id = "{}:{}-{}".format(
+                    gene_id = "{}:{}-{}|{}".format(
                         record.id,
                         contig_info[contig_name]["contig_start"],
                         contig_info[contig_name]["contig_end"],
+                        contig_info[contig_name]["strand"],
                     )
                     self.all_sequences[busco_id][gene_id][
                         "translations"

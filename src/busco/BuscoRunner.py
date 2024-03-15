@@ -47,12 +47,6 @@ logger = BuscoLogger.get_logger(__name__)
 class SingleRunner:
 
     all_runners = set()
-    summary = {
-        "parameters": {},
-        "lineage_dataset": {},
-        "versions": {},
-        "results": {},
-    }
 
     def __init__(self, config_manager):
         self.start_time = time.time()
@@ -102,23 +96,6 @@ class SingleRunner:
             except UnboundLocalError:
                 pass
         return lineage_dataset, runner, parent_domain
-
-    def compile_summary(self):
-        for option in self.config.items("busco_run"):
-            type(self).summary["parameters"][option[0]] = option[1]
-
-        type(self).summary["versions"] = self.runner.analysis.hmmer_runner.tool_versions
-        self.config.run_stats[
-            "versions"
-        ] = self.runner.analysis.hmmer_runner.tool_versions
-        self.config.run_stats["versions"]["python"] = sys.version_info
-        type(self).summary["versions"]["busco"] = busco.__version__
-
-        type(self).summary["results"] = self.runner.all_results
-        self.config.run_stats["results"] = self.runner.all_results
-
-        if "genome" in self.config.get("busco_run", "mode"):
-            type(self).summary["metrics"] = self.runner.analysis.bbtools_runner.metrics
 
     @staticmethod
     def log_error(err):
@@ -190,13 +167,10 @@ class SingleRunner:
 
             if self.config.getboolean("busco_run", "tar"):
                 self.compress_folders()
-            try:
-                self.compile_summary()
-            except AttributeError:
-                raise BatchFatalError(
-                    "BUSCO encountered a problem. This is possibly caused by restarting a previously completed run with different parameters."
-                )
-            self.runner.finish(time.time() - self.start_time)
+
+            wall_time_elapsed = time.time() - self.start_time
+            self.config.run_stats["wall_time"] = wall_time_elapsed
+            self.runner.finish(wall_time_elapsed)
 
         except BuscoError:
             if self.runner is not None:
@@ -276,6 +250,7 @@ class BatchRunner:
     def run(self):
         for i, input_file in enumerate(self.input_files):
             try:
+                logger.info("\n\n" + "*" * 80 + "\n" + "Running BUSCO on file: {}\n".format(input_file) + "*" * 80 + "\n\n")
                 input_id = os.path.basename(input_file)
                 self.config.set("busco_run", "in", input_file)
                 self.config.set(
@@ -302,7 +277,7 @@ class BatchRunner:
             except BuscoError as be:
                 if "did not recognize any genes" in be.value:
                     type(self).batch_results.append(
-                        "{}\tNo genes found\t\t\t\t\t\t\t\t\t\t{}\n".format(
+                        "{}\tNo genes found\t\t\t\t\t\t\t\t\t\t{}{}\n".format(
                             os.path.basename(input_file),
                             "\t\t\t"
                             * int(
@@ -310,11 +285,12 @@ class BatchRunner:
                                     "busco_run", "auto-lineage"
                                 )
                             ),
+                            "\t" * int(single_run.config.getboolean("busco_run", "use_miniprot")),
                         )
                     )
                 else:
                     type(self).batch_results.append(
-                        "{}\tRun failed; check logs\t\t\t\t\t\t\t\t\t\t{}\n".format(
+                        "{}\tRun failed; check logs\t\t\t\t\t\t\t\t\t\t{}{}\n".format(
                             os.path.basename(input_file),
                             "\t\t\t"
                             * int(
@@ -322,10 +298,13 @@ class BatchRunner:
                                     "busco_run", "auto-lineage"
                                 )
                             ),
+                            "\t" * int(single_run.config.getboolean("busco_run", "use_miniprot")),
                         )
                     )
                 logger.error(be.value)
                 continue
+            except BaseException as e:
+                raise BatchFatalError(e)
             finally:
                 AnalysisRunner.reset()
                 BuscoLogger.reset()
@@ -348,19 +327,26 @@ class BatchRunner:
                 metrics_header = (
                     "\tScaffold N50\tContigs N50\tPercent gaps\tNumber of scaffolds"
                 )
+                if self.config.getboolean("busco_run", "use_miniprot"):
+                    extra = "\tInternal stop codon percent"
+                else:
+                    extra = ""
             else:
                 metrics_header = ""
+                extra = ""
             if self.config.getboolean("busco_run", "auto-lineage"):
                 f.write(
-                    "Input_file\tDataset\tComplete\tSingle\tDuplicated\tFragmented\tMissing\tn_markers\t"
+                    "Input_file\tDataset\tComplete\tSingle\tDuplicated\tFragmented\tMissing\tn_markers{}\t"
                     "Scores_archaea_odb10\tScores_bacteria_odb10\tScores_eukaryota_odb10{}\n".format(
-                        metrics_header
+                        extra,
+                        metrics_header,
                     )
                 )
             else:
                 f.write(
-                    "Input_file\tDataset\tComplete\tSingle\tDuplicated\tFragmented\tMissing\tn_markers{}\n".format(
-                        metrics_header
+                    "Input_file\tDataset\tComplete\tSingle\tDuplicated\tFragmented\tMissing\tn_markers{}{}\n".format(
+                        extra,
+                        metrics_header,
                     )
                 )
             for line in type(self).batch_results:
@@ -467,14 +453,15 @@ class AnalysisRunner:
             self.all_results[self.lineage_basename][
                 "n_markers"
             ] = self.analysis.hmmer_runner.total_buscos
+            self.all_results[self.lineage_basename]["avg_identity"] = self.analysis.hmmer_runner.avg_identity
             self.all_results[self.lineage_basename]["domain"] = self.analysis.domain
             try:  # these values will only be present in miniprot runs, and if internal stop codons are detected
                 self.all_results[self.lineage_basename][
                     "internal_stop_codon_count"
-                ] = self.analysis.complete_stop_codon_count
+                ] = self.analysis.hmmer_runner.complete_stop_codon_count
                 self.all_results[self.lineage_basename][
                     "internal_stop_codon_percent"
-                ] = self.analysis.stop_codon_percent
+                ] = self.analysis.hmmer_runner.e_percent
             except AttributeError:
                 pass
             if "genome" in self.mode and not self.config.getboolean(
@@ -489,7 +476,10 @@ class AnalysisRunner:
             self.write_summary_files()
         except (AttributeError, TypeError):
             if exception_raised:
-                pass
+                try:
+                    self.compile_summary()
+                except:
+                    pass
             else:
                 raise BuscoError("Something went wrong. Results not recorded.")
 
@@ -504,21 +494,31 @@ class AnalysisRunner:
                 self.summary["lineage_dataset"][option[0]] = option[1]
             else:
                 self.summary["parameters"][option[0]] = option[1]
+
+        self.config.run_stats["versions"] = BaseRunner.tool_versions
+        self.config.run_stats["versions"]["python"] = sys.version_info
+        self.config.run_stats["versions"]["busco"] = busco.__version__
+        self.summary["versions"] = self.config.run_stats["versions"]
+
         if "genome" in self.mode:
             if self.config.get("busco_run", "domain") in ["prokaryota", "viruses"]:
                 gene_predictor = "prodigal"
             elif self.config.getboolean("busco_run", "use_augustus"):
                 gene_predictor = "augustus"
+            elif self.config.getboolean("busco_run", "use_metaeuk"):
+                gene_predictor = "metaeuk"
             elif self.config.getboolean("busco_run", "use_miniprot"):
                 gene_predictor = "miniprot"
             else:
-                gene_predictor = "metaeuk"
+                gene_predictor = "miniprot"
             self.summary["parameters"]["gene_predictor"] = gene_predictor
-
-        self.summary["versions"] = self.analysis.hmmer_runner.tool_versions
-        self.summary["versions"]["busco"] = busco.__version__
+            try:
+                self.summary["metrics"] = self.analysis.bbtools_runner.metrics
+            except AttributeError:  # may not exist if bbtools is skipped
+                pass
 
         self.summary["results"] = type(self).all_results[self.lineage_basename]
+        self.config.run_stats["results"] = type(self).all_results[self.lineage_basename]
         if (
             self.config.getboolean("busco_run", "auto-lineage")
             and isinstance(self.config, BuscoConfigMain)
@@ -721,15 +721,24 @@ class AnalysisRunner:
         n_markers = type(self).all_results[dataset]["n_markers"]
 
         if "genome" in self.mode:
-            scaffold_n50 = self.analysis.bbtools_runner.metrics["Scaffold N50"]
-            contigs_n50 = self.analysis.bbtools_runner.metrics["Contigs N50"]
-            percent_gaps = self.analysis.bbtools_runner.metrics["Percent gaps"]
-            num_scaffolds = self.analysis.bbtools_runner.metrics["Number of scaffolds"]
-            metrics_scores = "\t{}\t{}\t{}\t{}".format(
-                scaffold_n50, contigs_n50, percent_gaps, num_scaffolds
-            )
+            try:
+                scaffold_n50 = self.analysis.bbtools_runner.metrics["Scaffold N50"]
+                contigs_n50 = self.analysis.bbtools_runner.metrics["Contigs N50"]
+                percent_gaps = self.analysis.bbtools_runner.metrics["Percent gaps"]
+                num_scaffolds = self.analysis.bbtools_runner.metrics["Number of scaffolds"]
+                metrics_scores = "\t{}\t{}\t{}\t{}".format(
+                    scaffold_n50, contigs_n50, percent_gaps, num_scaffolds
+                )
+            except KeyError:
+                metrics_scores = "\t\t\t\t"
         else:
-            metrics_scores = ""
+            metrics_scores = "\t\t\t\t"
+
+        if self.config.getboolean("busco_run", "use_miniprot"):
+            internal_stop_codon_percent = self.analysis.hmmer_runner.e_percent
+            extra = "\t{}".format(internal_stop_codon_percent)
+        else:
+            extra = ""
 
         if self.config.getboolean("busco_run", "auto-lineage"):
             try:
@@ -759,7 +768,7 @@ class AnalysisRunner:
         else:
             parent_lineage_scores = ""
 
-        summary_line = "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}{}{}\n".format(
+        summary_line = "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}{}{}{}\n".format(
             input_file,
             dataset,
             complete,
@@ -768,6 +777,7 @@ class AnalysisRunner:
             fragmented,
             missing,
             n_markers,
+            extra,
             parent_lineage_scores,
             metrics_scores,
         )
@@ -974,12 +984,13 @@ class SmartBox:
         lens = [len(x) for x in lines]
         max_ind = lens.index(max(lens))
         longest_line = lines[max_ind]
+        scores_line = lines[0]
         if len(header_text) > len(longest_line):
             longest_line = header_text
         if len(longest_line) + 2 < 80:  # add 2 for vertical frame lines
-            self.width = max(50, len(longest_line.expandtabs()))
+            self.width = max(max(50, len(scores_line) + 2), len(longest_line.expandtabs()))
         else:
-            self.width = 50
+            self.width = max(50, len(scores_line) + 2)  # scores lines with "E:x%" values can be longer than 50
 
     def wrap_header(self, header_text):
         header_text = header_text.strip().replace("\t", self.tab)

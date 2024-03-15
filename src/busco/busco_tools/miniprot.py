@@ -207,6 +207,8 @@ class MiniprotAlignRunner(MiniprotRunner, GenePredictor):
         frameshift_lengths,
         stop_codon_count,
         identity,
+        gff_start,
+        gff_end,
     ):
         self.all_gff_records.append(
             np.array(
@@ -230,12 +232,14 @@ class MiniprotAlignRunner(MiniprotRunner, GenePredictor):
                     frameshift_lengths,
                     stop_codon_count,
                     identity,
+                    gff_start,
+                    gff_end,
                 ),
                 dtype=[
-                    ("gene_id", "U100"),
+                    ("gene_id", "U500"),
                     ("busco_id", "U100"),
-                    ("target_id", "U100"),
-                    ("contig_id", "U50"),
+                    ("target_id", "U500"),
+                    ("contig_id", "U500"),
                     ("contig_start", "i4"),
                     ("contig_end", "i4"),
                     ("strand", "U1"),
@@ -251,6 +255,8 @@ class MiniprotAlignRunner(MiniprotRunner, GenePredictor):
                     ("frameshift_lengths", "i4"),
                     ("stop_codon_count", "i4"),
                     ("identity", "f4"),
+                    ("gff_start", "i4"),
+                    ("gff_end", "i4"),
                 ],
             )
         )
@@ -264,11 +270,18 @@ class MiniprotAlignRunner(MiniprotRunner, GenePredictor):
         paf_block_started = False
         gene_id = ""
         identity = None
+        line_no = -1
+        gff_block = False
+        gff_start = None
+
         with open(self.output_gff, "r") as gff:
 
             for line in gff:
+                line_no += 1
                 if line.startswith("##PAF"):
-                    if identity and len(exon_coords) > 0:
+                    gff_block = False
+                    gff_end = line_no
+                    if identity and len(exon_coords) > 0 and gff_start:
                         self.save_record(
                             gene_id,
                             target_id,
@@ -288,6 +301,8 @@ class MiniprotAlignRunner(MiniprotRunner, GenePredictor):
                             frameshift_lengths,
                             stop_codon_count,
                             identity,
+                            gff_start,
+                            gff_end,
                         )
                         identity = None
                         exon_coords = []
@@ -307,11 +322,12 @@ class MiniprotAlignRunner(MiniprotRunner, GenePredictor):
                     contig_id = fields[5]
                     contig_start = int(fields[7])
                     contig_end = int(fields[8])
-                    gene_id = "{}|{}:{}-{}".format(
+                    gene_id = "{}|{}:{}-{}|{}".format(
                         target_id,
                         contig_id,
                         contig_start,
                         contig_end,
+                        strand
                     )
                     score = int(fields[13].strip().split(":")[2])
 
@@ -322,12 +338,16 @@ class MiniprotAlignRunner(MiniprotRunner, GenePredictor):
                         frameshift_lengths,
                     ) = self.decode_cigar(cigar_seq)
                     sta_line = gff.readline()
+                    line_no += 1
                     sta_seq = sta_line.strip().split("\t")[1]
                     ata_seq = sta_seq.upper()
                     stop_codon_count = ata_seq.strip("*").count("*")
                     ata_seq = ata_seq.replace("*", "")
 
                 elif paf_block_started:
+                    if not gff_block:
+                        gff_start = line_no
+                    gff_block = True
                     fields = line.strip().split("\t")
                     if fields[2] == "CDS":
                         start, stop, score, strand = (
@@ -343,6 +363,7 @@ class MiniprotAlignRunner(MiniprotRunner, GenePredictor):
                         )
                         identity = float(info_dict["Identity"])
             else:
+                gff_end = line_no
                 self.save_record(
                     gene_id,
                     target_id,
@@ -362,6 +383,8 @@ class MiniprotAlignRunner(MiniprotRunner, GenePredictor):
                     frameshift_lengths,
                     stop_codon_count,
                     identity,
+                    gff_start,
+                    gff_end,
                 )
         self.gff_arr = np.array(self.all_gff_records)
         return
@@ -460,6 +483,8 @@ class MiniprotAlignRunner(MiniprotRunner, GenePredictor):
             frameshift_lengths = match["frameshift_lengths"]
             stop_codon_count = match["stop_codon_count"]
             identity = match["identity"]
+            gff_start = match["gff_start"]
+            gff_end = match["gff_end"]
 
             self.gene_details[gene_id].update(
                 {
@@ -482,6 +507,8 @@ class MiniprotAlignRunner(MiniprotRunner, GenePredictor):
                     "stop_codon_count": stop_codon_count,
                     "identity": identity,
                     "run_number": self.run_number,
+                    "gff_start": gff_start,
+                    "gff_end": gff_end,
                 }
             )
             self.sequences_aa[gene_id] = SeqRecord(Seq(ata_seq), id=gene_id)

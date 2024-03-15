@@ -375,10 +375,8 @@ class AugustusRunner(GenePredictor):
         return augustus_job
 
     def _extract_genes_from_augustus_output(self, filename):
-        # todo: consider parallelizing this and other parsing functions
 
         gene_id = None
-        gene_info = []
         sequences_aa = []
         sequences_nt = []
         gene_found = False
@@ -499,7 +497,7 @@ class AugustusRunner(GenePredictor):
                     part_end = line[4].strip()
                     strand = line[6].strip()
                     if part_type == "gene":
-                        gene_id = "{}:{}-{}".format(part_id, part_start, part_end)
+                        gene_id = "{}:{}-{}|{}".format(part_id, part_start, part_end, strand)
                         contig_id = part_id
                         contig_start = part_start
                         contig_end = part_end
@@ -531,8 +529,8 @@ class AugustusRunner(GenePredictor):
         :return:
         """
 
-        gene_id = "{}:{}-{}".format(
-            details["contig_id"], details["contig_start"], details["contig_end"]
+        gene_id = "{}:{}-{}|{}".format(
+            details["contig_id"], details["contig_start"], details["contig_end"], details["strand"]
         )
 
         aa_seq = SeqRecord(Seq(details["aa_seq"]), id=gene_id, description="")

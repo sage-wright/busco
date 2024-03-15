@@ -46,6 +46,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         "auto-lineage-euk": False,
         "use_augustus": False,
         "use_miniprot": False,
+        "use_metaeuk": False,
         "skip_bbtools": False,
         "batch_mode": False,
         "tar": False,
@@ -111,6 +112,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         "download_base_url",
         "use_augustus",
         "use_miniprot",
+        "use_metaeuk",
         "download_base_url",
         "skip_bbtools",
         "opt-out-run-stats",
@@ -143,6 +145,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         "limit",
         "use_augustus",
         "use_miniprot",
+        "use_metaeuk",
         "skip_bbtools",
         "batch_mode",
         "tar",
@@ -239,10 +242,11 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
             elif domain == "eukaryota":
                 if self.getboolean("busco_run", "use_augustus"):
                     mode = "euk_genome_aug"
-                elif self.getboolean("busco_run", "use_miniprot"):
-                    mode = "euk_genome_min"
-                else:
+                elif self.getboolean("busco_run", "use_metaeuk"):
                     mode = "euk_genome_met"
+                else:
+                    self.set("busco_run", "use_miniprot", "True")
+                    mode = "euk_genome_min"
             else:
                 raise BatchFatalError("Unrecognized mode {}".format(mode))
 
@@ -460,6 +464,8 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
                     if "path" in key:
                         self.run_stats[key] = "user-specified"
                     elif key == "lineage_dataset":  # make a list, for auto-lineage runs
+                        if "/" in val:
+                            val = "localpath/{}".format(os.path.basename(val))
                         if key in self.run_stats:
                             self.run_stats[key].append(val)
                         else:
@@ -598,10 +604,14 @@ class BuscoConfigMain(BaseConfig):
         try:
             self.get("busco_run", "out")
         except NoOptionError:
+            if os.path.isdir(self._input_filepath):
+                basename = os.path.basename(self._input_filepath.strip("/"))
+            else:
+                basename = os.path.basename(self._input_filepath)
             self.set(
                 "busco_run",
                 "out",
-                "BUSCO_{}".format(os.path.basename(self.get("busco_run", "in"))),
+                "BUSCO_{}".format(basename),
             )
         return
 
@@ -618,6 +628,7 @@ class BuscoConfigMain(BaseConfig):
 
     def validate(self):
         self._check_mandatory_keys_exist()
+        self._input_filepath = self.get("busco_run", "in")
         self._add_out_folder()
         self._cleanup_config()
         self._check_no_previous_run()
@@ -678,8 +689,6 @@ class BuscoConfigMain(BaseConfig):
             raise BatchFatalError(
                 "Unrecognized input type. Please use either a single file or a directory name (for batch mode)"
             )
-        else:
-            self.run_stats["batch_mode"] = False
         return
 
     def _check_evalue(self):
@@ -809,11 +818,12 @@ class BuscoConfigMain(BaseConfig):
         Test for existence of input file.
         :return:
         """
-        self._input_filepath = self.get("busco_run", "in")
         if not os.path.exists(self._input_filepath):
             raise BatchFatalError(
                 "Input {} does not exist".format(self._input_filepath)
             )
+        file_size = os.stat(self._input_filepath).st_size
+        self.run_stats["input_file_size"] = file_size
         return
 
     def _check_no_previous_run(self):

@@ -46,6 +46,7 @@ logger = BuscoLogger.get_logger(__name__)
 )
 class BuscoMaster:
     def __init__(self, params):
+        self.start_process_time = time.process_time()
         self.run_data = {}
         self.params = params
         self.config_manager = BuscoConfigManager(self.params)
@@ -99,6 +100,7 @@ class BuscoMaster:
         self.get_dist_info()
         self.get_input_checksum()
         self.run_data.update(self.config.run_stats)
+        self.run_data["proc_time"] = time.process_time() - self.start_process_time
 
     def post_run_data(self):
 
@@ -119,7 +121,7 @@ class BuscoMaster:
             logger.debug("File upload failed. Status code: {}".format(response.status))
 
     def get_dist_info(self):
-        if (
+        if (  # todo: fix
             "conda" in __file__
             and os.environ("CONDA_DEFAULT_ENV")
             and os.environ("CONDA_PREFIX")
@@ -237,7 +239,7 @@ def _parse_args():
     optional.add_argument(
         "--augustus_parameters",
         dest="augustus_parameters",
-        metavar="--PARAM1=VALUE1,--PARAM2=VALUE2",
+        metavar='"--PARAM1=VALUE1,--PARAM2=VALUE2"',
         required=False,
         help="Pass additional arguments to Augustus. All arguments should be contained within a "
         "single string with no white space, with each argument separated by a comma.",
@@ -383,6 +385,14 @@ def _parse_args():
     )
 
     optional.add_argument(
+        "--metaeuk",
+        dest="use_metaeuk",
+        action="store_true",
+        required=False,
+        help="Use Metaeuk gene predictor",
+    )
+
+    optional.add_argument(
         "--metaeuk_parameters",
         dest="metaeuk_parameters",
         metavar='"--PARAM1=VALUE1,--PARAM2=VALUE2"',
@@ -405,7 +415,7 @@ def _parse_args():
         dest="use_miniprot",
         action="store_true",
         required=False,
-        help="Use miniprot gene predictor",
+        help="Use Miniprot gene predictor",
     )
 
     optional.add_argument(
@@ -483,7 +493,7 @@ def _parse_args():
         version="BUSCO {}".format(busco.__version__),
     )
 
-    return vars(parser.parse_args())
+    return vars(parser.parse_args(None if len(sys.argv) > 1 else ['--help']))
 
 
 def main():

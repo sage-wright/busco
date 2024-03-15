@@ -1,3 +1,10 @@
+5.7.0
+- Make Miniprot pipeline the default option for eukaryote genomes
+- Introduce optional --metaeuk flag to use Metaeuk pipeline for eukaryote genomes
+- Add GFF files to miniprot pipeline
+- Fix GFF files in metaeuk pipeline (Issue #624)
+- Fix --skip_bbtools option in batch mode (Issue #721)
+
 5.6.1
 - Bug fixes
 - Remove --update-data option and make it the default. To inactivate, use --offline

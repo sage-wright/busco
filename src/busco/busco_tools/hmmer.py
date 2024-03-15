@@ -65,7 +65,7 @@ class HMMERRunner(BaseRunner):
         # to be initialized before run time
         self.input_sequences = None
         self.busco_ids = None
-        self.mode = None
+        self.mode = self.config.get("busco_run", "mode")
         self.gene_details = {}
         self.results_dir = None
 
@@ -95,6 +95,10 @@ class HMMERRunner(BaseRunner):
                 self._hmmer_output_folder, "rerun_results"
             )
             self.create_dirs([self.initial_results_dir, self.rerun_results_dir])
+
+        else:
+            self.initial_results_dir = self._hmmer_output_folder
+            self.rerun_results_dir = None
 
         self.single_copy = 0
         self.multi_copy = 0
@@ -325,11 +329,11 @@ class HMMERRunner(BaseRunner):
         arr = np.array(
             data,
             dtype=[
-                ("target_name", "U100"),
-                ("target_accession", "U50"),
+                ("target_name", "U500"),
+                ("target_accession", "U500"),
                 ("tlen", "i4"),
-                ("query_name", "U30"),
-                ("query_accession", "U30"),
+                ("query_name", "U500"),
+                ("query_accession", "U500"),
                 ("qlen", "i4"),
                 ("eval", "f8"),
                 ("score", "f8"),
@@ -347,7 +351,7 @@ class HMMERRunner(BaseRunner):
                 ("env_coord_from", "i4"),
                 ("env_coord_to", "i4"),
                 ("acc", "f8"),
-                ("description", "U100"),
+                ("description", "U500"),
             ],
         )
 
@@ -355,7 +359,7 @@ class HMMERRunner(BaseRunner):
 
         for target in target_hits_sorted:
             all_domain_hits = arr[arr["target_name"] == target]
-            gene_id = target.split("|", maxsplit=1)[-1]
+            gene_id = self.get_gene_id(target)
             score = all_domain_hits[0]["score"]
 
             if not self.mode == "proteins" and not target in processed_genes:
@@ -395,6 +399,16 @@ class HMMERRunner(BaseRunner):
                 matched_genes.append(gene_id)
                 processed_genes.append(target)
         return records
+
+    def get_gene_id(self, target):
+        if self.mode == "proteins":
+            return target
+        else:
+            parts = target.split("|")
+            if len(parts) > 2:
+                return "|".join(parts[1:-1])  # allow for contig IDs to contain pipes
+            else:
+                return parts[-2]
 
     @staticmethod
     def _check_overlap(matched_genes, gene2):
@@ -1295,6 +1309,7 @@ class HMMERRunner(BaseRunner):
             self._get_stop_codon_percent_and_avg_identity()
         else:
             self.e_percent = 0
+            self.avg_identity = None
             self.complete_stop_codon_count = 0
 
         return
@@ -1341,11 +1356,11 @@ class HMMERRunner(BaseRunner):
                 )
             )
 
-        avg_identity = round(sum(identities) / len(identities), 2)
-        if avg_identity < 0.5:
+        self.avg_identity = round(sum(identities) / len(identities), 2)
+        if self.avg_identity < 0.5:
             logger.warning(
                 "BUSCO gene predictions from Miniprot have low average identity ({}). You may want to repeat the analysis using the Metaeuk pipeline.".format(
-                    avg_identity
+                    self.avg_identity
                 )
             )
         return

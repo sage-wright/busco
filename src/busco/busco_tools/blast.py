@@ -357,6 +357,7 @@ class TBLASTNRunner(BaseRunner):
                         contig_start = int(line[8])
                         contig_end = int(line[9])
                         blast_eval = float(line[10])
+                        strand = "+"  # Default to plus-strand genes
                     except (IndexError, ValueError):
                         continue
 
@@ -371,6 +372,7 @@ class TBLASTNRunner(BaseRunner):
                             "contig_end": contig_end,
                             "busco_coords": [[busco_start, busco_end]],
                             "blast_eval": blast_eval,
+                            "strand": strand,
                         }
 
                     elif (

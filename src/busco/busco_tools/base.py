@@ -49,7 +49,6 @@ class BaseRunner(Tool, metaclass=ABCMeta):
         super().__init__()
         self.run_number = 0
         self.input_file = self.config.get("busco_run", "in")
-        # type(self).summary["versions"]["busco"] = busco.__version__
         self.main_out = self.config.get("busco_run", "main_out")
         self.working_dir = (
             os.path.join(self.main_out, "auto_lineage")
@@ -331,8 +330,8 @@ class GenePredictor(BaseRunner, metaclass=ABCMeta):
                 elif (
                     (
                         (
-                            row1["gene_id"].split("|", 1)[-1]
-                            != row2["gene_id"].split("|", 1)[-1]
+                            row1["gene_id"].rsplit("|", 1)[-2]
+                            != row2["gene_id"].rsplit("|", 1)[-2]
                         )  # for efficiency skip overlaps that are
                         # actually the same gene matching multiple BUSCOs, as this will be dealt with in the
                         # filtering step later

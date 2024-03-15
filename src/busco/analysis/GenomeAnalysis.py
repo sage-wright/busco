@@ -36,6 +36,7 @@ import glob
 from collections import defaultdict
 from busco.Exceptions import BuscoError
 import numpy as np
+import re
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -247,9 +248,9 @@ class GenomeAnalysisEukaryotes(GenomeAnalysis):
         exon_records_arr = np.array(
             exon_records,
             dtype=[
-                ("gene_id", "U100"),
-                ("target_id", "U30"),
-                ("contig_id", "U70"),
+                ("gene_id", "U500"),
+                ("target_id", "U500"),
+                ("contig_id", "U500"),
                 ("low_coord", "i4"),
                 ("high_coord", "i4"),
                 ("strand", "U1"),
@@ -283,8 +284,8 @@ class GenomeAnalysisEukaryotes(GenomeAnalysis):
                         orig_gene_id = self.gene_update_mapping[busco_id][orig_gene_id][
                             "new_gene_coords"
                         ]
-                new_gene_start, new_gene_stop = gene_id.rsplit(":", 1)[-1].split(
-                    "-"
+                new_gene_start, new_gene_stop = (
+                    gene_id.rsplit(":", 1)[-1].split("|")[0].split("-")
                 )  # this line just initializes values that will be changed if an exon is removed
                 new_gene_low = new_gene_start  # initialize values
                 new_gene_high = new_gene_stop
@@ -320,11 +321,14 @@ class GenomeAnalysisEukaryotes(GenomeAnalysis):
                             new_gene_high = exon["high_coord"]
                             break
 
-                    new_long_gene_id = "{}:{}-{}".format(
-                        orig_gene_id.rsplit(":", 1)[0], new_gene_low, new_gene_high
+                    new_long_gene_id = "{}:{}-{}|{}".format(
+                        orig_gene_id.rsplit(":", 1)[0],
+                        new_gene_low,
+                        new_gene_high,
+                        strand,
                     )
-                    new_short_gene_id = "{}:{}-{}".format(
-                        gene_id.rsplit(":", 1)[0], new_gene_low, new_gene_high
+                    new_short_gene_id = "{}:{}-{}|{}".format(
+                        gene_id.rsplit(":", 1)[0], new_gene_low, new_gene_high, strand
                     )
                 else:
                     new_long_gene_id = orig_gene_id
@@ -404,7 +408,8 @@ class GenomeAnalysisEukaryotes(GenomeAnalysis):
 
     def find_overlaps(self, exon_records_arr):
         overlaps = self.run_overlap_finder(exon_records_arr)
-        logger.info("{} candidate overlapping regions found".format(len(overlaps)))
+        if len(overlaps) > 0:
+            logger.info("{} candidate overlapping regions found".format(len(overlaps)))
         logger.info("{} exons in total".format(len(exon_records_arr)))
         return overlaps
 
@@ -431,8 +436,8 @@ class GenomeAnalysisEukaryotes(GenomeAnalysis):
         exons2 = exon_records[exon_records["gene_id"] == match2["gene_id"]]
         busco_match1 = match1["target_id"]
         busco_match2 = match2["target_id"]
-        gene_id1 = match1["gene_id"].split("|", maxsplit=1)[1]
-        gene_id2 = match2["gene_id"].split("|", maxsplit=1)[1]
+        gene_id1 = self.hmmer_runner.get_gene_id(match1["gene_id"])
+        gene_id2 = self.hmmer_runner.get_gene_id(match2["gene_id"])
         strand1 = match1["strand"]
         strand2 = match2["strand"]
 
@@ -901,11 +906,92 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
             for f in existing_gff_files:
                 os.remove(f)
 
+        current_busco = ""
+        f = None
+
+        sc_busco_ids = list(self.hmmer_runner.single_copy_buscos.keys())
+        mc_busco_ids = list(self.hmmer_runner.multi_copy_buscos.keys())
+        frag_busco_ids = list(self.hmmer_runner.fragmented_buscos.keys())
+        unused_busco_ids = set()
+        used_busco_ids = (
+            set()
+        )  # Needed to track which BUSCOs are used on the rerun vs initial run
+
+        match_pattern = re.compile(
+            r"(?:TCS_ID|Parent)=(((\d+at\d+)(?:_?[^\s|]+)?)\|([^\s|]+(?:\|[^\s|]+)*)\|([+\-]))"
+        )
+
         for gff_file in self.metaeuk_runner.gff_files[
             ::-1
         ]:  # Write GFF results to file, starting with the rerun results and then using the initial results
-            self.metaeuk_runner.gff_file = gff_file
-            self.metaeuk_runner.write_gff_files(*busco_seqs_folders)
+            try:
+                with open(gff_file, "r") as gf:
+                    lines = gf.readlines()
+            except FileNotFoundError:
+                logger.warning(
+                    "Metaeuk did not create a GFF file. Please use Metaeuk version 5-34c21f2 or higher for GFF results."
+                )
+                return
+
+            for line in lines:
+                m = match_pattern.search(line)
+                if not m:
+                    raise BuscoError("GFF file does not match expected format")
+                line_refseq_id = m.group(1)
+                line_busco_id = m.group(3)
+                line_contig_id = m.group(4)
+
+                if line_busco_id in unused_busco_ids:
+                    continue
+                elif line_busco_id in sc_busco_ids:
+                    output_folder = self.hmmer_runner.single_copy_sequences_folder
+                    result_dict = self.hmmer_runner.single_copy_buscos
+                elif line_busco_id in mc_busco_ids:
+                    output_folder = self.hmmer_runner.multi_copy_sequences_folder
+                    result_dict = self.hmmer_runner.multi_copy_buscos
+                elif line_busco_id in frag_busco_ids:
+                    output_folder = self.hmmer_runner.fragmented_sequences_folder
+                    result_dict = self.hmmer_runner.fragmented_buscos
+                else:
+                    unused_busco_ids.add(line_busco_id)
+                    continue
+
+                match_dict = result_dict[line_busco_id]
+                for gene_id, details in match_dict.items():
+                    if gene_id.startswith(line_contig_id):
+                        if match_dict[gene_id][0]["ref gene ID"].startswith(
+                            "{}|{}".format(line_refseq_id, line_contig_id)
+                        ):
+                            if line_busco_id != current_busco:
+                                if f:
+                                    if not f.closed:
+                                        f.close()
+                                gff_filename = "{}.gff".format(
+                                    os.path.join(output_folder, line_busco_id)
+                                )
+
+                                if (
+                                    line_busco_id not in used_busco_ids
+                                    and os.path.exists(gff_filename)
+                                ):  # don't overwrite the result from the rerun with the inital run GFF file
+                                    unused_busco_ids.add(line_busco_id)
+                                    current_busco = line_busco_id
+                                    continue
+
+                                else:
+                                    f = open(gff_filename, "a")
+                                    # I avoided using a context manager for the file IO to avoid multiple file open/close
+                                    # operations and keep a single pass through the large GFF file. Efficiency!
+                                    current_busco = line_busco_id
+                                    used_busco_ids.add(line_busco_id)
+
+                            f.write(line)
+
+        if f:
+            if not f.closed:
+                f.close()
+
+        return
 
     def _run_metaeuk(self, incomplete_buscos):
         self.metaeuk_runner.configure_runner(incomplete_buscos)
@@ -964,6 +1050,7 @@ class GenomeAnalysisEukaryotesMiniprot(GenomeAnalysisEukaryotes):
             raise NoGenesError("Miniprot")
 
         self.hmmer_runner.write_buscos_to_file()
+        self.write_gff_files()
 
     def run_miniprot(self, incomplete_buscos):
         self.miniprot_index_runner.configure_runner()
@@ -992,6 +1079,42 @@ class GenomeAnalysisEukaryotesMiniprot(GenomeAnalysisEukaryotes):
 
     def record_results(self):
         self.hmmer_runner.record_results()
+
+    def write_gff_files(self):
+        busco_seqs_folders = [
+            self.hmmer_runner.single_copy_sequences_folder,
+            self.hmmer_runner.multi_copy_sequences_folder,
+            self.hmmer_runner.fragmented_sequences_folder,
+        ]
+        for folder in busco_seqs_folders:
+            existing_gff_files = glob.glob(os.path.join(folder, "*.gff"))
+            for f in existing_gff_files:
+                os.remove(f)
+
+        with open(self.miniprot_align_runner.output_gff, "r") as g:
+            output_lines = g.readlines()
+
+        for category in ["sc", "mc", "fr"]:
+            if category == "sc":
+                result_dict = self.hmmer_runner.single_copy_buscos
+                output_folder = self.hmmer_runner.single_copy_sequences_folder
+            elif category == "mc":
+                result_dict = self.hmmer_runner.multi_copy_buscos
+                output_folder = self.hmmer_runner.multi_copy_sequences_folder
+            else:
+                result_dict = self.hmmer_runner.fragmented_buscos
+                output_folder = self.hmmer_runner.fragmented_sequences_folder
+
+            for busco_id, match_dict in result_dict.items():
+                gff_filename = "{}.gff".format(os.path.join(output_folder, busco_id))
+                extracted_gff_lines = []
+                for gene_id, details in match_dict.items():
+                    ref_ID = details[0]["ref gene ID"]
+                    gff_start = int(self.gene_details[ref_ID]["gff_start"])
+                    gff_end = int(self.gene_details[ref_ID]["gff_end"])
+                    extracted_gff_lines.extend(output_lines[gff_start:gff_end])
+                with open(gff_filename, "w") as f:
+                    f.writelines(extracted_gff_lines)
 
     def cleanup(self):
         super().cleanup()

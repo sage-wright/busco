@@ -79,6 +79,7 @@ class TestBuscoConfig(unittest.TestCase):
                 "evalue",
                 "limit",
                 "use_augustus",
+                "use_metaeuk",
                 "use_miniprot",
                 "batch_mode",
                 "tar",
@@ -486,6 +487,7 @@ class TestBuscoConfig(unittest.TestCase):
         self.test_params["in"] = input_filename
         config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
         config.configure()
+        config._input_filepath = config.get("busco_run", "in")
         with self.assertRaises(BuscoConfig.BatchFatalError):
             config._check_required_input_exists()
 
