@@ -1,3 +1,7 @@
+5.7.1
+- Performance improvement in Miniprot post-processing (Issue #728)
+- Restore *.fna files in Metaeuk pipeline (Issue #730)
+
 5.7.0
 - Make Miniprot pipeline the default option for eukaryote genomes
 - Introduce optional --metaeuk flag to use Metaeuk pipeline for eukaryote genomes

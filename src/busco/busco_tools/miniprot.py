@@ -23,6 +23,7 @@ from Bio import SeqIO
 from collections import defaultdict
 import numpy as np
 import re
+from multiprocessing import Pool
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -392,15 +393,22 @@ class MiniprotAlignRunner(MiniprotRunner, GenePredictor):
     def filter(self):
         contigs = np.unique(self.gff_arr["contig_id"])
         self.filtered_matches = np.array([], dtype=self.gff_arr.dtype)
-        for contig in contigs:
-            contig_filtered = self.filter_contig(contig)
-            self.filtered_matches = np.concatenate(
-                (self.filtered_matches, contig_filtered)
-            )
+        if len(contigs) > 1700:  # 1700 seems to be around the number where parallel post-processing is faster
+            with Pool(self.cpus) as pool:
+                results = pool.map(self.filter_contig, contigs, chunksize=max(1, len(contigs)// self.cpus))
+            stacked_results = np.vstack([np.vstack(res) for res in results])
+            self.filtered_matches = np.squeeze(stacked_results, axis=1)
+        else:
+            for contig in contigs:
+                contig_filtered = self.filter_contig(contig)
+                self.filtered_matches = np.concatenate(
+                    (self.filtered_matches, contig_filtered)
+                )
 
         return
 
     def filter_contig(self, contig):
+
         contig_matches = self.gff_arr[self.gff_arr["contig_id"] == contig]
         for i in range(len(contig_matches)):
             if contig_matches["contig_start"][i] < 0:
@@ -460,8 +468,8 @@ class MiniprotAlignRunner(MiniprotRunner, GenePredictor):
                         break
                     else:
                         contig_matches["contig_start"][j] = -1  # Remove match
-
-        return contig_matches[contig_matches["contig_start"] != -1]
+        filtered_contig_matches = contig_matches[contig_matches["contig_start"] != -1]
+        return filtered_contig_matches
 
     def record_gene_details(self):
         for match in self.filtered_matches:

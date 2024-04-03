@@ -121,13 +121,7 @@ class BuscoMaster:
             logger.debug("File upload failed. Status code: {}".format(response.status))
 
     def get_dist_info(self):
-        if (  # todo: fix
-            "conda" in __file__
-            and os.environ("CONDA_DEFAULT_ENV")
-            and os.environ("CONDA_PREFIX")
-        ):
-            self.run_data["distribution"] = "conda"
-        elif os.path.exists("/.dockerenv"):
+        if os.path.exists("/.dockerenv"):
             self.run_data["distribution"] = "docker"
         elif os.path.exists("/.singularity.d"):
             self.run_data["distribution"] = "singularity"

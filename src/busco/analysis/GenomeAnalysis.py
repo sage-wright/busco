@@ -327,8 +327,8 @@ class GenomeAnalysisEukaryotes(GenomeAnalysis):
                         new_gene_high,
                         strand,
                     )
-                    new_short_gene_id = "{}:{}-{}|{}".format(
-                        gene_id.rsplit(":", 1)[0], new_gene_low, new_gene_high, strand
+                    new_short_gene_id = "{}:{}-{}".format(
+                        gene_id.rsplit(":", 1)[0], new_gene_low, new_gene_high
                     )
                 else:
                     new_long_gene_id = orig_gene_id
@@ -937,7 +937,7 @@ class GenomeAnalysisEukaryotesMetaeuk(GenomeAnalysisEukaryotes):
                 m = match_pattern.search(line)
                 if not m:
                     raise BuscoError("GFF file does not match expected format")
-                line_refseq_id = m.group(1)
+                line_refseq_id = m.group(2)
                 line_busco_id = m.group(3)
                 line_contig_id = m.group(4)
 
