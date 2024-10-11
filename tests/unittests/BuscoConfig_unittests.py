@@ -552,27 +552,6 @@ class TestBuscoConfig(unittest.TestCase):
         config.configure()
         self.assertFalse(config.check_lineage_present())
 
-    def test_check_lineage_present_true_with_dataset_version_correct(self):
-        self.test_params["lineage_dataset"] = "test_dataset_odb10"
-        self.test_params["datasets_version"] = "odb10"
-        config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
-        config.configure()
-        self.assertEqual(
-            config.get("busco_run", "datasets_version"),
-            self.test_params["datasets_version"],
-        )
-
-    def test_check_lineage_present_true_with_dataset_version_mismatch(self):
-        self.test_params["lineage_dataset"] = "test_dataset_odb10"
-        self.test_params["datasets_version"] = "odb11"
-        config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
-        with self.assertLogs(BuscoConfig.logger, level="WARNING"):
-            config.configure()
-        self.assertEqual(
-            config.get("busco_run", "datasets_version"),
-            self.test_params["lineage_dataset"].split("_")[-1],
-        )
-
     def test_check_lineage_present_true_with_odb_missing(self):
         self.test_params["lineage_dataset"] = "test_dataset"
         self.test_params["datasets_version"] = "odb10"
@@ -585,13 +564,6 @@ class TestBuscoConfig(unittest.TestCase):
                 self.test_params["datasets_version"],
             ),
         )
-
-    def test_check_lineage_present_true_with_invalid_dataset_version(self):
-        self.test_params["lineage_dataset"] = "test_dataset"
-        self.test_params["datasets_version"] = "odb11"
-        config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)
-        with self.assertRaises(BuscoConfig.BatchFatalError):
-            config.configure()
 
     def test_set_results_dirname(self):
         config = BuscoConfig.BuscoConfigMain(self.base_config, self.test_params)

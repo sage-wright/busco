@@ -384,6 +384,10 @@ class AutoSelectLineage:
             protein_seqs,
             self.selected_runner.analysis.hmmer_runner.single_copy_buscos,
         )
+        try:
+            bp.download_placement_files()
+        except BuscoError as e:
+            raise BuscoError("Failed to download placement files. Files may not be available for download.") from e
         dataset_details, placement_file_versions = bp.define_dataset()
         self.config.placement_files = placement_file_versions
         # Necessary to pass these filenames to the final run to be recorded.

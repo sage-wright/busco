@@ -9,4 +9,4 @@ Copyright (c) 2015-2024, Evgeny Zdobnov (ez@ezlab.org). All rights reserved.
 License: Licensed under the MIT license. See LICENSE.md file.
 """
 
-__version__ = "5.7.1"
+__version__ = "5.8.0"

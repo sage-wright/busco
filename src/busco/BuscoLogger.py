@@ -67,6 +67,8 @@ class LogDecorator:
         return wrapped_func
 
     def format_string(self, *args):
+        if self.logger.quiet:
+            return
         if self.log_once:
             if self.attr_name in type(self)._log_once_keywords:
                 return

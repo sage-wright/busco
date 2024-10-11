@@ -294,13 +294,6 @@ def _parse_args():
     )
 
     optional.add_argument(
-        "--datasets_version",
-        dest="datasets_version",
-        required=False,
-        help="Specify the version of BUSCO datasets, e.g. odb10",
-    )
-
-    optional.add_argument(
         "--download",
         dest="download",
         required=False,
@@ -498,6 +491,8 @@ def main():
     :raises SystemExit: if any errors occur
     """
     params = _parse_args()
+    if params["quiet"]:
+        BuscoLogger.quiet = True
     busco_run = BuscoMaster(params)
     busco_run.run()
 

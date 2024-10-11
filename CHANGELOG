@@ -1,6 +1,13 @@
+5.8.0
+- Make code compatible with odb12 datasets
+- Fix bug in full_table.tsv output (Issue #748)
+- Fix quiet mode (Issue #756)
+- Fix ZeroDivisionError edge case (Issue #760)
+
 5.7.1
 - Performance improvement in Miniprot post-processing (Issue #728)
 - Restore *.fna files in Metaeuk pipeline (Issue #730)
+- Bug fix (Issue #732)
 
 5.7.0
 - Make Miniprot pipeline the default option for eukaryote genomes

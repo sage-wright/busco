@@ -378,7 +378,8 @@ class AnalysisRunner:
         setattr(BuscoAnalysis, "config", config)
 
         self.input_file = self.config.get("busco_run", "in")
-        self.mode, self.domain = self.config.update_mode()
+        self.mode = self.config.update_mode()
+        self.domain = self.config.get("busco_run", "domain")
         self.lineage_basename = os.path.basename(
             self.config.get("busco_run", "lineage_dataset")
         )

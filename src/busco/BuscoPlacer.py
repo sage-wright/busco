@@ -62,7 +62,7 @@ class BuscoPlacer:
         self.single_copy_buscos = single_copy_buscos  # dict
         self.init_tools()
 
-    def _download_placement_files(self):
+    def download_placement_files(self):
         self.ref_markers_file = self.downloader.get(
             "list_of_reference_markers.{0}_{1}.txt".format(
                 os.path.basename(self.run_folder).split("_")[-2], self.datasets_version
@@ -118,7 +118,7 @@ class BuscoPlacer:
     @log("Extract markers...", logger)
     def define_dataset(self):
         # If mode is genome, substitute input with prodigal/augustus output
-        self._download_placement_files()
+        self.download_placement_files()
         placement_file_versions = self._get_placement_file_versions()
         try:
             self._extract_marker_sequences()

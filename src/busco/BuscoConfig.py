@@ -25,6 +25,7 @@ import os
 import shutil
 import glob
 import pprint
+import re
 
 logger = BuscoLogger.get_logger(__name__)
 
@@ -38,7 +39,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         "restart": False,
         "quiet": False,
         "download_path": os.path.join(os.getcwd(), "busco_downloads"),
-        "datasets_version": "odb10",
+        "datasets_version": "odb10",  # to be updated when all datasets are released
         "offline": False,
         "download_base_url": "https://busco-data.ezlab.org/v5/data/",
         "auto-lineage": False,
@@ -236,7 +237,11 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         if "genome" in mode:
             if domain in ["prokaryota", "viruses"]:
                 if self.getboolean("busco_run", "use_miniprot"):
-                    mode = "prok_genome_min"
+                    if self.get("busco_run", "datasets_version") != "odb10":
+                        logger.warning("Miniprot is not currently available for ODB11 prokaryotic datasets")
+                        mode = "prok_genome_prod"
+                    else:
+                        mode = "prok_genome_min"
                 else:
                     mode = "prok_genome_prod"
             elif domain == "eukaryota":
@@ -262,7 +267,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
             else:
                 raise BatchFatalError("Unrecognized mode {}".format(mode))
 
-        return mode, domain
+        return mode
 
     def add_mode_specific_parameters(self):
         mode = self.get("busco_run", "mode")
@@ -314,10 +319,13 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
                 domain = dataset_kwargs[
                     "domain"
                 ]  # Necessary to set domain kw first to enable augustus and prodigal arguments to be handled properly
+                if "odb_version" in dataset_kwargs:
+                    self.set("busco_run", "datasets_version", dataset_kwargs["odb_version"])
+                    del dataset_kwargs["odb_version"]
+
                 self.set("busco_run", "domain", domain)
-                mode, domain = self.update_mode()
+                mode = self.update_mode()
                 self.set("busco_run", "mode", mode)
-                self.set("busco_run", "domain", domain)
                 del dataset_kwargs["domain"]
                 for key, value in dataset_kwargs.items():
                     if key == "species":
@@ -450,7 +458,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         for key, val in args.items():
             if key in type(self).PERMITTED_OPTIONS:
                 if val is not None and type(val) is not bool:
-                    self.set("busco_run", key, str(val))
+                    self.set("busco_run", key, str(val).rstrip("/")) # strip any trailing slashes from paths
                 elif val:  # if True
                     self.set("busco_run", key, "True")
                 if (
@@ -654,25 +662,18 @@ class BuscoConfigMain(BaseConfig):
         try:
             lineage_dataset = self.get("busco_run", "lineage_dataset")
             datasets_version = self.get("busco_run", "datasets_version")
-            if "_odb" in lineage_dataset:
+            odb_pattern = r"_odb\d+(\.\d+)?$"  # Matches "_odb" followed by a number, optionally including a decimal
+            if bool(re.search(odb_pattern, lineage_dataset)):
                 dataset_version = lineage_dataset.rsplit("_")[-1].rstrip("/")
-                if datasets_version != dataset_version:
-                    logger.warning(
-                        "There is a conflict in your config. You specified a dataset from {0} while "
-                        "simultaneously requesting the datasets_version parameter be {1}. Proceeding with "
-                        "the lineage dataset as specified from {0}".format(
-                            dataset_version, datasets_version
-                        )
-                    )
                 self.set("busco_run", "datasets_version", dataset_version)
             else:  # Make sure the ODB version is in the dataset name
                 lineage_dataset = "_".join([lineage_dataset, datasets_version])
                 self.set("busco_run", "lineage_dataset", lineage_dataset)
 
             datasets_version = self.get("busco_run", "datasets_version")
-            if datasets_version != "odb10":
+            if float(datasets_version.split("odb")[-1]) < 10:
                 raise BatchFatalError(
-                    "BUSCO v5 only works with datasets from OrthoDB v10 (with the suffix '_odb10'). "
+                    "BUSCO v5 only works with datasets from OrthoDB v10 and higher (with the suffix '_odb10' or '_odb11'). "
                     "For a full list of available datasets, enter 'busco --list-datasets'. "
                     "You can also run BUSCO using --auto-lineage, to allow BUSCO to automatically select "
                     "the best dataset for your input data."

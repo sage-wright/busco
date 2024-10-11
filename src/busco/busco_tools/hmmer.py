@@ -197,7 +197,8 @@ class HMMERRunner(BaseRunner):
         :return:
         """
         self.cutoff_dict = defaultdict(dict)
-        self._load_length()
+        if self.config.get("busco_run", "datasets_version") == "odb10":
+            self._load_length()
         self._load_score()
         self.cutoff_dict = dict(self.cutoff_dict)
         return
@@ -257,21 +258,6 @@ class HMMERRunner(BaseRunner):
                 )
             )
         return
-
-    @staticmethod
-    def _get_matched_lengths(nested_dict):
-        """
-        For each entry in a nested dictionary, return a dict with the total lengths of all gene matches for each entry.
-        :param nested_dict:
-        :type nested_dict:
-        :return:
-        :rtype:
-        """
-        total_len = defaultdict(int)
-        for entry in nested_dict:
-            for hit in nested_dict[entry]:
-                total_len[entry] += hit[1] - hit[0]
-        return total_len
 
     def merge_dicts(self):
         merged_dict = defaultdict(lambda: defaultdict(list))
@@ -386,6 +372,7 @@ class HMMERRunner(BaseRunner):
             records[gene_id].append(
                 {
                     "hmm_matched_length": hmm_match_lengths[target],
+                    "hmm_profile_length": all_domain_hits[0]["qlen"],
                     "hmm_coords": hmm_coords,
                     "env_coords": env_coords,
                     "score": score,
@@ -446,7 +433,7 @@ class HMMERRunner(BaseRunner):
             else:
                 hmm_regions_used.append(list(region))
 
-        return sum([region[1] - region[0] for region in hmm_regions_used])
+        return sum([region[1] - region[0] + 1 for region in hmm_regions_used])
 
     def _sort_matches(self, matched_record, busco_query):
         """
@@ -478,21 +465,35 @@ class HMMERRunner(BaseRunner):
 
                 size = subrecord[0]["hmm_matched_length"]
 
-                # Kind of like a z-score, but it is compared with a cutoff value, not a mean
-                zeta = (
-                    self.cutoff_dict[busco_query]["length"] - size
-                ) / self.cutoff_dict[busco_query]["sigma"]
+                if self.config.get("busco_run", "datasets_version") == "odb10":
 
-                # gene match can only be either complete, v_large or fragment
-                if -2 <= zeta <= 2:
-                    busco_type = busco_complete
-                    match_type = matched_genes_complete
-                elif zeta < -2:
-                    busco_type = busco_vlarge
-                    match_type = matched_genes_vlarge
-                else:
-                    busco_type = busco_fragment
-                    match_type = matched_genes_fragment
+                    # Kind of like a z-score, but it is compared with a cutoff value, not a mean
+                    zeta = (
+                        self.cutoff_dict[busco_query]["length"] - size
+                    ) / self.cutoff_dict[busco_query]["sigma"]
+
+                    # gene match can only be either complete, v_large or fragment
+                    if -2 <= zeta <= 2:
+                        busco_type = busco_complete
+                        match_type = matched_genes_complete
+                    elif zeta < -2:
+                        busco_type = busco_vlarge
+                        match_type = matched_genes_vlarge
+                    else:
+                        busco_type = busco_fragment
+                        match_type = matched_genes_fragment
+
+                else:  # logic is made more concise for odb11 datasets and later
+
+                    profile_length = subrecord[0]["hmm_profile_length"]
+
+                    if size >= 0.8 * profile_length:
+                        busco_type = busco_complete
+                        match_type = matched_genes_complete
+
+                    else:
+                        busco_type = busco_fragment
+                        match_type = matched_genes_fragment
 
                 # Add information about match to dict
                 busco_type[gene_id].append(
@@ -928,16 +929,13 @@ class HMMERRunner(BaseRunner):
                             )
                     elif self.mode == "genome":
                         scaffold = self.gene_details[match["ref gene ID"]]
-                        if self.domain == "eukaryota":
-                            if "strand" in scaffold:
-                                location_pattern = ":{}-{}".format(
-                                    scaffold["contig_start"], scaffold["contig_end"]
-                                )
-                                if gene_id.endswith(location_pattern):
-                                    gene_id = gene_id.replace(location_pattern, "")
+                        if "strand" in scaffold:
+                            location_pattern = ":{}-{}".format(
+                                scaffold["contig_start"], scaffold["contig_end"]
+                            )
+                            if gene_id.endswith(location_pattern):
+                                gene_id = gene_id.replace(location_pattern, "")
 
-                        else:  # Remove suffix assigned by Prodigal
-                            gene_id = gene_id.rsplit("_", 1)[0]
                         start, end = sorted(
                             [scaffold["contig_start"], scaffold["contig_end"]],
                             reverse=bool(scaffold["strand"] == "-"),
@@ -1296,15 +1294,15 @@ class HMMERRunner(BaseRunner):
         self.multi_copy = len(self.multi_copy_buscos)  # int
         self.only_fragments = len(self.fragmented_buscos)  # int
         self.total_buscos = len(self.cutoff_dict)
+        self.num_missing = self.total_buscos - self.single_copy - self.multi_copy - self.only_fragments
 
         # Get percentage of each kind of BUSCO match
         self.s_percent = abs(round((self.single_copy / self.total_buscos) * 100, 1))
         self.d_percent = abs(round((self.multi_copy / self.total_buscos) * 100, 1))
         self.f_percent = abs(round((self.only_fragments / self.total_buscos) * 100, 1))
-        self.complete_percent = round(self.s_percent + self.d_percent, 1)
-        self.missing_percent = abs(
-            round(100 - self.s_percent - self.d_percent - self.f_percent, 1)
-        )
+        self.complete_percent = abs(round(((self.single_copy + self.multi_copy) / self.total_buscos) * 100, 1))
+        self.missing_percent = abs(round((self.num_missing / self.total_buscos) * 100, 1))
+
         if self.miniprot_pipeline:
             self._get_stop_codon_percent_and_avg_identity()
         else:
@@ -1355,14 +1353,17 @@ class HMMERRunner(BaseRunner):
                     self.complete_stop_codon_count, complete_count, self.e_percent
                 )
             )
-
-        self.avg_identity = round(sum(identities) / len(identities), 2)
-        if self.avg_identity < 0.5:
-            logger.warning(
-                "BUSCO gene predictions from Miniprot have low average identity ({}). You may want to repeat the analysis using the Metaeuk pipeline.".format(
-                    self.avg_identity
+        if len(identities) > 0:
+            self.avg_identity = round(sum(identities) / len(identities), 2)
+            if self.avg_identity < 0.5:
+                logger.warning(
+                    "BUSCO gene predictions from Miniprot have low average identity ({}). You may want to repeat the analysis using the Metaeuk pipeline.".format(
+                        self.avg_identity
+                    )
                 )
-            )
+        else:
+            self.avg_identity = None
+
         return
 
     def get_error_count(self):

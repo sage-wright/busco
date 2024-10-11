@@ -473,26 +473,26 @@ class MiniprotAlignRunner(MiniprotRunner, GenePredictor):
 
     def record_gene_details(self):
         for match in self.filtered_matches:
-            gene_id = match["gene_id"]
-            target_id = match["target_id"]
-            contig_id = match["contig_id"]
-            contig_start = match["contig_start"]
-            contig_end = match["contig_end"]
-            strand = match["strand"]
-            score = match["score"]
+            gene_id = match["gene_id"].item()
+            target_id = match["target_id"].item()
+            contig_id = match["contig_id"].item()
+            contig_start = match["contig_start"].item()
+            contig_end = match["contig_end"].item()
+            strand = match["strand"].item()
+            score = match["score"].item()
             exon_coords = match["exon_coords"]
-            ata_seq = match["aa_seq"]
-            protein_start = match["protein_start"]
-            protein_end = match["protein_end"]
-            protein_length = match["protein_length"]
-            cigar_seq = match["cigar_seq"]
+            ata_seq = match["aa_seq"].item()
+            protein_start = match["protein_start"].item()
+            protein_end = match["protein_end"].item()
+            protein_length = match["protein_length"].item()
+            cigar_seq = match["cigar_seq"].item()
             frameshifts = match["frameshifts"]
-            frameshift_events = match["frameshift_events"]
-            frameshift_lengths = match["frameshift_lengths"]
-            stop_codon_count = match["stop_codon_count"]
-            identity = match["identity"]
-            gff_start = match["gff_start"]
-            gff_end = match["gff_end"]
+            frameshift_events = match["frameshift_events"].item()
+            frameshift_lengths = match["frameshift_lengths"].item()
+            stop_codon_count = match["stop_codon_count"].item()
+            identity = match["identity"].item()
+            gff_start = match["gff_start"].item()
+            gff_end = match["gff_end"].item()
 
             self.gene_details[gene_id].update(
                 {
