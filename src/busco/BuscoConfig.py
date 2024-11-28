@@ -18,7 +18,7 @@ from configparser import ParsingError
 from configparser import DuplicateOptionError
 from busco.BuscoLogger import BuscoLogger
 from busco.BuscoLogger import LogDecorator as log
-from busco.Exceptions import BatchFatalError
+from busco.Exceptions import BatchFatalError, BuscoError
 from abc import ABCMeta
 from busco.BuscoDownloadManager import BuscoDownloadManager
 import os
@@ -39,7 +39,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         "restart": False,
         "quiet": False,
         "download_path": os.path.join(os.getcwd(), "busco_downloads"),
-        "datasets_version": "odb10",  # to be updated when all datasets are released
+        "datasets_version": "odb12",  # to be updated when all datasets are released
         "offline": False,
         "download_base_url": "https://busco-data.ezlab.org/v5/data/",
         "auto-lineage": False,
@@ -237,9 +237,19 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         if "genome" in mode:
             if domain in ["prokaryota", "viruses"]:
                 if self.getboolean("busco_run", "use_miniprot"):
-                    if self.get("busco_run", "datasets_version") != "odb10":
-                        logger.warning("Miniprot is not currently available for ODB11 prokaryotic datasets")
-                        mode = "prok_genome_prod"
+                    if self.get(
+                        "busco_run", "datasets_version"
+                    ) != "odb10" and not os.path.exists(
+                        os.path.join(
+                            self.get("busco_run", "lineage_dataset"), "refseq_db.faa.gz"
+                        )
+                    ):
+                        raise BatchFatalError(
+                            "Miniprot is not currently available for {} prokaryotic datasets".format(
+                                self.get("busco_run", "datasets_version")
+                            )
+                        )
+                        # mode = "prok_genome_prod"
                     else:
                         mode = "prok_genome_min"
                 else:
@@ -319,9 +329,11 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
                 domain = dataset_kwargs[
                     "domain"
                 ]  # Necessary to set domain kw first to enable augustus and prodigal arguments to be handled properly
-                if "odb_version" in dataset_kwargs:
-                    self.set("busco_run", "datasets_version", dataset_kwargs["odb_version"])
-                    del dataset_kwargs["odb_version"]
+                if "_odb" in dataset_kwargs["name"]:
+                    odb_version = "odb" + dataset_kwargs["name"].split("_odb")[-1]
+                    self.set(
+                        "busco_run", "datasets_version", odb_version
+                    )
 
                 self.set("busco_run", "domain", domain)
                 mode = self.update_mode()
@@ -371,6 +383,8 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
                         self.set("busco_run", key, value)
                     else:
                         self.set("busco_run", key, value)
+        except KeyError:
+            raise BuscoError("Dataset configuration file is not valid")
 
         except IOError:
             logger.warning(
@@ -458,7 +472,9 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         for key, val in args.items():
             if key in type(self).PERMITTED_OPTIONS:
                 if val is not None and type(val) is not bool:
-                    self.set("busco_run", key, str(val).rstrip("/")) # strip any trailing slashes from paths
+                    self.set(
+                        "busco_run", key, str(val).rstrip("/")
+                    )  # strip any trailing slashes from paths
                 elif val:  # if True
                     self.set("busco_run", key, "True")
                 if (
@@ -673,7 +689,7 @@ class BuscoConfigMain(BaseConfig):
             datasets_version = self.get("busco_run", "datasets_version")
             if float(datasets_version.split("odb")[-1]) < 10:
                 raise BatchFatalError(
-                    "BUSCO v5 only works with datasets from OrthoDB v10 and higher (with the suffix '_odb10' or '_odb11'). "
+                    "BUSCO v5 only works with datasets from OrthoDB v10 and higher (with the suffix '_odb10' or '_odb12'). "
                     "For a full list of available datasets, enter 'busco --list-datasets'. "
                     "You can also run BUSCO using --auto-lineage, to allow BUSCO to automatically select "
                     "the best dataset for your input data."

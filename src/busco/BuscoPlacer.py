@@ -212,6 +212,7 @@ class BuscoPlacer:
                     % node,
                     tree,
                 )
+                ############################################################################
                 # extract taxid:
                 try:
                     if re.match("^[A-Za-z]", match[0]):
@@ -219,14 +220,22 @@ class BuscoPlacer:
                     else:
                         taxid = match[0][1:].split(":")[0]
                 except IndexError as e:
-                    raise e
-                if taxid_dataset[taxid] in node_weight:
-                    node_weight[taxid_dataset[taxid]] += 1
+                    # raise e # do not raise error as one issue for a single placement will make the pipeline to crash unnecessarily
+                    continue  # If no match is found, skip to the next placement
+                if not taxid:  # e.g. node was found but it's empty string
+                    type(self)._logger.debug(f"Node is empty string")
+                    continue
+                # Check if taxid exists in taxid_dataset
+                if taxid in taxid_dataset:
+                    taxid_key = taxid_dataset[taxid]  # Get the key from taxid_dataset
                 else:
-                    node_weight[taxid_dataset[taxid]] = 1
-                break  # Break here to keep only the best match. In my experience, keeping all does not change much.
-        type(self)._logger.debug("Placements counts by node are: %s" % node_weight)
-
+                    continue  # if not, skip to the next placement
+                if taxid_key in node_weight:
+                    node_weight[taxid_key] += 1
+                else:
+                    node_weight[taxid_key] = 1
+                break  # Break here to keep only the best match placement (i.e. if additional locations with lower  score were reported in the placement file)
+        ############################################################################
         # from here, define which placement can be trusted
         max_markers = 0
         choice = []

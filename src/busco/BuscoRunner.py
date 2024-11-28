@@ -55,6 +55,7 @@ class SingleRunner:
         self.input_file = self.config.get("busco_run", "in")
         self.lineage_dataset = None
         self.runner = None
+        self.auto_lineage_dataset_versions = []
 
     def get_lineage(self):
         if self.config.getboolean("busco_run", "auto-lineage"):
@@ -92,6 +93,9 @@ class SingleRunner:
         finally:
             try:
                 type(self).all_runners.update(asl.runners)
+                self.auto_lineage_dataset_versions = (
+                    AutoSelectLineage.root_dataset_versions
+                )
                 asl.reset()
             except UnboundLocalError:
                 pass
@@ -135,18 +139,24 @@ class SingleRunner:
                     lineage_basename.startswith(("bacteria", "archaea", "eukaryota"))
                     or (
                         lineage_basename.startswith(
-                            ("mollicutes", "mycoplasmatales", "entomoplasmatales")
+                            (
+                                "mycoplasmatales",
+                                "entomoplasmatales",
+                                "mycoplasmataceae",
+                                "mycoplasma",
+                                "spiroplasma",
+                            )
                         )
                         and os.path.exists(lineage_results_folder)
                     )
                     or (self.config.get("busco_run", "domain") == "viruses")
                 )
             ):
-                # It is possible that the  lineages ("mollicutes", "mycoplasmatales", "entomoplasmatales") were
-                # arrived at either by the Prodigal genetic code shortcut or by BuscoPlacer. If the former, the run
-                # will have already been completed. If the latter it still needs to be done.
-                # If the auto-lineage selected dataset is from the virus pipeline, the run has also already been
-                # completed.
+                # It is possible that the  lineages ("mycoplasmatales", "entomoplasmatales", "mycoplasmataceae",
+                # "mycoplasma", "spiroplasma") were arrived at either by the Prodigal genetic code shortcut or by
+                # BuscoPlacer. If the former, the run will have already been completed. If the latter it still needs to
+                # be done. If the auto-lineage selected dataset is from the virus pipeline, the run has also already
+                # been completed.
 
                 self.runner = AnalysisRunner(self.config)
 
@@ -175,6 +185,9 @@ class SingleRunner:
         except BuscoError:
             if self.runner is not None:
                 type(self).all_runners.add(self.runner)
+            raise
+
+        except BatchFatalError:
             raise
 
         except ToolException as e:
@@ -229,6 +242,7 @@ class SingleRunner:
 class BatchRunner:
 
     batch_results = []
+    auto_lineage_dataset_versions = []
 
     @log(
         "Running in batch mode. {} input files found in {}",
@@ -250,7 +264,14 @@ class BatchRunner:
     def run(self):
         for i, input_file in enumerate(self.input_files):
             try:
-                logger.info("\n\n" + "*" * 80 + "\n" + "Running BUSCO on file: {}\n".format(input_file) + "*" * 80 + "\n\n")
+                logger.info(
+                    "\n\n"
+                    + "*" * 80
+                    + "\n"
+                    + "Running BUSCO on file: {}\n".format(input_file)
+                    + "*" * 80
+                    + "\n\n"
+                )
                 input_id = os.path.basename(input_file)
                 self.config.set("busco_run", "in", input_file)
                 self.config.set(
@@ -262,11 +283,21 @@ class BatchRunner:
                         input_id,
                     ),
                 )
+                self.config.set(
+                    "busco_run",
+                    "datasets_version",
+                    BuscoConfigMain.DEFAULT_ARGS_VALUES["datasets_version"],
+                )
                 single_run = SingleRunner(self.config_manager)
                 single_run.run()
 
                 run_summary = single_run.runner.format_run_summary()
                 type(self).batch_results.append(run_summary)
+                type(
+                    self
+                ).auto_lineage_dataset_versions = (
+                    single_run.auto_lineage_dataset_versions
+                )
 
             except NoOptionError as noe:
                 raise BatchFatalError(noe.message)
@@ -285,7 +316,12 @@ class BatchRunner:
                                     "busco_run", "auto-lineage"
                                 )
                             ),
-                            "\t" * int(single_run.config.getboolean("busco_run", "use_miniprot")),
+                            "\t"
+                            * int(
+                                single_run.config.getboolean(
+                                    "busco_run", "use_miniprot"
+                                )
+                            ),
                         )
                     )
                 else:
@@ -298,7 +334,12 @@ class BatchRunner:
                                     "busco_run", "auto-lineage"
                                 )
                             ),
-                            "\t" * int(single_run.config.getboolean("busco_run", "use_miniprot")),
+                            "\t"
+                            * int(
+                                single_run.config.getboolean(
+                                    "busco_run", "use_miniprot"
+                                )
+                            ),
                         )
                     )
                 logger.error(be.value)
@@ -335,10 +376,29 @@ class BatchRunner:
                 metrics_header = ""
                 extra = ""
             if self.config.getboolean("busco_run", "auto-lineage"):
+                archaea_version = "archaea_{}".format(
+                    BuscoConfigMain.DEFAULT_ARGS_VALUES["datasets_version"]
+                )
+                bacteria_verison = "bacteria_{}".format(
+                    BuscoConfigMain.DEFAULT_ARGS_VALUES["datasets_version"]
+                )
+                eukaryota_version = "eukaryota_{}".format(
+                    BuscoConfigMain.DEFAULT_ARGS_VALUES["datasets_version"]
+                )
+                for version in type(self).auto_lineage_dataset_versions:
+                    if version.startswith("archaea"):
+                        archaea_version = version
+                    elif version.startswith("bacteria"):
+                        bacteria_verison = version
+                    elif version.startswith("eukaryota"):
+                        eukaryota_version = version
                 f.write(
-                    "Input_file\tDataset\tComplete\tSingle\tDuplicated\tFragmented\tMissing\tn_markers{}\t"
-                    "Scores_archaea_odb10\tScores_bacteria_odb10\tScores_eukaryota_odb10{}\n".format(
+                    "Input_file\tDataset\tComplete\tSingle\tDuplicated\tFragmented\tMissing\tn_markers{0}\t"
+                    "Scores_{1}\tScores_{2}\tScores_{3}{4}\n".format(
                         extra,
+                        archaea_version,
+                        bacteria_verison,
+                        eukaryota_version,
                         metrics_header,
                     )
                 )
@@ -454,7 +514,9 @@ class AnalysisRunner:
             self.all_results[self.lineage_basename][
                 "n_markers"
             ] = self.analysis.hmmer_runner.total_buscos
-            self.all_results[self.lineage_basename]["avg_identity"] = self.analysis.hmmer_runner.avg_identity
+            self.all_results[self.lineage_basename][
+                "avg_identity"
+            ] = self.analysis.hmmer_runner.avg_identity
             self.all_results[self.lineage_basename]["domain"] = self.analysis.domain
             try:  # these values will only be present in miniprot runs, and if internal stop codons are detected
                 self.all_results[self.lineage_basename][
@@ -726,7 +788,9 @@ class AnalysisRunner:
                 scaffold_n50 = self.analysis.bbtools_runner.metrics["Scaffold N50"]
                 contigs_n50 = self.analysis.bbtools_runner.metrics["Contigs N50"]
                 percent_gaps = self.analysis.bbtools_runner.metrics["Percent gaps"]
-                num_scaffolds = self.analysis.bbtools_runner.metrics["Number of scaffolds"]
+                num_scaffolds = self.analysis.bbtools_runner.metrics[
+                    "Number of scaffolds"
+                ]
                 metrics_scores = "\t{}\t{}\t{}\t{}".format(
                     scaffold_n50, contigs_n50, percent_gaps, num_scaffolds
                 )
@@ -742,22 +806,39 @@ class AnalysisRunner:
             extra = ""
 
         if self.config.getboolean("busco_run", "auto-lineage"):
+            archaea_version = "archaea_{}".format(
+                self.config.get("busco_run", "datasets_version")
+            )
+            bacteria_verison = "bacteria_{}".format(
+                self.config.get("busco_run", "datasets_version")
+            )
+            eukaryota_version = "eukaryota_{}".format(
+                self.config.get("busco_run", "datasets_version")
+            )
+            for dataset in type(self).all_results:
+                if dataset.startswith("archaea"):
+                    archaea_version = dataset
+                elif dataset.startswith("bacteria"):
+                    bacteria_verison = dataset
+                elif dataset.startswith("eukaryota"):
+                    eukaryota_version = dataset
+            datasets_version = self.config.get("busco_run", "datasets_version")
             try:
                 scores_arch = (
-                    type(self).all_results["archaea_odb10"]["one_line_summary"].strip()
+                    type(self).all_results[archaea_version]["one_line_summary"].strip()
                 )
             except KeyError:
                 scores_arch = "Not run"
             try:
                 scores_bact = (
-                    type(self).all_results["bacteria_odb10"]["one_line_summary"].strip()
+                    type(self).all_results[bacteria_verison]["one_line_summary"].strip()
                 )
             except KeyError:
                 scores_bact = "Not run"
             try:
                 scores_euk = (
                     type(self)
-                    .all_results["eukaryota_odb10"]["one_line_summary"]
+                    .all_results[eukaryota_version]["one_line_summary"]
                     .strip()
                 )
             except KeyError:
@@ -989,9 +1070,13 @@ class SmartBox:
         if len(header_text) > len(longest_line):
             longest_line = header_text
         if len(longest_line) + 2 < 80:  # add 2 for vertical frame lines
-            self.width = max(max(50, len(scores_line) + 2), len(longest_line.expandtabs()))
+            self.width = max(
+                max(50, len(scores_line) + 2), len(longest_line.expandtabs())
+            )
         else:
-            self.width = max(50, len(scores_line) + 2)  # scores lines with "E:x%" values can be longer than 50
+            self.width = max(
+                50, len(scores_line) + 2
+            )  # scores lines with "E:x%" values can be longer than 50
 
     def wrap_header(self, header_text):
         header_text = header_text.strip().replace("\t", self.tab)

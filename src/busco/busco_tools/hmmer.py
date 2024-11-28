@@ -483,7 +483,7 @@ class HMMERRunner(BaseRunner):
                         busco_type = busco_fragment
                         match_type = matched_genes_fragment
 
-                else:  # logic is made more concise for odb11 datasets and later
+                else:  # logic is made more concise for odb12 datasets and later
 
                     profile_length = subrecord[0]["hmm_profile_length"]
 
@@ -1294,14 +1294,20 @@ class HMMERRunner(BaseRunner):
         self.multi_copy = len(self.multi_copy_buscos)  # int
         self.only_fragments = len(self.fragmented_buscos)  # int
         self.total_buscos = len(self.cutoff_dict)
-        self.num_missing = self.total_buscos - self.single_copy - self.multi_copy - self.only_fragments
+        self.num_missing = (
+            self.total_buscos - self.single_copy - self.multi_copy - self.only_fragments
+        )
 
         # Get percentage of each kind of BUSCO match
         self.s_percent = abs(round((self.single_copy / self.total_buscos) * 100, 1))
         self.d_percent = abs(round((self.multi_copy / self.total_buscos) * 100, 1))
         self.f_percent = abs(round((self.only_fragments / self.total_buscos) * 100, 1))
-        self.complete_percent = abs(round(((self.single_copy + self.multi_copy) / self.total_buscos) * 100, 1))
-        self.missing_percent = abs(round((self.num_missing / self.total_buscos) * 100, 1))
+        self.complete_percent = abs(
+            round(((self.single_copy + self.multi_copy) / self.total_buscos) * 100, 1)
+        )
+        self.missing_percent = abs(
+            round((self.num_missing / self.total_buscos) * 100, 1)
+        )
 
         if self.miniprot_pipeline:
             self._get_stop_codon_percent_and_avg_identity()

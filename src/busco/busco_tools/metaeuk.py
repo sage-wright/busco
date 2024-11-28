@@ -164,7 +164,9 @@ class MetaeukRunner(GenePredictor):
         except NoOptionError:
             raise BuscoError(
                 "{} is an old dataset version and is not compatible with Metaeuk. If you are running in --offline mode "
-                "please make sure you have already downloaded the latest datasets.".format(self.lineage_dataset)
+                "please make sure you have already downloaded the latest datasets.".format(
+                    self.lineage_dataset
+                )
             )
         self.overlap = 1
         self.s_set = False

@@ -497,7 +497,9 @@ class AugustusRunner(GenePredictor):
                     part_end = line[4].strip()
                     strand = line[6].strip()
                     if part_type == "gene":
-                        gene_id = "{}:{}-{}|{}".format(part_id, part_start, part_end, strand)
+                        gene_id = "{}:{}-{}|{}".format(
+                            part_id, part_start, part_end, strand
+                        )
                         contig_id = part_id
                         contig_start = part_start
                         contig_end = part_end
@@ -530,7 +532,10 @@ class AugustusRunner(GenePredictor):
         """
 
         gene_id = "{}:{}-{}|{}".format(
-            details["contig_id"], details["contig_start"], details["contig_end"], details["strand"]
+            details["contig_id"],
+            details["contig_start"],
+            details["contig_end"],
+            details["strand"],
         )
 
         aa_seq = SeqRecord(Seq(details["aa_seq"]), id=gene_id, description="")

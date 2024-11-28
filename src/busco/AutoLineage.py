@@ -38,6 +38,7 @@ class AutoSelectLineage:
     """
 
     runners = []
+    root_dataset_versions = []
 
     @log(
         "***** Starting Auto Select Lineage *****\n\t"
@@ -106,7 +107,9 @@ class AutoSelectLineage:
         Run BUSCO on each lineage listed in all_lineages.
         :return:
         """
-        root_runners = self.run_lineages_list(self.all_lineages)
+        odb_versions = self.check_odb_versions(self.all_lineages)
+        type(self).root_dataset_versions = ["{}_{}".format(self.all_lineages[i], odb_versions[i]) for i in range(len(self.all_lineages))]
+        root_runners = self.run_lineages_list(self.all_lineages, versions=odb_versions)
         self.get_best_match_lineage(root_runners)
         if self.virus_check() and not self.config.getboolean(
             "busco_run", "auto-lineage-euk"
@@ -128,6 +131,36 @@ class AutoSelectLineage:
         )
         return
 
+    def check_odb_versions(self, lineages):
+        odb_versions = []
+        for lineage in lineages:
+            dataset_name = "{}_{}".format(lineage, self.dataset_version)
+            files_to_check = [
+                dataset_name,
+                "list_of_reference_markers.{}.txt".format(dataset_name),
+                "mapping_taxid-lineage.{}.txt".format(dataset_name),
+                "mapping_taxids-busco_dataset_name.{}.txt".format(dataset_name),
+                "supermatrix.aln.{}.faa".format(dataset_name),
+                "tree.{}.nwk".format(dataset_name),
+                "tree_metadata.{}.txt".format(dataset_name),
+            ]
+            for filename in files_to_check:
+                try:
+                    self.config.downloader.check_latest_version(filename)
+                except BuscoError as e:
+                    if "not a valid download option" in str(e):
+                        logger.warning(
+                            "The auto-lineage pipeline is not yet available using the parent dataset {}. Reverting to {}.".format(
+                                dataset_name, dataset_name.split("_odb")[0] + "_odb10"
+                            )
+                        )
+
+                        odb_versions.append("odb10")
+                        break
+            else:
+                odb_versions.append(self.dataset_version)
+        return odb_versions
+
     def virus_check(self):
         return (self.selected_runner.analysis.hmmer_runner.s_percent < 3.0) & (
             os.stat(self.selected_runner.analysis.input_file).st_size < 500000
@@ -145,13 +178,33 @@ class AutoSelectLineage:
         self.run_lineages_list(lineages_to_check)
         return
 
-    def run_lineages_list(self, lineages_list):
+    def run_lineages_list(self, lineages_list, versions=None):
         root_runners = []
-        for l in lineages_list:
-            self.current_lineage = "{}_{}".format(l, self.dataset_version)
-            autoconfig = self.config_manager.load_busco_config_auto(
-                self.current_lineage
-            )
+        for idx, l in enumerate(lineages_list):
+            version = self.dataset_version if not versions else versions[idx]
+            self.current_lineage = "{}_{}".format(l, version)
+            try:
+                autoconfig = self.config_manager.load_busco_config_auto(
+                    self.current_lineage
+                )
+                autoconfig.set("busco_run", "datasets_version", version)
+            except BuscoError as e:
+                if "not a valid option" in str(e):
+                    self.dataset_version = "odb10"
+                    logger.warning(
+                        "The lineage dataset {} is not yet available for BUSCO. Reverting to {}.".format(
+                            self.current_lineage,
+                            self.current_lineage.split("_odb")[0] + "_odb10",
+                        )
+                    )
+                    self.current_lineage = "{}_{}".format(l, self.dataset_version)
+                    autoconfig = self.config_manager.load_busco_config_auto(
+                        self.current_lineage
+                    )
+                    autoconfig.set(
+                        "busco_run", "datasets_version", self.dataset_version
+                    )
+
             busco_run = AnalysisRunner(autoconfig)
             busco_run.run_analysis(callback=self.callback)
             root_runners.append(busco_run)
@@ -233,18 +286,35 @@ class AutoSelectLineage:
         return
 
     def get_best_match_lineage(
-        self, runners, use_percent=False, mollicutes_pathway=False
+        self, runners, use_percent=False, mycoplasmatota_pathway=False
     ):
         max_ind = self.evaluate(runners, use_percent)
         self.selected_runner = runners[int(max_ind)]
         self.best_match_lineage_dataset = self.selected_runner.config.get(
             "busco_run", "lineage_dataset"
         )
-        if mollicutes_pathway:
+        if mycoplasmatota_pathway:
+            # Pick parent runner. Logic is designed to allow for bacteria_odb10 to be used with mycoplasmatota_odb12.
+            parent_dataset_version = self.selected_runner.config.get("busco_run", "datasets_version")
+            for runner in runners:
+                if runner.config.get("busco_run", "name").startswith("bacteria"):
+                    bacteria_runner = runner
+                    parent_dataset_version = bacteria_runner.config.get(
+                        "busco_run", "datasets_version"
+                    )
+                    break
+                elif runner.config.get("busco_run", "name").startswith("mycoplasmatota") and runner.config.has_option("busco_run", "domain_run_name"):
+                    parent_dataset_version = runner.config.get("busco_run", "domain_run_name").split("_")[-1]
+
+            # Set the parent dataset to the bacteria dataset
             self.selected_runner.config.set(
                 "busco_run",
                 "domain_run_name",
-                os.path.basename("bacteria_{}".format(self.dataset_version)),
+                os.path.basename(
+                    "bacteria_{}".format(
+                        parent_dataset_version
+                    )
+                ),
             )
         else:
             self.selected_runner.config.set(
@@ -256,6 +326,9 @@ class AutoSelectLineage:
             "busco_run", "lineage_dataset", self.best_match_lineage_dataset
         )
         self.selected_runner.set_parent_dataset()
+        self.dataset_version = self.selected_runner.config.get(
+            "busco_run", "datasets_version"
+        )
         runners.pop(int(max_ind))
         self.cleanup_disused_runs(runners)
         return
@@ -282,25 +355,25 @@ class AutoSelectLineage:
             ).startswith("bacteria")
         ):
             logger.info(
-                "Certain mollicute clades use a different genetic code to the rest of bacteria. They are not part "
+                "Certain mycoplasmatota clades use a different genetic code to the rest of bacteria. They are not part "
                 "of the BUSCO placement tree and need to be tested separately. For more information, see the user "
                 "guide."
             )
             use_percent = self.selected_runner.mode == "proteins"
-            self.check_mollicutes(use_percent)
+            self.check_mycoplasmatota(use_percent)
             if os.path.basename(
                 self.selected_runner.config.get("busco_run", "lineage_dataset")
             ).startswith("bacteria"):
                 logger.info(
-                    "Bacteria domain is a better match than the mollicutes subclade. "
+                    "Bacteria domain is a better match than the mycoplasmatota subclade. "
                     "Continuing to tree placement."
                 )
                 self.run_busco_placer()
             else:
                 logger.info(
-                    "Mollicutes dataset is a better match for your data. Testing subclades..."
+                    "Mycoplasmatota dataset is a better match for your data. Testing subclades..."
                 )
-                self._run_3_datasets(self.selected_runner)
+                self._run_mycoplasmatota_clade_datasets(self.selected_runner)
 
         elif (
             "geno" in self.selected_runner.mode
@@ -311,9 +384,9 @@ class AutoSelectLineage:
         ):
             logger.info(
                 "The results from the Prodigal gene predictor indicate that your data belongs to the "
-                "mollicutes clade. Testing subclades..."
+                "mycoplasmatota clade. Testing subclades..."
             )
-            self._run_3_datasets()
+            self._run_mycoplasmatota_clade_datasets()
         elif self.selected_runner.domain == "viruses":
             pass
         else:
@@ -325,19 +398,26 @@ class AutoSelectLineage:
             self.best_match_lineage_dataset
         )
 
-    def check_mollicutes(self, use_percent=False):
-        runners = self.run_lineages_list(["mollicutes"])
+    def check_mycoplasmatota(self, use_percent=False):
+        runners = self.run_lineages_list(
+            ["mycoplasmatota"], versions=["odb12"]
+        )  # have to use odb12 even if using bacteria_odb10, as this dataset does not exist in odb10
         runners.append(self.selected_runner)
         self.get_best_match_lineage(
-            runners, use_percent=use_percent, mollicutes_pathway=True
+            runners, use_percent=use_percent, mycoplasmatota_pathway=True
         )
         return
 
     def run_busco_placer(self):
         if "genome" in self.selected_runner.mode:
-            if self.selected_runner.domain == "prokaryota" and not self.config.getboolean("busco_run", "use_miniprot"):
+            if (
+                self.selected_runner.domain == "prokaryota"
+                and not self.config.getboolean("busco_run", "use_miniprot")
+            ):
                 protein_seqs = self.selected_runner.analysis.prodigal_runner.output_faa
-            elif self.selected_runner.domain == "eukaryota" or self.config.getboolean("busco_run", "use_miniprot"):
+            elif self.selected_runner.domain == "eukaryota" or self.config.getboolean(
+                "busco_run", "use_miniprot"
+            ):
                 if self.config.getboolean("busco_run", "use_augustus"):
                     protein_seqs_dir = (
                         self.selected_runner.analysis.augustus_runner.extracted_prot_dir
@@ -387,7 +467,9 @@ class AutoSelectLineage:
         try:
             bp.download_placement_files()
         except BuscoError as e:
-            raise BuscoError("Failed to download placement files. Files may not be available for download.") from e
+            raise BuscoError(
+                "Failed to download placement files. Files may not be available for download."
+            ) from e
         dataset_details, placement_file_versions = bp.define_dataset()
         self.config.placement_files = placement_file_versions
         # Necessary to pass these filenames to the final run to be recorded.
@@ -406,14 +488,26 @@ class AutoSelectLineage:
         self.selected_runner.set_parent_dataset()
         return
 
-    def _run_3_datasets(self, mollicutes_runner=None):
-        if mollicutes_runner:
-            datasets = ["mycoplasmatales", "entomoplasmatales"]
-            dataset_runners = [mollicutes_runner]
+    def _run_mycoplasmatota_clade_datasets(self, mycoplasmatota_runner=None):
+        if mycoplasmatota_runner:
+            datasets = [
+                "mycoplasmatales",
+                "entomoplasmatales",
+                "mycoplasma",
+                "spiroplasma",
+            ]
+            dataset_runners = [mycoplasmatota_runner]
         else:
-            datasets = ["mollicutes", "mycoplasmatales", "entomoplasmatales"]
+            datasets = [
+                "mycoplasmatales",
+                "entomoplasmatales",
+                "mycoplasma",
+                "spiroplasma",
+            ]
             dataset_runners = []
-        dataset_runners += self.run_lineages_list(datasets)
-        self.get_best_match_lineage(dataset_runners, mollicutes_pathway=True)
+        dataset_runners += self.run_lineages_list(
+            datasets, versions=["odb12"] * 4
+        )  # have to use odb12 even if using bacteria_odb10, as these datasets do not all exist in odb10
+        self.get_best_match_lineage(dataset_runners, mycoplasmatota_pathway=True)
 
         return

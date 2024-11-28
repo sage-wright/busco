@@ -114,7 +114,7 @@ class TestParams(unittest.TestCase):
             "list_datasets": "==SUPPRESS==",
             "mode": None,
             "offline": False,
-            'opt-out-run-stats': False,
+            "opt-out-run-stats": False,
             "out": None,
             "out_path": None,
             "quiet": False,
@@ -127,6 +127,7 @@ class TestParams(unittest.TestCase):
             "augustus_parameters": None,
             "augustus_species": None,
             "long": False,
+            "datasets_version": None,
             "download": "==SUPPRESS==",
             "download_base_url": None,
             "download_path": None,
@@ -176,7 +177,7 @@ class TestParams(unittest.TestCase):
             "list_datasets": "==SUPPRESS==",
             "mode": mode,
             "offline": False,
-            'opt-out-run-stats': False,
+            "opt-out-run-stats": False,
             "out": output_file,
             "out_path": None,
             "quiet": True,
@@ -190,6 +191,7 @@ class TestParams(unittest.TestCase):
             "augustus_parameters": None,
             "augustus_species": None,
             "long": False,
+            "datasets_version": None,
             "download": "==SUPPRESS==",
             "download_base_url": None,
             "download_path": None,
@@ -213,6 +215,7 @@ class TestParams(unittest.TestCase):
         config = "config"
         out_path = "out_path"
         download_path = "download_path"
+        datasets_version = "datasets_version"
         download_base_url = "download_base_url"
         metaeuk_parameters = "metaeuk_parameters"
         metaeuk_rerun_parameters = "metaeuk_rerun_parameters"
@@ -231,6 +234,7 @@ class TestParams(unittest.TestCase):
             "--contig_break": contig_break,
             "--out_path": out_path,
             "--download_path": download_path,
+            "--datasets_version": datasets_version,
             "--download_base_url": download_base_url,
             "--metaeuk_parameters": metaeuk_parameters,
             "--metaeuk_rerun_parameters": metaeuk_rerun_parameters,
@@ -261,6 +265,7 @@ class TestParams(unittest.TestCase):
             "augustus_species": augustus_species,
             "metaeuk_parameters": metaeuk_parameters,
             "metaeuk_rerun_parameters": metaeuk_rerun_parameters,
+            "datasets_version": datasets_version,
             "download": "==SUPPRESS==",
             "download_base_url": download_base_url,
             "download_path": download_path,
@@ -284,7 +289,7 @@ class TestParams(unittest.TestCase):
             "long": True,
             "mode": mode,
             "offline": True,
-            'opt-out-run-stats': True,
+            "opt-out-run-stats": True,
             "out": output_file,
             "out_path": out_path,
             "quiet": True,

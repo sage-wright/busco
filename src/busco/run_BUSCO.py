@@ -294,6 +294,13 @@ def _parse_args():
     )
 
     optional.add_argument(
+        "--datasets_version",
+        dest="datasets_version",
+        required=False,
+        help="Specify the version of BUSCO datasets, e.g. odb10, odb12 (default odb12)",
+    )
+
+    optional.add_argument(
         "--download",
         dest="download",
         required=False,
@@ -480,7 +487,7 @@ def _parse_args():
         version="BUSCO {}".format(busco.__version__),
     )
 
-    return vars(parser.parse_args(None if len(sys.argv) > 1 else ['--help']))
+    return vars(parser.parse_args(None if len(sys.argv) > 1 else ["--help"]))
 
 
 def main():

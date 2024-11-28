@@ -67,6 +67,14 @@ class BuscoDownloadManager:
             # exist_ok=True to allow for multiple parallel BUSCO runs each trying to create this folder simultaneously
             os.makedirs(self.local_download_path, exist_ok=True)
 
+    def check_latest_version(self, data_name):
+        if data_name in type(self).version_files.index:
+            latest_update = type(self).version_files.loc[data_name]["date"]
+            return latest_update
+        else:
+            raise BuscoError(
+                "{} is not a valid download option".format(data_name)
+            )
     @log("Downloading information on latest versions of BUSCO data...", logger)
     def _obtain_versions_file(self):
         remote_filepath = os.path.join(self.download_base_url, "file_versions.tsv")
@@ -101,7 +109,7 @@ class BuscoDownloadManager:
                     )
                     time.sleep(tsleep)
                 else:
-                    if hasattr(e, 'code') and e.code == 429:
+                    if hasattr(e, "code") and e.code == 429:
                         raise
                     else:
                         raise BatchFatalError("Cannot reach {}".format(remote_filepath))
@@ -131,7 +139,7 @@ class BuscoDownloadManager:
             )
         return dataset_date
 
-    def _check_existing_version(self, local_filepath, category, data_basename):
+    def check_existing_version(self, local_filepath, category, data_basename):
         try:
             latest_update = type(self).version_files.loc[data_basename]["date"]
         except KeyError:
@@ -216,7 +224,7 @@ class BuscoDownloadManager:
             latest_version,
             local_filepath,
             hash,
-        ) = self._check_existing_version(local_filepath, category, data_basename)
+        ) = self.check_existing_version(local_filepath, category, data_basename)
 
         if not up_to_date or not present:
             # download

@@ -324,11 +324,7 @@ class MiniprotAlignRunner(MiniprotRunner, GenePredictor):
                     contig_start = int(fields[7])
                     contig_end = int(fields[8])
                     gene_id = "{}|{}:{}-{}|{}".format(
-                        target_id,
-                        contig_id,
-                        contig_start,
-                        contig_end,
-                        strand
+                        target_id, contig_id, contig_start, contig_end, strand
                     )
                     score = int(fields[13].strip().split(":")[2])
 
@@ -393,9 +389,15 @@ class MiniprotAlignRunner(MiniprotRunner, GenePredictor):
     def filter(self):
         contigs = np.unique(self.gff_arr["contig_id"])
         self.filtered_matches = np.array([], dtype=self.gff_arr.dtype)
-        if len(contigs) > 1700:  # 1700 seems to be around the number where parallel post-processing is faster
+        if (
+            len(contigs) > 1700
+        ):  # 1700 seems to be around the number where parallel post-processing is faster
             with Pool(self.cpus) as pool:
-                results = pool.map(self.filter_contig, contigs, chunksize=max(1, len(contigs)// self.cpus))
+                results = pool.map(
+                    self.filter_contig,
+                    contigs,
+                    chunksize=max(1, len(contigs) // self.cpus),
+                )
             stacked_results = np.vstack([np.vstack(res) for res in results])
             self.filtered_matches = np.squeeze(stacked_results, axis=1)
         else:

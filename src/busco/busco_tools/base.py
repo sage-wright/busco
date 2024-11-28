@@ -373,7 +373,9 @@ class GenePredictor(BaseRunner, metaclass=ABCMeta):
     def decompress_refseq_file(
         gzip_file,
     ):
-        unzipped_filename = gzip_file.rsplit(".gz", 1)[0] if gzip_file.endswith(".gz") else gzip_file
+        unzipped_filename = (
+            gzip_file.rsplit(".gz", 1)[0] if gzip_file.endswith(".gz") else gzip_file
+        )
         if not os.path.exists(unzipped_filename):
             with gzip.open(gzip_file, "rb") as compressed_file:
                 with open(unzipped_filename, "wb") as decompressed_file:

@@ -179,7 +179,7 @@ class TestBuscoConfig(unittest.TestCase):
             "auto-lineage-euk": False,
             "auto-lineage-prok": False,
             "cpu": "1",
-            "datasets_version": "odb10",
+            "datasets_version": "odb12",
             "download_base_url": "https://busco-data.ezlab.org/v5/data/",
             "download_path": os.path.join(os.getcwd(), "busco_downloads"),
             "force": False,
