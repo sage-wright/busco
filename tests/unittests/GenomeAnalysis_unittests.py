@@ -61,7 +61,7 @@ class TestConfigManager(unittest.TestCase):
         "busco.analysis.GenomeAnalysis.BuscoAnalysis.config.get",
         return_value="euk_genome_met",
     )
-    @patch("busco.analysis.GenomeAnalysis.BuscoAnalysis.config", autospec=True)
+    @patch("busco.analysis.GenomeAnalysis.BuscoAnalysis.config")
     @patch("busco.analysis.GenomeAnalysis.BBToolsRunner")
     @patch("busco.analysis.GenomeAnalysis.MetaeukRunner")
     @patch("busco.analysis.BuscoAnalysis.HMMERRunner")
@@ -80,7 +80,7 @@ class TestConfigManager(unittest.TestCase):
         "busco.analysis.GenomeAnalysis.BuscoAnalysis.config.get",
         return_value="prok_genome_prod",
     )
-    @patch("busco.analysis.GenomeAnalysis.BuscoAnalysis.config", autospec=True)
+    @patch("busco.analysis.GenomeAnalysis.BuscoAnalysis.config")
     @patch("busco.analysis.GenomeAnalysis.BBToolsRunner")
     @patch("busco.analysis.GenomeAnalysis.ProdigalRunner")
     @patch("busco.analysis.BuscoAnalysis.HMMERRunner")
@@ -99,7 +99,7 @@ class TestConfigManager(unittest.TestCase):
         "busco.analysis.GenomeAnalysis.BuscoAnalysis.config.get",
         return_value="euk_genome_met",
     )
-    @patch("busco.analysis.GenomeAnalysis.BuscoAnalysis.config", autospec=True)
+    @patch("busco.analysis.GenomeAnalysis.BuscoAnalysis.config")
     @patch("busco.analysis.GenomeAnalysis.BuscoAnalysis.run_analysis")
     @patch("busco.analysis.GenomeAnalysis.GenomeAnalysis._run_bbtools")
     @patch("busco.analysis.GenomeAnalysis.BuscoAnalysis.run_hmmer")
@@ -115,9 +115,9 @@ class TestConfigManager(unittest.TestCase):
         analysis.metaeuk_runner = Mock()
         analysis.hmmer_runner = Mock(missing_buscos=[])
         analysis.hmmer_runner.fragmented_buscos.keys = Mock(return_value=[])
-        analysis.gene_details = Mock(autospec=True)
-        analysis.sequences_aa = Mock(autospec=True)
-        analysis.sequences_nt = Mock(autospec=True)
+        analysis.gene_details = Mock()
+        analysis.sequences_aa = Mock()
+        analysis.sequences_nt = Mock()
         analysis.write_gff_files = Mock()
         analysis.run_analysis()
         mock_run_metaeuk.assert_called()

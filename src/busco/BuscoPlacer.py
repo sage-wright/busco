@@ -344,6 +344,19 @@ class BuscoPlacer:
             self._config.set("busco_run", "restart", str(self.restart))
             self.sepp_runner.run()
             self.sepp_runner.cleanup()
+        # Check if SEPP run was successful
+        while not os.path.exists(os.path.join(self.placement_folder, "output_placement.json")) and self.sepp_runner.run_number < 3:
+            logger.info("SEPP run failed. Retrying with different parameters.")
+            self.sepp_runner.configure_runner(
+                self.tree_nwk_file,
+                self.tree_metadata_file,
+                self.supermatrix_file,
+                self.downloader,
+            )
+            self.sepp_runner.run()
+            self.sepp_runner.cleanup()
+        if not os.path.exists(os.path.join(self.placement_folder, "output_placement.json")):
+            raise BuscoError("SEPP run failed. Try to rerun increasing the memory or select a lineage manually.")
 
     def _extract_marker_sequences(self):
         """

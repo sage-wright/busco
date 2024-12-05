@@ -84,6 +84,12 @@ class SEPPRunner(BaseRunner):
         sepp_job.add_parameter("amino")
         sepp_job.add_parameter("-p")
         sepp_job.add_parameter(self._tmp_folder)
+        if self.run_number == 2:
+            sepp_job.add_parameter("-P")
+            sepp_job.add_parameter("30")
+        elif self.run_number == 3:
+            sepp_job.add_parameter("-P")
+            sepp_job.add_parameter("300")
         return sepp_job
 
     def check_tool_dependencies(self):

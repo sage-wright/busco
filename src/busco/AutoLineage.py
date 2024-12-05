@@ -286,42 +286,19 @@ class AutoSelectLineage:
         return
 
     def get_best_match_lineage(
-        self, runners, use_percent=False, mycoplasmatota_pathway=False
+        self, runners, use_percent=False,
     ):
         max_ind = self.evaluate(runners, use_percent)
         self.selected_runner = runners[int(max_ind)]
         self.best_match_lineage_dataset = self.selected_runner.config.get(
             "busco_run", "lineage_dataset"
         )
-        if mycoplasmatota_pathway:
-            # Pick parent runner. Logic is designed to allow for bacteria_odb10 to be used with mycoplasmatota_odb12.
-            parent_dataset_version = self.selected_runner.config.get("busco_run", "datasets_version")
-            for runner in runners:
-                if runner.config.get("busco_run", "name").startswith("bacteria"):
-                    bacteria_runner = runner
-                    parent_dataset_version = bacteria_runner.config.get(
-                        "busco_run", "datasets_version"
-                    )
-                    break
-                elif runner.config.get("busco_run", "name").startswith("mycoplasmatota") and runner.config.has_option("busco_run", "domain_run_name"):
-                    parent_dataset_version = runner.config.get("busco_run", "domain_run_name").split("_")[-1]
 
-            # Set the parent dataset to the bacteria dataset
-            self.selected_runner.config.set(
-                "busco_run",
-                "domain_run_name",
-                os.path.basename(
-                    "bacteria_{}".format(
-                        parent_dataset_version
-                    )
-                ),
-            )
-        else:
-            self.selected_runner.config.set(
-                "busco_run",
-                "domain_run_name",
-                os.path.basename(self.best_match_lineage_dataset),
-            )
+        self.selected_runner.config.set(
+            "busco_run",
+            "domain_run_name",
+            os.path.basename(self.best_match_lineage_dataset),
+        )
         self.selected_runner.config.set(
             "busco_run", "lineage_dataset", self.best_match_lineage_dataset
         )
@@ -349,44 +326,7 @@ class AutoSelectLineage:
             or self.selected_runner.config.getboolean("busco_run", "use_miniprot")
         ):
             self.run_busco_placer()
-        elif (self.selected_runner.mode in ["proteins", "prok_tran"]) and (
-            os.path.basename(
-                self.selected_runner.config.get("busco_run", "lineage_dataset")
-            ).startswith("bacteria")
-        ):
-            logger.info(
-                "Certain mycoplasmatota clades use a different genetic code to the rest of bacteria. They are not part "
-                "of the BUSCO placement tree and need to be tested separately. For more information, see the user "
-                "guide."
-            )
-            use_percent = self.selected_runner.mode == "proteins"
-            self.check_mycoplasmatota(use_percent)
-            if os.path.basename(
-                self.selected_runner.config.get("busco_run", "lineage_dataset")
-            ).startswith("bacteria"):
-                logger.info(
-                    "Bacteria domain is a better match than the mycoplasmatota subclade. "
-                    "Continuing to tree placement."
-                )
-                self.run_busco_placer()
-            else:
-                logger.info(
-                    "Mycoplasmatota dataset is a better match for your data. Testing subclades..."
-                )
-                self._run_mycoplasmatota_clade_datasets(self.selected_runner)
 
-        elif (
-            "geno" in self.selected_runner.mode
-            and self.selected_runner.analysis.prodigal_runner.current_gc == "4"
-            and os.path.basename(
-                self.selected_runner.config.get("busco_run", "lineage_dataset")
-            ).startswith("bacteria")
-        ):
-            logger.info(
-                "The results from the Prodigal gene predictor indicate that your data belongs to the "
-                "mycoplasmatota clade. Testing subclades..."
-            )
-            self._run_mycoplasmatota_clade_datasets()
         elif self.selected_runner.domain == "viruses":
             pass
         else:
@@ -397,16 +337,6 @@ class AutoSelectLineage:
         AnalysisRunner.selected_dataset = os.path.basename(
             self.best_match_lineage_dataset
         )
-
-    def check_mycoplasmatota(self, use_percent=False):
-        runners = self.run_lineages_list(
-            ["mycoplasmatota"], versions=["odb12"]
-        )  # have to use odb12 even if using bacteria_odb10, as this dataset does not exist in odb10
-        runners.append(self.selected_runner)
-        self.get_best_match_lineage(
-            runners, use_percent=use_percent, mycoplasmatota_pathway=True
-        )
-        return
 
     def run_busco_placer(self):
         if "genome" in self.selected_runner.mode:
@@ -488,26 +418,3 @@ class AutoSelectLineage:
         self.selected_runner.set_parent_dataset()
         return
 
-    def _run_mycoplasmatota_clade_datasets(self, mycoplasmatota_runner=None):
-        if mycoplasmatota_runner:
-            datasets = [
-                "mycoplasmatales",
-                "entomoplasmatales",
-                "mycoplasma",
-                "spiroplasma",
-            ]
-            dataset_runners = [mycoplasmatota_runner]
-        else:
-            datasets = [
-                "mycoplasmatales",
-                "entomoplasmatales",
-                "mycoplasma",
-                "spiroplasma",
-            ]
-            dataset_runners = []
-        dataset_runners += self.run_lineages_list(
-            datasets, versions=["odb12"] * 4
-        )  # have to use odb12 even if using bacteria_odb10, as these datasets do not all exist in odb10
-        self.get_best_match_lineage(dataset_runners, mycoplasmatota_pathway=True)
-
-        return

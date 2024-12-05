@@ -1,3 +1,7 @@
+5.8.2
+- Add flexibility to SEPP placement to avoid crashes
+- Remove manual check for mycoplasmatota
+
 5.8.1
 - Enhance compatibility with odb12 datasets; catch errors for unavailable pipelines
 
