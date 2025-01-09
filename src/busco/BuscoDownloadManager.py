@@ -17,17 +17,19 @@ import time
 import glob
 import tarfile
 import hashlib
-import urllib.request
-from urllib.error import URLError
+# import urllib.request
+# from urllib.error import URLError
 import gzip
 import pandas as pd
+
+from google.cloud import storage
+from google.cloud import exceptions
 
 from busco.BuscoLogger import BuscoLogger
 from busco.BuscoLogger import LogDecorator as log
 from busco.Exceptions import BatchFatalError, BuscoError
 
 logger = BuscoLogger.get_logger(__name__)
-
 
 class BuscoDownloadManager:
     """
@@ -59,7 +61,7 @@ class BuscoDownloadManager:
                     )
                 )
                 self._obtain_versions_file()
-            except URLError:
+            except exceptions.NotFound:
                 raise BatchFatalError("Too many requests.")
 
     def _create_main_download_dir(self):
@@ -82,7 +84,12 @@ class BuscoDownloadManager:
 
         for tsleep in [10, 100, None]:
             try:
-                urllib.request.urlretrieve(remote_filepath, local_filepath)
+                storage_client = storage.Client("theiagen-public-resources").create_anonymous_client()
+                bucket = storage_client.bucket("theiagen-public-files")
+                blob = bucket.blob(remote_filepath)
+                blob.download_to_filename(local_filepath)
+                
+                #urllib.request.urlretrieve(remote_filepath, local_filepath) #### may need changes
                 type(self).version_files = pd.read_csv(
                     local_filepath,
                     sep="\t",
@@ -95,7 +102,7 @@ class BuscoDownloadManager:
                         remote_filepath
                     )
                 )
-            except URLError as e:
+            except exceptions.NotFound as e:
                 if self.offline:
                     logger.warning(
                         "Unable to verify BUSCO datasets because of offline mode"
@@ -301,7 +308,13 @@ class BuscoDownloadManager:
     @log("Downloading file {}", logger, func_arg=1)
     def _download_file(self, remote_filepath, local_filepath, expected_hash):
         try:
-            urllib.request.urlretrieve(remote_filepath, local_filepath)
+            storage_client = storage.Client("theiagen-public-resources").create_anonymous_client()
+            bucket = storage_client.bucket("theiagen-public-files")
+            blob = bucket.blob(remote_filepath)
+            blob.download_to_filename(local_filepath)
+                
+            
+            #urllib.request.urlretrieve(remote_filepath, local_filepath) ### change
             observed_hash = type(self)._md5(local_filepath)
             if observed_hash != expected_hash:
                 logger.error(
@@ -316,7 +329,7 @@ class BuscoDownloadManager:
                 )
             else:
                 logger.debug("md5 hash is {}".format(observed_hash))
-        except URLError:
+        except exceptions.NotFound:
             logger.error("Cannot reach {}".format(remote_filepath))
             return False
         return True
