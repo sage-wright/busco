@@ -17,8 +17,8 @@ import time
 import glob
 import tarfile
 import hashlib
-# import urllib.request
-# from urllib.error import URLError
+import urllib.request
+from urllib.error import URLError
 import gzip
 import pandas as pd
 
@@ -49,6 +49,9 @@ class BuscoDownloadManager:
         self.offline = config.getboolean("busco_run", "offline")
         self.download_base_url = config.get("busco_run", "download_base_url")
         self.local_download_path = config.get("busco_run", "download_path")
+        self.use_gcs = config.has_option("busco_run", "gcs_bucket")
+        self.gcs_bucket = config.get("busco_run", "gcs_bucket") if self.use_gcs else None
+        
         self._create_main_download_dir()
         if not type(self).version_files is not None and not self.offline:
             try:
@@ -68,6 +71,37 @@ class BuscoDownloadManager:
         if not os.path.exists(self.local_download_path):
             # exist_ok=True to allow for multiple parallel BUSCO runs each trying to create this folder simultaneously
             os.makedirs(self.local_download_path, exist_ok=True)
+            
+    def _download_from_gcs(self, remote_path, local_path):
+        """
+        Download a file from gcs storage bucket.
+        """
+        try:
+            storage_client = storage.Client()
+            bucket = storage_client.bucket(self.gcs_bucket)
+            blob = bucket.blob(remote_path)
+            blob.download_to_filename(local_path)
+            return True
+        except exceptions.NotFound:
+            logger.error(f"File not found in GCS: {remote_path}")
+            return False
+        except Exception as e:
+            logger.error(f"Error downloading from GCS: {str(e)}")
+            return False
+
+    def _download_from_url(self, remote_url, local_path):
+        """
+        Download a file from a provided url.
+        """
+        try:
+            urllib.request.urlretrieve(remote_url, local_path)
+            return True
+        except URLError:
+            logger.error(f"Cannot reach {remote_url}")
+            return False
+        except Exception as e:
+            logger.error(f"Error downloading from URL: {str(e)}")
+            return False
 
     def check_latest_version(self, data_name):
         if data_name in type(self).version_files.index:
@@ -84,18 +118,19 @@ class BuscoDownloadManager:
 
         for tsleep in [10, 100, None]:
             try:
-                storage_client = storage.Client("theiagen-public-resources").create_anonymous_client()
-                bucket = storage_client.bucket("theiagen-public-files")
-                blob = bucket.blob(remote_filepath)
-                blob.download_to_filename(local_filepath)
+                if self.use_gcs:
+                    download_success = self._download_from_gcs(remote_filepath, local_filepath)
+                else:
+                    download_success = self._download_from_url(remote_filepath, local_filepath)
                 
-                #urllib.request.urlretrieve(remote_filepath, local_filepath) #### may need changes
-                type(self).version_files = pd.read_csv(
-                    local_filepath,
-                    sep="\t",
-                    names=["dataset", "date", "hash", "domain", "type"],
-                    index_col="dataset",
-                )
+                # Succesful download will return true
+                if download_success:
+                    type(self).version_files = pd.read_csv(
+                        local_filepath,
+                        sep="\t",
+                        names=["dataset", "date", "hash", "domain", "type"],
+                        index_col="dataset",
+                    )
             except ValueError:
                 raise BatchFatalError(
                     "Invalid URL. Cannot reach {}. Please provide a valid URL for --base_download_url".format(
@@ -308,13 +343,14 @@ class BuscoDownloadManager:
     @log("Downloading file {}", logger, func_arg=1)
     def _download_file(self, remote_filepath, local_filepath, expected_hash):
         try:
-            storage_client = storage.Client("theiagen-public-resources").create_anonymous_client()
-            bucket = storage_client.bucket("theiagen-public-files")
-            blob = bucket.blob(remote_filepath)
-            blob.download_to_filename(local_filepath)
+            if self.use_gcs:
+                success = self._download_from_gcs(remote_filepath, local_filepath)
+            else:
+                success = self._download_from_url(remote_filepath, local_filepath)
+
+            if not success:
+                return False
                 
-            
-            #urllib.request.urlretrieve(remote_filepath, local_filepath) ### change
             observed_hash = type(self)._md5(local_filepath)
             if observed_hash != expected_hash:
                 logger.error(
@@ -329,10 +365,11 @@ class BuscoDownloadManager:
                 )
             else:
                 logger.debug("md5 hash is {}".format(observed_hash))
-        except exceptions.NotFound:
-            logger.error("Cannot reach {}".format(remote_filepath))
+                return True
+        # Make this a more general exception to catch all errors
+        except Exception as e:
+            logger.error(f"Error during download: {str(e)}")
             return False
-        return True
 
     @staticmethod
     def _md5(fname):
