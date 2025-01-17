@@ -154,6 +154,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         "contig_break",
         "scaffold_composition",
         "opt-out-run-stats",
+        "gcs_bucket",
     }
 
     FORBIDDEN_HEADER_CHARS = [
