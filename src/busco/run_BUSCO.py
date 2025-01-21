@@ -355,6 +355,14 @@ def _parse_args():
         type=str,
         help="Specify a Google Cloud Storage bucket containg BUSCO datasets.",
     )
+    
+    optional.add_argument(
+        "--gcp_project",
+        dest="gcp_project",
+        required=False,
+        type=str,
+        help="Google Cloud Platform project ID associated with billing account.",
+    )
 
     optional.add_argument(
         "-h", "--help", action=CleanHelpAction, help="Show this help message and exit"
