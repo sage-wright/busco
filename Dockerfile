@@ -42,7 +42,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
 
 # install other necessary tools
 # BioPython (python3-biopython installs 1.73. It causes python error in this version)
-RUN pip install --no-cache-dir biopython
+RUN pip install --no-cache-dir biopython google-cloud
 # blast
 RUN wget https://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/${BLAST_VER}/ncbi-blast-${BLAST_VER}+-x64-linux.tar.gz &&\
     tar -xvf ncbi-blast-${BLAST_VER}+-x64-linux.tar.gz && rm ncbi-blast-${BLAST_VER}+-x64-linux.tar.gz

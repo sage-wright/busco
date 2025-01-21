@@ -52,6 +52,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         "batch_mode": False,
         "tar": False,
         "opt-out-run-stats": False,
+        "gcs_bucket": "",
     }
 
     AUGUSTUS_ARGS = {
@@ -153,6 +154,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         "contig_break",
         "scaffold_composition",
         "opt-out-run-stats",
+        "gcs_bucket",
     }
 
     FORBIDDEN_HEADER_CHARS = [
@@ -619,6 +621,11 @@ class BuscoConfigMain(BaseConfig):
         self._update_config_with_args(self.params)
         self._update_logger()
         self.harmonize_auto_lineage_settings()
+        
+        gcs_bucket = self.get("busco_run", "gcs_bucket")
+        if gcs_bucket:
+            logger.info(f"Using Google Cloud Storage bucket: {gcs_bucket}")
+            self.run_stats["gcs_bucket"] = gcs_bucket
 
     def _add_out_folder(self):
         """

@@ -347,6 +347,14 @@ def _parse_args():
         help="Force rewriting of existing files. "
         "Must be used when output files with the provided name already exist.",
     )
+    
+    optional.add_argument(
+        "--gcs_bucket",
+        dest="gcs_bucket",
+        required=False,
+        type=str,
+        help="Specify a Google Cloud Storage bucket containg BUSCO datasets.",
+    )
 
     optional.add_argument(
         "-h", "--help", action=CleanHelpAction, help="Show this help message and exit"
