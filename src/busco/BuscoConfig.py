@@ -52,7 +52,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         "batch_mode": False,
         "tar": False,
         "opt-out-run-stats": False,
-        "gcs_bucket": None,
+        "gcs_bucket": "",
     }
 
     AUGUSTUS_ARGS = {
