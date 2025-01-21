@@ -53,6 +53,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         "tar": False,
         "opt-out-run-stats": False,
         "gcs_bucket": "",
+        "gcp_project": "",
     }
 
     AUGUSTUS_ARGS = {
@@ -155,6 +156,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         "scaffold_composition",
         "opt-out-run-stats",
         "gcs_bucket",
+        "gcp_project",
     }
 
     FORBIDDEN_HEADER_CHARS = [

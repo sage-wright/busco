@@ -55,10 +55,12 @@ class BuscoDownloadManager:
             self.gcs_client_name, self.gcs_bucket_name, *base_path_parts = gcs_path.split('/')
             self.gcs_base_path = '/'.join(base_path_parts) if base_path_parts else ''
             self.download_base_url = self.gcs_base_path
+            self.gcp_project = config.get("busco_run", "gcp_project")
         else:
             self.gcs_client_name = None
             self.gcs_bucket_name = None
             self.gcs_base_path = None
+            self.gcp_project = None
         
         self._create_main_download_dir()
         if not type(self).version_files is not None and not self.offline:
@@ -80,18 +82,40 @@ class BuscoDownloadManager:
             # exist_ok=True to allow for multiple parallel BUSCO runs each trying to create this folder simultaneously
             os.makedirs(self.local_download_path, exist_ok=True)
             
-    def _download_from_gcs(self, remote_path, local_path):
+    def _get_gcs_client(self):
         """
-        Download a file from gcs storage bucket.
+        Get GCS client with appropriate project account
         """
         try:
-            storage_client = storage.Client(project=self.gcs_client_name).create_anonymous_client()
-            bucket = storage_client.bucket(self.gcs_bucket_name)
+            if self.gcp_project:
+                # Instantiate client with project account
+                client = storage.Client()
+                if self.gcp_project:
+                    client.project = self.gcp_project
+            else:
+                # Fall back to anonymous client for public buckets
+                client = storage.Client(project=self.gcs_client_name).create_anonymous_client()
+            return client
+        except Exception as e:
+            logger.error(f"Error creating GCS client: {str(e)}")
+            return None
             
-            # Combine base path with remote path
-            gcs_remote_path = remote_path.lstrip('/') 
+    def _download_from_gcs(self, remote_path, local_path):
+        """
+        Download a file from gcs storage bucket using authenticated client.
+        Uses the bucket path provided via --gcs_bucket.
+        """
+        try:
+            client = self._get_gcs_client()
+            if not client:
+                return False
             
-            blob = bucket.blob(gcs_remote_path)
+            bucket = client.bucket(self.gcs_bucket_name)
+            
+            gcs_remote_path = os.path.join(self.gcs_base_path, remote_path) if self.gcs_base_path else remote_path
+            gcs_remote_path = gcs_remote_path.lstrip('/') 
+            
+            blob = bucket.blob(remote_path)
             blob.download_to_filename(local_path)
             return True
         except exceptions.NotFound:
