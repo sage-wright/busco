@@ -52,7 +52,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         "batch_mode": False,
         "tar": False,
         "opt-out-run-stats": False,
-        "gcs_bucket": "",
+        "gcp_bucket": "",
         "gcp_project": "",
     }
 
@@ -155,7 +155,7 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         "contig_break",
         "scaffold_composition",
         "opt-out-run-stats",
-        "gcs_bucket",
+        "gcp_bucket",
         "gcp_project",
     }
 
@@ -624,10 +624,10 @@ class BuscoConfigMain(BaseConfig):
         self._update_logger()
         self.harmonize_auto_lineage_settings()
         
-        gcs_bucket = self.get("busco_run", "gcs_bucket")
-        if gcs_bucket:
-            logger.info(f"Using Google Cloud Storage bucket: {gcs_bucket}")
-            self.run_stats["gcs_bucket"] = gcs_bucket
+        gcp_bucket = self.get("busco_run", "gcp_bucket")
+        if gcp_bucket:
+            logger.info(f"Using Google Cloud Storage bucket: {gcp_bucket}")
+            self.run_stats["gcp_bucket"] = gcp_bucket
 
     def _add_out_folder(self):
         """

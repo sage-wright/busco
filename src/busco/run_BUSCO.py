@@ -349,8 +349,8 @@ def _parse_args():
     )
     
     optional.add_argument(
-        "--gcs_bucket",
-        dest="gcs_bucket",
+        "--gcp_bucket",
+        dest="gcp_bucket",
         required=False,
         type=str,
         help="Specify a Google Cloud Storage bucket containg BUSCO datasets.",

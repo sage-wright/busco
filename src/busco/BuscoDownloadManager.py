@@ -49,9 +49,10 @@ class BuscoDownloadManager:
         self.offline = config.getboolean("busco_run", "offline")
         self.download_base_url = config.get("busco_run", "download_base_url")
         self.local_download_path = config.get("busco_run", "download_path")
-        self.use_gcs = config.has_option("busco_run", "gcs_bucket")
-        if self.use_gcs:
-            gcs_path = config.get("busco_run", "gcs_bucket")
+        self.use_gcp = config.has_option("busco_run", "gcp_bucket")
+        if self.use_gcp:
+            # Where gcp refers to google cloud platform and gcs to google cloud storage
+            gcs_path = config.get("busco_run", "gcp_bucket")
             self.gcs_client_name, self.gcs_bucket_name, *base_path_parts = gcs_path.split('/')
             self.gcs_base_path = '/'.join(base_path_parts) if base_path_parts else ''
             self.download_base_url = self.gcs_base_path
@@ -103,7 +104,7 @@ class BuscoDownloadManager:
     def _download_from_gcs(self, remote_path, local_path):
         """
         Download a file from gcs storage bucket using authenticated client.
-        Uses the bucket path provided via --gcs_bucket.
+        Uses the bucket path provided via --gcp_bucket.
         """
         try:
             client = self._get_gcs_client()
@@ -112,14 +113,11 @@ class BuscoDownloadManager:
             
             bucket = client.bucket(self.gcs_bucket_name)
             
-            gcs_remote_path = os.path.join(self.gcs_base_path, remote_path) if self.gcs_base_path else remote_path
-            gcs_remote_path = gcs_remote_path.lstrip('/') 
-            
             blob = bucket.blob(remote_path)
             blob.download_to_filename(local_path)
             return True
         except exceptions.NotFound:
-            logger.error(f"File not found in GCS: {gcs_remote_path}")
+            logger.error(f"File not found in GCS: {remote_path}")
             return False
         except Exception as e:
             logger.error(f"Error downloading from GCS: {str(e)}")
