@@ -9,6 +9,7 @@ ARG MINIPROT_VER="0.13"
 ARG SEPP_VER="4.5.5"
 ARG METAEUK_VER="7-bba0d80"
 ARG DEBIAN_FRONTEND=noninteractive
+ARG BUSCO_COMMIT=2965a44792039f47d31c8df4e67619a927be718e
 
 LABEL base.image="ubuntu:focal"
 LABEL dockerfile.version="1"
@@ -42,7 +43,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
 
 # install other necessary tools
 # BioPython (python3-biopython installs 1.73. It causes python error in this version)
-RUN pip install --no-cache-dir biopython google-cloud
+RUN pip install --no-cache-dir biopython
 # blast
 RUN wget https://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/${BLAST_VER}/ncbi-blast-${BLAST_VER}+-x64-linux.tar.gz &&\
     tar -xvf ncbi-blast-${BLAST_VER}+-x64-linux.tar.gz && rm ncbi-blast-${BLAST_VER}+-x64-linux.tar.gz
@@ -64,16 +65,16 @@ RUN wget https://github.com/lh3/miniprot/releases/download/v${MINIPROT_VER}/mini
     tar -C /usr/local/bin/ --strip-components=1 --no-same-owner -xvf miniprot-${MINIPROT_VER}_x64-linux.tar.bz2 miniprot-${MINIPROT_VER}_x64-linux/miniprot &&\
     rm miniprot-${MINIPROT_VER}_x64-linux.tar.bz2
 
-ARG BUSCO_COMMIT=f9079dbd4793f722763a2b9f1c2052cf360bafe6
 # and finally busco
 RUN wget https://github.com/sage-wright/busco/archive/${BUSCO_COMMIT}.zip && \
     unzip ${BUSCO_COMMIT}.zip && \
-    mv busco-${KRAKENTOOLS_COMMIT} busco && \
+    mv busco-${BUSCO_COMMIT} busco && \
     cd busco && \
-    python -m pip install
+    python -m pip install google-cloud-storage && \
+    python -m pip install .
 
 ENV AUGUSTUS_CONFIG_PATH="/usr/share/augustus/config/" \
-    PATH="${PATH}:/ncbi-blast-${BLAST_VER}+/bin:/usr/share/augustus/scripts:/busco-${BUSCO_VER}/scripts" \
+    PATH="${PATH}:/ncbi-blast-${BLAST_VER}+/bin:/usr/share/augustus/scripts:/busco/scripts" \
     LC_ALL=C
 
 WORKDIR /data
@@ -88,9 +89,9 @@ ARG BUSCO_VER
 RUN busco -h && generate_plot.py -h
 
 # run tests for bacteria and eukaryota
-RUN busco -i /busco-${BUSCO_VER}/test_data/bacteria/genome.fna -c 8 -m geno -f --out test_bacteria
-RUN busco -i /busco-${BUSCO_VER}/test_data/eukaryota/genome.fna -c 8 -m geno -f --out test_eukaryota
-RUN busco -i /busco-${BUSCO_VER}/test_data/eukaryota/genome.fna -l eukaryota_odb10 -c 8 -m geno -f --out test_eukaryota_augustus --augustus
+RUN busco -i /busco/test_data/bacteria/genome.fna -c 8 -m geno -f --out test_bacteria
+RUN busco -i /busco/test_data/eukaryota/genome.fna -c 8 -m geno -f --out test_eukaryota
+RUN busco -i /busco/test_data/eukaryota/genome.fna -l eukaryota_odb10 -c 8 -m geno -f --out test_eukaryota_augustus --augustus
 
 # generate plot
 RUN mkdir my_summaries &&\
