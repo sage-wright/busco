@@ -49,16 +49,20 @@ class BuscoDownloadManager:
         self.offline = config.getboolean("busco_run", "offline")
         self.download_base_url = config.get("busco_run", "download_base_url")
         self.local_download_path = config.get("busco_run", "download_path")
-        self.use_gcp = config.has_option("busco_run", "gcp_bucket")
+        
+        # Check if google cloud bucket is explicitly set, not just an empty string as default
+        gcs_path = config.get("busco_run", "gcp_bucket")
+        self.use_gcp = bool(gcs_path and gcs_path.strip())
         if self.use_gcp:
-            # Where gcp refers to google cloud platform and gcs to google cloud storage
+            # Where gcp refers to google cloud platform and gcs to google cloud storage client
             gcs_path = config.get("busco_run", "gcp_bucket")
-            self.gcs_client_name, self.gcs_bucket_name, *base_path_parts = gcs_path.split('/')
-            self.gcs_base_path = '/'.join(base_path_parts) if base_path_parts else ''
+            gcs_path = gcs_path.replace('gs://', '')
+            path_parts = gcs_path.split('/')
+            self.gcs_bucket_name = path_parts[0]
+            self.gcs_base_path = '/'.join(path_parts[1:]) if len(path_parts) > 1 else ''
             self.download_base_url = self.gcs_base_path
             self.gcp_project = config.get("busco_run", "gcp_project")
         else:
-            self.gcs_client_name = None
             self.gcs_bucket_name = None
             self.gcs_base_path = None
             self.gcp_project = None
@@ -90,12 +94,10 @@ class BuscoDownloadManager:
         try:
             if self.gcp_project:
                 # Instantiate client with project account
-                client = storage.Client()
-                if self.gcp_project:
-                    client.project = self.gcp_project
+                client = storage.Client(project=self.gcp_project)
             else:
                 # Fall back to anonymous client for public buckets
-                client = storage.Client(project=self.gcs_client_name).create_anonymous_client()
+                client = storage.Client.create_anonymous_client()
             return client
         except Exception as e:
             logger.error(f"Error creating GCS client: {str(e)}")
@@ -118,6 +120,16 @@ class BuscoDownloadManager:
             return True
         except exceptions.NotFound:
             logger.error(f"File not found in GCS: {remote_path}")
+            return False
+        except exceptions.BadRequest as e:
+            if "Bucket is a requester pays bucket but no user project provided" in str(e):
+                logger.error(
+                    f"The bucket '{self.gcs_bucket_name}' is a requester pays bucket."
+                    "You must provide a valid project ID using --gcp_project to access this bucket."
+                    "Example: --gcp_project your-project-id"
+                )
+            else:
+                logger.error(f"Error downloading from GCS: {str(e)}")
             return False
         except Exception as e:
             logger.error(f"Error downloading from GCS: {str(e)}")
@@ -152,7 +164,7 @@ class BuscoDownloadManager:
 
         for tsleep in [10, 100, None]:
             try:
-                if self.use_gcs:
+                if self.use_gcp:
                     download_success = self._download_from_gcs(remote_filepath, local_filepath)
                 else:
                     download_success = self._download_from_url(remote_filepath, local_filepath)
@@ -377,7 +389,7 @@ class BuscoDownloadManager:
     @log("Downloading file {}", logger, func_arg=1)
     def _download_file(self, remote_filepath, local_filepath, expected_hash):
         try:
-            if self.use_gcs:
+            if self.use_gcp:
                 success = self._download_from_gcs(remote_filepath, local_filepath)
             else:
                 success = self._download_from_url(remote_filepath, local_filepath)

@@ -119,6 +119,8 @@ class BaseConfig(ConfigParser, metaclass=ABCMeta):
         "download_base_url",
         "skip_bbtools",
         "opt-out-run-stats",
+        "gcp_bucket",
+        "gcp_project",
     }
 
     PERMITTED_OPTIONS = {
