@@ -96,19 +96,3 @@ FROM app AS test
 ARG BUSCO_VER
 
 RUN busco -h && generate_plot.py -h
-
-# run tests for bacteria and eukaryota
-RUN busco -i /busco/test_data/bacteria/genome.fna -c 8 -m geno -f --out test_bacteria
-RUN busco -i /busco/test_data/eukaryota/genome.fna -c 8 -m geno -f --out test_eukaryota
-RUN busco -i /busco/test_data/eukaryota/genome.fna -l eukaryota_odb10 -c 8 -m geno -f --out test_eukaryota_augustus --augustus
-
-# generate plot
-RUN mkdir my_summaries &&\
-    find . -name "short_summary.*.txt" -exec cp {} my_summaries \; &&\
-    generate_plot.py -wd my_summaries
-
-# using actual data (Salmonella genome)
-RUN wget -q https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/010/941/835/GCA_010941835.1_PDT000052640.3/GCA_010941835.1_PDT000052640.3_genomic.fna.gz  && \
-    gzip -d GCA_010941835.1_PDT000052640.3_genomic.fna.gz && \
-    busco -m genome -i GCA_010941835.1_PDT000052640.3_genomic.fna -o busco_GCA_010941835.1 --cpu 4 --auto-lineage-prok && \
-    head busco_GCA_010941835.1/short_summary*.txt

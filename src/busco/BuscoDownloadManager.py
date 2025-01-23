@@ -118,7 +118,7 @@ class BuscoDownloadManager:
             bucket = client.bucket(self.gcs_bucket_name, user_project=self.gcp_project)
             
             blob = bucket.blob(remote_path)
-            blob.download_to_filename(local_path, user_project=self.gcp_project)
+            blob.download_to_filename(local_path)
             return True
         except exceptions.NotFound:
             logger.error(f"File not found in GCS: {remote_path}")
