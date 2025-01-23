@@ -94,9 +94,11 @@ class BuscoDownloadManager:
         try:
             if self.gcp_project:
                 # Instantiate client with project account
+                
                 client = storage.Client(project=self.gcp_project)
             else:
                 # Fall back to anonymous client for public buckets
+                logger.info("Using anonymous GCS client")
                 client = storage.Client.create_anonymous_client()
             return client
         except Exception as e:
@@ -113,10 +115,10 @@ class BuscoDownloadManager:
             if not client:
                 return False
             
-            bucket = client.bucket(self.gcs_bucket_name)
+            bucket = client.bucket(self.gcs_bucket_name, user_project=self.gcp_project)
             
             blob = bucket.blob(remote_path)
-            blob.download_to_filename(local_path)
+            blob.download_to_filename(local_path, user_project=self.gcp_project)
             return True
         except exceptions.NotFound:
             logger.error(f"File not found in GCS: {remote_path}")

@@ -23,6 +23,10 @@ LABEL maintainer.email="kutluhan.incekara@ct.gov"
 
 # install dependencies
 RUN apt-get update && apt-get install --no-install-recommends -y \
+    apt-transport-https \
+    ca-certificates \
+    gnupg \
+    curl \
     wget \
     python3-pip \
     python3-pandas \
@@ -40,6 +44,11 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     lbzip2 \
     && rm -rf /var/lib/apt/lists/* && apt-get autoclean \
     && ln -s /usr/bin/python3 /usr/bin/python
+
+RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \
+    curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key --keyring /usr/share/keyrings/cloud.google.gpg add - && \
+    apt-get update && apt-get install -y google-cloud-sdk && \
+    rm -rf /var/lib/apt/lists/*
 
 # install other necessary tools
 # BioPython (python3-biopython installs 1.73. It causes python error in this version)
@@ -70,7 +79,7 @@ RUN wget https://github.com/sage-wright/busco/archive/${BUSCO_COMMIT}.zip && \
     unzip ${BUSCO_COMMIT}.zip && \
     mv busco-${BUSCO_COMMIT} busco && \
     cd busco && \
-    python -m pip install google-cloud-storage && \
+    python -m pip install google-cloud-storage google-auth && \
     python -m pip install .
 
 ENV AUGUSTUS_CONFIG_PATH="/usr/share/augustus/config/" \
